@@ -7,7 +7,10 @@ use super::*;
 pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, TransitionError> {
     let mut after = before.clone();
     let offense = before.half.offense();
-    if event.kind == EventKind::PlateAppearance {
+    if matches!(
+        event.kind,
+        EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
+    ) {
         let cursor = after.teams[offense].next_batter;
         if cursor >= 9 {
             return Err(TransitionError::InvalidState);

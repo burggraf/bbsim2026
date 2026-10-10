@@ -1,6 +1,45 @@
 //! 2019 scoring and regulation ending rules. A walk-off HR exception still
 //! needs explicit contact classification.
-use super::{Base, Destination, Event, EventKind, GameState, Half, ThirdOutKind, TransitionError};
+use super::{
+    Base, CreditKind, Destination, Event, EventKind, GameState, Half, ThirdOutKind, TransitionError,
+};
+
+/// The exception is only for a batted ball leaving the park, not an
+/// inside-the-park hit or a generic multi-run advancement.
+pub(crate) fn validate_home_run(before: &GameState, event: &Event) -> Result<(), TransitionError> {
+    if event.kind != EventKind::OutOfParkHomeRun {
+        return Ok(());
+    }
+    let batter = event.participants.batter.as_deref();
+    if event.delta.outs != 0
+        || event.delta.third_out.is_some()
+        || event.delta.moves.len() != 1 + before.bases.iter().flatten().count()
+        || event.delta.moves.iter().any(|m| m.to != Destination::Home)
+        || !event
+            .delta
+            .moves
+            .iter()
+            .any(|m| m.from == Base::Plate && Some(m.runner.player_id.as_str()) == batter)
+    {
+        return Err(TransitionError::DeltaMismatch);
+    }
+    if event
+        .delta
+        .credits
+        .iter()
+        .filter(|c| c.kind == CreditKind::Hit)
+        .count()
+        != 1
+        || !event
+            .delta
+            .credits
+            .iter()
+            .any(|c| c.kind == CreditKind::Hit && Some(c.player_id.as_str()) == batter)
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(())
+}
 
 /// Derive legally credited runner IDs from movement and explicit third-out
 /// cause/timing. Home crossings need not all be runs (Rule 5.08(a)).
@@ -145,10 +184,12 @@ pub(crate) fn ending(
                 return Err(TransitionError::UnsupportedRule);
             }
             if new_home > away {
-                // Rule 7.01(g)(3): ordinarily stop on the winning run. The
-                // out-of-park HR exception is not yet represented in Event.
+                // Rule 7.01(g)(3): ordinarily stop on the winning run;
+                // an out-of-park HR allows every runner and batter to score.
                 let winning_runs = away - home + 1;
-                if u16::from(event.delta.runs) != winning_runs {
+                if event.kind != EventKind::OutOfParkHomeRun
+                    && u16::from(event.delta.runs) != winning_runs
+                {
                     return Err(TransitionError::UnsupportedRule);
                 }
                 Ok(Ending::WalkOff)

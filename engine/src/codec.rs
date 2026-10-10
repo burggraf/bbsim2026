@@ -153,6 +153,7 @@ impl Binary for EventKind {
                 kind.encode(out);
             }
             Self::Substitution => 2u8.encode(out),
+            Self::OutOfParkHomeRun => 3u8.encode(out),
         }
     }
     fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
@@ -160,6 +161,7 @@ impl Binary for EventKind {
             0 => Ok(Self::PlateAppearance),
             1 => Ok(Self::RunnerOnly(RunnerEvent::decode(reader)?)),
             2 => Ok(Self::Substitution),
+            3 => Ok(Self::OutOfParkHomeRun),
             _ => Err(TransitionError::InvalidEncoding),
         }
     }
@@ -276,7 +278,7 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE4".to_vec();
+        let mut out = b"BBE5".to_vec();
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
@@ -284,7 +286,7 @@ impl EventTransition {
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
         let payload = bytes
-            .strip_prefix(b"BBE4")
+            .strip_prefix(b"BBE5")
             .ok_or(TransitionError::InvalidEncoding)?;
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;

@@ -97,6 +97,8 @@ pub enum EventKind {
     PlateAppearance,
     RunnerOnly(RunnerEvent),
     Substitution,
+    /// A plate appearance on an out-of-park HR; all runners may score on a walk-off.
+    OutOfParkHomeRun,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -241,7 +243,10 @@ impl EventTransition {
         {
             return Err(TransitionError::InvalidParticipants);
         }
-        let is_pa = event.kind == EventKind::PlateAppearance;
+        let is_pa = matches!(
+            event.kind,
+            EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
+        );
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
         let is_substitution = event.kind == EventKind::Substitution;
         if is_substitution {
@@ -376,6 +381,7 @@ impl EventTransition {
         if total_outs > 3 {
             return Err(TransitionError::DeltaMismatch);
         }
+        rules::validate_home_run(&before, &event)?;
         let mut scored = rules::scored_runners(&before, &event, total_outs)?;
         if scored.len() != usize::from(event.delta.runs) {
             return Err(TransitionError::DeltaMismatch);

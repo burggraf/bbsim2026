@@ -473,3 +473,91 @@ fn multi_out_force_sequence_needs_ordering_before_voiding_runs() {
         Err(TransitionError::UnsupportedRule)
     ));
 }
+
+#[test]
+fn out_of_park_home_run_scores_all_on_walkoff() {
+    let mut before = state(9, Half::Bottom, 1, [4, 4]);
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![
+        RunnerMove {
+            runner: Runner {
+                player_id: "home0".into(),
+                responsible_pitcher: "away_pitcher".into(),
+            },
+            from: Base::Plate,
+            to: Destination::Home,
+        },
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 0, 2, &["r3", "home0"]);
+    event.delta.credits.push(Credit {
+        player_id: "home0".into(),
+        kind: CreditKind::Hit,
+    });
+    event.kind = EventKind::OutOfParkHomeRun;
+    let next = apply(&before, event).unwrap();
+    assert!(next.after().over);
+    assert_eq!(next.after().score, [4, 6]);
+    assert_eq!(EventTransition::from_bytes(&next.to_bytes()).unwrap(), next);
+}
+
+#[test]
+fn out_of_park_hr_scores_batter_and_every_occupied_base_for_all_masks() {
+    for mask in 0u8..8 {
+        let mut before = state(9, Half::Bottom, 0, [5, 5]);
+        let mut moves = vec![RunnerMove {
+            runner: Runner {
+                player_id: "home0".into(),
+                responsible_pitcher: "away_pitcher".into(),
+            },
+            from: Base::Plate,
+            to: Destination::Home,
+        }];
+        let mut scorers = vec!["home0"];
+        for (index, from) in [(0, Base::First), (1, Base::Second), (2, Base::Third)] {
+            if mask & (1 << index) != 0 {
+                let id = match index {
+                    0 => "r1",
+                    1 => "r2",
+                    _ => "r3",
+                };
+                before.bases[index] = Some(on_base(id));
+                moves.push(to_home(&before, index, from));
+                scorers.push(id);
+            }
+        }
+        let mut event = batter_event(&before, moves, 0, scorers.len() as u8, &scorers);
+        event.kind = EventKind::OutOfParkHomeRun;
+        event.delta.credits.push(Credit {
+            player_id: "home0".into(),
+            kind: CreditKind::Hit,
+        });
+        let next = apply(&before, event).unwrap();
+        assert!(next.after().over, "mask {mask}");
+        assert_eq!(
+            next.after().score,
+            [5, 5 + scorers.len() as u16],
+            "mask {mask}"
+        );
+    }
+}
+
+#[test]
+fn hr_label_does_not_make_a_single_walkoff_run_an_out_of_park_homer() {
+    let mut before = state(9, Half::Bottom, 0, [5, 5]);
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![
+        batter_reaches_first(&before),
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 0, 1, &["r3"]);
+    event.kind = EventKind::OutOfParkHomeRun;
+    event.delta.credits.push(Credit {
+        player_id: "home0".into(),
+        kind: CreditKind::Hit,
+    });
+    assert!(matches!(
+        apply(&before, event),
+        Err(TransitionError::DeltaMismatch)
+    ));
+}
