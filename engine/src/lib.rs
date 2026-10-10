@@ -473,6 +473,16 @@ impl EventTransition {
             return Err(TransitionError::IllegalCredit);
         }
         let defense_team = &before.teams[1 - offense];
+        let fielding_eligible = |id: &str| {
+            id == defense_team.pitcher
+                || defense_team
+                    .batting_order
+                    .iter()
+                    .enumerate()
+                    .any(|(slot, player)| {
+                        Some(slot) != defense_team.dh_slot.map(usize::from) && player.as_str() == id
+                    })
+        };
         for credit in &event.delta.credits {
             let eligible = match credit.kind {
                 CreditKind::PlateAppearance | CreditKind::Run => true, // checked above
@@ -503,12 +513,11 @@ impl EventTransition {
                         && m.runner.player_id == credit.player_id
                         && m.to == Destination::Out
                 }),
-                CreditKind::Putout
-                | CreditKind::Assist
-                | CreditKind::Error
-                | CreditKind::PassedBall => {
-                    credit.player_id == defense_team.pitcher
-                        || defense_team.batting_order.contains(&credit.player_id)
+                CreditKind::Putout | CreditKind::Assist | CreditKind::Error => {
+                    fielding_eligible(&credit.player_id)
+                }
+                CreditKind::PassedBall => {
+                    credit.player_id != defense_team.pitcher && fielding_eligible(&credit.player_id)
                 }
             };
             if !eligible {
