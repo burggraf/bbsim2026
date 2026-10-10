@@ -5,6 +5,9 @@ use super::*;
 /// Derive the after-state from a before-state and explicit event effects.
 /// This does not sample outcomes or infer missing decisions.
 pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, TransitionError> {
+    if before.teams.iter().any(|team| !rules::valid_team(team)) {
+        return Err(TransitionError::InvalidState);
+    }
     let mut after = before.clone();
     let offense = before.half.offense();
     if matches!(
@@ -59,10 +62,17 @@ pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, Transi
                 if after.bases[index].as_ref() != Some(outgoing) {
                     return Err(TransitionError::DeltaMismatch);
                 }
+                let order = &mut after.teams[offense].batting_order;
+                let slot = order
+                    .iter()
+                    .position(|id| id == &outgoing.player_id)
+                    .ok_or(TransitionError::DeltaMismatch)?;
+                order[slot] = incoming.player_id.clone();
                 after.bases[index] = Some(incoming.clone());
             }
         }
     }
+    rules::finalize_personnel(&before.teams, &mut after.teams, &event, offense)?;
     // Remove all origins before adding destinations: a forced runner may move
     // into a base just vacated by another runner on the same play.
     for movement in &event.delta.moves {

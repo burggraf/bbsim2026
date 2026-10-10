@@ -46,6 +46,15 @@ pub struct TeamState {
     pub batting_order: [String; 9],
     pub next_batter: u8,
     pub pitcher: String,
+    /// Declared before first pitch; `None` means the pitcher bats.
+    /// Once lost, the DH cannot be restored in this game.
+    pub dh_slot: Option<u8>,
+    /// Starting DH has not yet batted; cleared by his first PA or an opposing pitching change.
+    pub dh_must_bat: bool,
+    /// Players eligible to enter but not yet used in this game.
+    pub bench: Vec<String>,
+    /// Players removed from all active roles; re-entry is prohibited.
+    pub removed: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -209,11 +218,11 @@ impl EventTransition {
             || after.inning == 0
             || before.outs > 2
             || after.outs > 2
-            || before.teams.iter().chain(after.teams.iter()).any(|team| {
-                team.next_batter > 8
-                    || team.pitcher.is_empty()
-                    || team.batting_order.iter().any(String::is_empty)
-            })
+            || before
+                .teams
+                .iter()
+                .chain(after.teams.iter())
+                .any(|team| !rules::valid_team(team))
             || before.over
         {
             return Err(TransitionError::InvalidState);
@@ -223,6 +232,12 @@ impl EventTransition {
                 if let Some(runner) = runner {
                     if runner.player_id.is_empty()
                         || runner.responsible_pitcher.is_empty()
+                        || !snapshot.teams[snapshot.half.offense()]
+                            .batting_order
+                            .contains(&runner.player_id)
+                        || snapshot.teams[snapshot.half.offense()].batting_order
+                            [snapshot.teams[snapshot.half.offense()].next_batter as usize]
+                            == runner.player_id
                         || snapshot.bases[index + 1..]
                             .iter()
                             .flatten()
@@ -298,6 +313,12 @@ impl EventTransition {
                     outgoing,
                     incoming,
                 } => {
+                    if expected_teams[team.index()].dh_slot.is_some()
+                        && expected_teams[team.index()].pitcher == *incoming
+                        && expected_teams[team.index()].dh_slot != Some(*slot)
+                    {
+                        return Err(TransitionError::DeltaMismatch);
+                    }
                     let batter = expected_teams[team.index()]
                         .batting_order
                         .get_mut(*slot as usize)
@@ -325,10 +346,22 @@ impl EventTransition {
                     {
                         return Err(TransitionError::DeltaMismatch);
                     }
+                    let order = &mut expected_teams[offense].batting_order;
+                    let slot = order
+                        .iter()
+                        .position(|id| id == &outgoing.player_id)
+                        .ok_or(TransitionError::DeltaMismatch)?;
+                    if incoming.player_id == expected_teams[offense].pitcher
+                        && expected_teams[offense].dh_slot != Some(slot as u8)
+                    {
+                        return Err(TransitionError::DeltaMismatch);
+                    }
+                    order[slot] = incoming.player_id.clone();
                     expected_bases[index] = Some(incoming.clone());
                 }
             }
         }
+        rules::finalize_personnel(&before.teams, &mut expected_teams, &event, offense)?;
         if after.teams != expected_teams {
             return Err(TransitionError::IllegalStateChange);
         }

@@ -13,14 +13,32 @@ fn state(inning: u16, half: Half, outs: u8, score: [u16; 2]) -> GameState {
         over: false,
         teams: [
             TeamState {
-                batting_order: std::array::from_fn(|i| format!("away{i}")),
+                batting_order: std::array::from_fn(|i| match i {
+                    5 => "r1".into(),
+                    6 => "r2".into(),
+                    7 => "r3".into(),
+                    _ => format!("away{i}"),
+                }),
                 next_batter: 0,
                 pitcher: "away_pitcher".into(),
+                dh_slot: Some(8),
+                dh_must_bat: false,
+                bench: vec!["reliever".into(), "pinch".into()],
+                removed: vec![],
             },
             TeamState {
-                batting_order: std::array::from_fn(|i| format!("home{i}")),
+                batting_order: std::array::from_fn(|i| match i {
+                    5 => "r1".into(),
+                    6 => "r2".into(),
+                    7 => "r3".into(),
+                    _ => format!("home{i}"),
+                }),
                 next_batter: 0,
                 pitcher: "home_pitcher".into(),
+                dh_slot: Some(8),
+                dh_must_bat: false,
+                bench: vec!["reliever".into(), "pinch".into()],
+                removed: vec![],
             },
         ],
         bases: [None, None, None],
@@ -149,6 +167,7 @@ fn tied_ninth_continues_to_empty_extra_inning() {
 #[test]
 fn winning_run_in_bottom_ninth_ends_immediately() {
     let mut before = state(9, Half::Bottom, 1, [4, 4]);
+    before.teams[1].batting_order[7] = "runner_on_third".into();
     before.bases[2] = Some(Runner {
         player_id: "runner_on_third".into(),
         responsible_pitcher: "prior_pitcher".into(),
@@ -559,5 +578,16 @@ fn hr_label_does_not_make_a_single_walkoff_run_an_out_of_park_homer() {
     assert!(matches!(
         apply(&before, event),
         Err(TransitionError::DeltaMismatch)
+    ));
+}
+
+#[test]
+fn no_dh_requires_the_pitcher_in_the_batting_order() {
+    let mut before = state(7, Half::Bottom, 0, [2, 3]);
+    before.teams[1].dh_slot = None;
+    let event = batter_event(&before, vec![batter_out(&before)], 1, 0, &[]);
+    assert!(matches!(
+        apply(&before, event),
+        Err(TransitionError::InvalidState)
     ));
 }

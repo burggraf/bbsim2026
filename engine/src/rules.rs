@@ -1,8 +1,113 @@
-//! 2019 scoring and regulation ending rules. A walk-off HR exception still
-//! needs explicit contact classification.
+//! Bounded 2019 scoring, lineup and regulation-ending rules.
 use super::{
-    Base, CreditKind, Destination, Event, EventKind, GameState, Half, ThirdOutKind, TransitionError,
+    Base, CreditKind, Destination, Event, EventKind, GameState, Half, TeamState, ThirdOutKind,
+    TransitionError,
 };
+
+pub(crate) fn valid_team(team: &TeamState) -> bool {
+    if team.next_batter > 8
+        || team.pitcher.is_empty()
+        || team.dh_slot.is_some_and(|s| s > 8)
+        || (team.dh_must_bat && team.dh_slot.is_none())
+    {
+        return false;
+    }
+    let pitcher_count = team
+        .batting_order
+        .iter()
+        .filter(|id| **id == team.pitcher)
+        .count();
+    if pitcher_count != usize::from(team.dh_slot.is_none()) {
+        return false;
+    }
+    let ids: Vec<&str> = team
+        .batting_order
+        .iter()
+        .chain(team.bench.iter())
+        .chain(team.removed.iter())
+        .map(String::as_str)
+        .collect();
+    if ids.iter().any(|id| {
+        id.is_empty()
+            || *id == team.pitcher
+                && (team.bench.iter().any(|b| b == id) || team.removed.iter().any(|r| r == id))
+    }) {
+        return false;
+    }
+    ids.iter()
+        .enumerate()
+        .all(|(i, id)| !ids[i + 1..].contains(id))
+}
+
+/// Derive one-way bench/removed transfers from active roles.
+pub(crate) fn finalize_personnel(
+    before: &[TeamState; 2],
+    after: &mut [TeamState; 2],
+    event: &Event,
+    offense: usize,
+) -> Result<(), TransitionError> {
+    for (side, (old, new)) in before.iter().zip(after.iter_mut()).enumerate() {
+        if let Some(slot) = old.dh_slot {
+            if new.batting_order[slot as usize] == new.pitcher {
+                new.dh_slot = None;
+            }
+            if old.dh_must_bat {
+                let dh_batted = side == offense
+                    && matches!(
+                        event.kind,
+                        EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
+                    )
+                    && event.participants.batter.as_deref()
+                        == Some(old.batting_order[slot as usize].as_str());
+                let opposing_pitcher_changed = event.delta.changes.iter().any(|change| {
+                    matches!(change, super::PersonnelChange::Pitcher { team, .. } if team.index() != side)
+                });
+                if !dh_batted
+                    && !opposing_pitcher_changed
+                    && (new.dh_slot.is_none()
+                        || new.batting_order[slot as usize] != old.batting_order[slot as usize])
+                {
+                    return Err(TransitionError::IllegalStateChange);
+                }
+                if dh_batted || opposing_pitcher_changed {
+                    new.dh_must_bat = false;
+                }
+            }
+        }
+        let old_active: Vec<_> = old
+            .batting_order
+            .iter()
+            .chain(std::iter::once(&old.pitcher))
+            .collect();
+        let new_active: Vec<_> = new
+            .batting_order
+            .iter()
+            .chain(std::iter::once(&new.pitcher))
+            .collect();
+        for id in &old_active {
+            if !new_active.contains(id) && !new.removed.contains(id) {
+                new.removed.push((*id).clone());
+            }
+        }
+        for (position, id) in new_active.iter().enumerate() {
+            if new_active[..position].contains(id) {
+                continue;
+            }
+            if !old_active.contains(id) {
+                let index = new
+                    .bench
+                    .iter()
+                    .position(|candidate| candidate == *id)
+                    .ok_or(TransitionError::IllegalStateChange)?;
+                new.bench.remove(index);
+            }
+        }
+        if !valid_team(new) {
+            return Err(TransitionError::IllegalStateChange);
+        }
+    }
+    Ok(())
+}
 
 /// The exception is only for a batted ball leaving the park, not an
 /// inside-the-park hit or a generic multi-run advancement.

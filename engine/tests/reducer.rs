@@ -4,7 +4,7 @@ use bbsim_engine::{
 };
 
 fn state() -> GameState {
-    GameState {
+    let mut state = GameState {
         inning: 3,
         half: Half::Bottom,
         outs: 2,
@@ -14,11 +14,19 @@ fn state() -> GameState {
                 batting_order: std::array::from_fn(|i| format!("away{i}")),
                 next_batter: 0,
                 pitcher: "away_pitcher".into(),
+                dh_slot: Some(8),
+                dh_must_bat: false,
+                bench: vec!["reliever".into(), "pinch".into()],
+                removed: vec![],
             },
             TeamState {
                 batting_order: std::array::from_fn(|i| format!("home{i}")),
                 next_batter: 0,
                 pitcher: "home_pitcher".into(),
+                dh_slot: Some(8),
+                dh_must_bat: false,
+                bench: vec!["reliever".into(), "pinch".into()],
+                removed: vec![],
             },
         ],
         bases: [
@@ -33,7 +41,10 @@ fn state() -> GameState {
             None,
         ],
         over: false,
-    }
+    };
+    state.teams[1].batting_order[7] = "runner_a".into();
+    state.teams[1].batting_order[6] = "runner_b".into();
+    state
 }
 
 #[test]
@@ -185,6 +196,7 @@ fn caught_stealing_third_out_clears_stranded_runners() {
 fn bases_loaded_walk_forces_a_run_without_loss_of_identity() {
     let mut before = state();
     before.outs = 1;
+    before.teams[1].batting_order[5] = "runner_c".into();
     before.bases[2] = Some(Runner {
         player_id: "runner_c".into(),
         responsible_pitcher: "older_pitcher".into(),
@@ -356,6 +368,7 @@ fn two_runners_score_on_one_plate_appearance() {
     let mut before = state();
     before.outs = 1;
     before.bases[0] = None;
+    before.teams[1].batting_order[5] = "runner_c".into();
     before.bases[2] = Some(Runner {
         player_id: "runner_c".into(),
         responsible_pitcher: "prior_pitcher".into(),
@@ -466,6 +479,9 @@ fn all_base_masks_preserve_or_strand_runners_at_the_third_out() {
             let mut before = state();
             before.outs = outs;
             for base in 0..3 {
+                if mask & (1 << base) != 0 {
+                    before.teams[1].batting_order[5 + base] = format!("runner_{base}");
+                }
                 before.bases[base] = (mask & (1 << base) != 0).then(|| Runner {
                     player_id: format!("runner_{base}"),
                     responsible_pitcher: "prior_pitcher".into(),

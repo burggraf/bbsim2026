@@ -20,15 +20,28 @@ fn state(
             batting_order: std::array::from_fn(|i| format!("away_{i}")),
             next_batter: 0,
             pitcher: "other_away_pitcher".into(),
+            dh_slot: Some(8),
+            dh_must_bat: false,
+            bench: vec![],
+            removed: vec![],
         },
         TeamState {
             batting_order: std::array::from_fn(|i| format!("home_{i}")),
             next_batter: 0,
             pitcher: "other_home_pitcher".into(),
+            dh_slot: Some(8),
+            dh_must_bat: false,
+            bench: vec![],
+            removed: vec![],
         },
     ];
     let offense = half.offense();
     teams[offense].batting_order[0] = batter.into();
+    for (index, id) in occupants.iter().enumerate() {
+        if let Some(id) = id {
+            teams[offense].batting_order[5 + index] = (*id).into();
+        }
+    }
     teams[1 - offense].pitcher = pitcher.into();
     GameState {
         inning,

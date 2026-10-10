@@ -8,16 +8,27 @@ fn team(prefix: &str, pitcher: &str) -> TeamState {
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
         pitcher: pitcher.into(),
+        dh_slot: Some(8),
+        dh_must_bat: false,
+        bench: vec![
+            "reliever".into(),
+            "bench_batter".into(),
+            "pinch_runner".into(),
+        ],
+        removed: vec![],
     }
 }
 
 fn state() -> GameState {
+    let mut home = team("home", "home_pitcher");
+    home.batting_order[7] = "runner_a".into();
+    home.batting_order[6] = "runner_b".into();
     GameState {
         inning: 3,
         half: Half::Bottom,
         outs: 2,
         score: [11, 2],
-        teams: [team("away", "away_pitcher"), team("home", "home_pitcher")],
+        teams: [team("away", "away_pitcher"), home],
         bases: [
             Some(Runner {
                 player_id: "runner_a".into(),
@@ -212,6 +223,8 @@ fn continuity_uses_complete_snapshots() {
     let next_before = first.after().clone();
     let mut next_after = next_before.clone();
     next_after.teams[0].pitcher = "reliever".into();
+    next_after.teams[0].bench.retain(|id| id != "reliever");
+    next_after.teams[0].removed.push("away_pitcher".into());
     let next = EventTransition::try_new(
         next_before,
         Event {
@@ -247,7 +260,7 @@ fn versioned_record_roundtrips_and_rejects_corruption() {
     let transition =
         EventTransition::try_new(before.clone(), wild_pitch_event(&before), after).unwrap();
     let bytes = transition.to_bytes();
-    assert!(bytes.starts_with(b"BBE5"));
+    assert!(bytes.starts_with(b"BBE7"));
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     assert!(EventTransition::from_bytes(&bytes[..bytes.len() - 1]).is_err());
     let mut trailing = bytes.clone();
@@ -281,6 +294,8 @@ fn substitution_preserves_batting_cursor_and_roundtrips() {
     let before = state();
     let mut after = before.clone();
     after.teams[0].pitcher = "reliever".into();
+    after.teams[0].bench.retain(|id| id != "reliever");
+    after.teams[0].removed.push("away_pitcher".into());
     let event = Event {
         kind: EventKind::Substitution,
         participants: Participants {
@@ -369,6 +384,13 @@ fn substitution_records_lineup_and_pinch_runner_responsibility() {
     let before = state();
     let mut after = before.clone();
     after.teams[1].batting_order[4] = "bench_batter".into();
+    after.teams[1].batting_order[7] = "pinch_runner".into();
+    after.teams[1]
+        .bench
+        .retain(|id| id != "bench_batter" && id != "pinch_runner");
+    after.teams[1]
+        .removed
+        .extend(["home4".into(), "runner_a".into()]);
     after.bases[0] = Some(Runner {
         player_id: "pinch_runner".into(),
         responsible_pitcher: "away_pitcher".into(),
@@ -418,6 +440,7 @@ fn simultaneous_out_and_score_reconciles_both_deltas() {
     let mut before = state();
     before.outs = 1;
     before.bases[1] = None;
+    before.teams[1].batting_order[5] = "scorer".into();
     before.bases[2] = Some(Runner {
         player_id: "scorer".into(),
         responsible_pitcher: "away_pitcher".into(),
