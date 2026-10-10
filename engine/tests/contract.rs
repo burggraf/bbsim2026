@@ -266,14 +266,14 @@ fn versioned_record_roundtrips_and_rejects_corruption() {
     let transition =
         EventTransition::try_new(before.clone(), wild_pitch_event(&before), after).unwrap();
     let bytes = transition.to_bytes();
-    assert!(bytes.starts_with(b"BBE10"));
+    assert!(bytes.starts_with(b"BBE11"));
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     assert!(EventTransition::from_bytes(&bytes[..bytes.len() - 1]).is_err());
     let mut trailing = bytes.clone();
     trailing.push(0);
     assert!(EventTransition::from_bytes(&trailing).is_err());
     let mut wrong_version = bytes;
-    wrong_version[4] = b'1';
+    wrong_version[0] = b'X';
     assert!(EventTransition::from_bytes(&wrong_version).is_err());
 }
 

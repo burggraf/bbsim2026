@@ -8,12 +8,10 @@ pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, Transi
     if before.teams.iter().any(|team| !rules::valid_team(team)) {
         return Err(TransitionError::InvalidState);
     }
+    rules::batter_charge(before, &event)?;
     let mut after = before.clone();
     let offense = before.half.offense();
-    if matches!(
-        event.kind,
-        EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
-    ) {
+    if event.kind.is_pa() {
         let cursor = after.teams[offense].next_batter;
         if cursor >= 9 {
             return Err(TransitionError::InvalidState);

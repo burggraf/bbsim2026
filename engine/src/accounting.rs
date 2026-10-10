@@ -232,10 +232,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             .entry(current_pitcher.into())
             .or_default()
             .outs_recorded += u32::from(event.delta.outs);
-        if matches!(
-            event.kind,
-            EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
-        ) {
+        if event.kind.is_pa() {
             let has = |kind| event.delta.credits.iter().any(|credit| credit.kind == kind);
             let excluded = [
                 CreditKind::Walk,
@@ -246,10 +243,12 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             ]
             .into_iter()
             .any(has);
-            let counted = event.kind == EventKind::OutOfParkHomeRun
-                || [CreditKind::AtBat, CreditKind::Hit, CreditKind::Strikeout]
-                    .into_iter()
-                    .any(has);
+            let counted = matches!(
+                event.kind,
+                EventKind::OutOfParkHomeRun | EventKind::FieldersChoice
+            ) || [CreditKind::AtBat, CreditKind::Hit, CreditKind::Strikeout]
+                .into_iter()
+                .any(has);
             let at_bat = if excluded {
                 Some(false)
             } else if counted {

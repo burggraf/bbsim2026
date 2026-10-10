@@ -109,6 +109,17 @@ pub enum EventKind {
     Substitution,
     /// A plate appearance on an out-of-park HR; all runners may score on a walk-off.
     OutOfParkHomeRun,
+    /// Bounded PA: lone occupied runner retired, batter safely to first.
+    /// The replacement inherits the retired runner's pitcher charge (9.16(g)).
+    FieldersChoice,
+}
+impl EventKind {
+    pub(crate) fn is_pa(self) -> bool {
+        matches!(
+            self,
+            Self::PlateAppearance | Self::OutOfParkHomeRun | Self::FieldersChoice
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -279,10 +290,8 @@ impl EventTransition {
         {
             return Err(TransitionError::InvalidParticipants);
         }
-        let is_pa = matches!(
-            event.kind,
-            EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
-        );
+        let is_pa = event.kind.is_pa();
+        let batter_charge = rules::batter_charge(&before, &event)?;
         if event.fielding_review == FieldingReview::NoMisplay
             && (event.kind == EventKind::RunnerOnly(RunnerEvent::PassedBall)
                 || event.delta.credits.iter().any(|c| {
@@ -417,7 +426,7 @@ impl EventTransition {
             if origin == 0 {
                 if !is_pa
                     || event.participants.batter.as_deref() != Some(&movement.runner.player_id)
-                    || movement.runner.responsible_pitcher != event.participants.pitcher
+                    || movement.runner.responsible_pitcher != batter_charge
                 {
                     return Err(TransitionError::DeltaMismatch);
                 }

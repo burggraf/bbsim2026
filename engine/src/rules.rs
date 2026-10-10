@@ -53,10 +53,7 @@ pub(crate) fn finalize_personnel(
             }
             if old.dh_must_bat {
                 let dh_batted = side == offense
-                    && matches!(
-                        event.kind,
-                        EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
-                    )
+                    && event.kind.is_pa()
                     && event.participants.batter.as_deref()
                         == Some(old.batting_order[slot as usize].as_str());
                 let opposing_pitcher_changed = event.delta.changes.iter().any(|change| {
@@ -107,6 +104,100 @@ pub(crate) fn finalize_personnel(
         }
     }
     Ok(())
+}
+
+/// Determine the batter-runner's carried charge, not who faced this PA.
+/// Rule 9.16(g): a lone runner retired by a fielder's choice is replaced by
+/// the batter with that runner's responsibility. More complex chains need
+/// additional play facts; movement-vector order is not a scoring fact.
+pub(crate) fn batter_charge<'a>(
+    before: &'a GameState,
+    event: &Event,
+) -> Result<&'a str, TransitionError> {
+    let current = before.teams[1 - before.half.offense()].pitcher.as_str();
+    if event.kind == EventKind::FieldersChoice {
+        if before.bases.iter().flatten().count() != 1
+            || event.delta.moves.len() != 2
+            || event.delta.outs != 1
+            || event.delta.runs != 0
+            || !event
+                .delta
+                .moves
+                .iter()
+                .any(|m| m.from == Base::Plate && m.to == Destination::First)
+        {
+            return Err(TransitionError::UnsupportedRule);
+        }
+        let (index, runner) = before
+            .bases
+            .iter()
+            .enumerate()
+            .find_map(|(i, r)| r.as_ref().map(|r| (i, r)))
+            .expect("one occupied base");
+        let base = [Base::First, Base::Second, Base::Third][index];
+        if !event
+            .delta
+            .moves
+            .iter()
+            .any(|m| m.from == base && m.to == Destination::Out && m.runner == *runner)
+        {
+            return Err(TransitionError::UnsupportedRule);
+        }
+        if event.delta.credits.iter().any(|c| {
+            matches!(
+                c.kind,
+                CreditKind::Hit
+                    | CreditKind::Walk
+                    | CreditKind::Strikeout
+                    | CreditKind::HitByPitch
+                    | CreditKind::SacrificeBunt
+                    | CreditKind::SacrificeFly
+                    | CreditKind::InterferenceAward
+                    | CreditKind::CaughtStealing
+            )
+        }) {
+            return Err(TransitionError::IllegalCredit);
+        }
+        return Ok(&runner.responsible_pitcher);
+    }
+    if event.kind == EventKind::PlateAppearance
+        && (before.outs.saturating_add(event.delta.outs) < 3
+            || event.delta.credits.iter().any(|c| {
+                c.kind == CreditKind::Run
+                    && Some(c.player_id.as_str()) == event.participants.batter.as_deref()
+            }))
+        && event.delta.moves.iter().any(|m| {
+            m.from == Base::Plate
+                && matches!(
+                    m.to,
+                    Destination::First
+                        | Destination::Second
+                        | Destination::Third
+                        | Destination::Home
+                )
+        })
+        && event.delta.moves.iter().any(|m| {
+            m.from != Base::Plate
+                && m.to == Destination::Out
+                && m.runner.responsible_pitcher != current
+        })
+        && !event.delta.credits.iter().any(|c| {
+            matches!(
+                c.kind,
+                CreditKind::Hit
+                    | CreditKind::Walk
+                    | CreditKind::HitByPitch
+                    | CreditKind::InterferenceAward
+            )
+        })
+    {
+        // An unclassified batter reaching while an inherited runner is retired
+        // may be a FC replacement. Do not silently erase that charge lineage.
+        // No carried/scored batter charge remains on a non-scoring third out;
+        // leave those existing timing/force/appeal validations in control.
+        return Err(TransitionError::UnsupportedRule);
+    }
+    Ok(current)
 }
 
 /// The exception is only for a batted ball leaving the park, not an
@@ -199,7 +290,7 @@ pub(crate) fn scored_runners(
             }
             // A force exists while the batter becomes a runner and every
             // preceding base in the chain was occupied before the play.
-            let batter_reaches_first = event.kind == EventKind::PlateAppearance
+            let batter_reaches_first = event.kind.is_pa()
                 && event.delta.moves.iter().any(|m| {
                     m.from == Base::Plate
                         && matches!(
