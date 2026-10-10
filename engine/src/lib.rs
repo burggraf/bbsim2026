@@ -191,10 +191,21 @@ pub struct Delta {
     pub changes: Vec<PersonnelChange>,
     pub third_out: Option<ThirdOut>,
 }
+/// Scorer/source review of all fielding chances during this event, including
+/// muffed fouls, errors, passed balls, interference and obstruction. NoMisplay
+/// asserts none occurred; it is not inferred from absent credits. Unknown
+/// cannot certify an errorless inning for earned runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldingReview {
+    Unknown,
+    NoMisplay,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
     pub participants: Participants,
+    pub fielding_review: FieldingReview,
     pub delta: Delta,
 }
 
@@ -272,6 +283,17 @@ impl EventTransition {
             event.kind,
             EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
         );
+        if event.fielding_review == FieldingReview::NoMisplay
+            && (event.kind == EventKind::RunnerOnly(RunnerEvent::PassedBall)
+                || event.delta.credits.iter().any(|c| {
+                    matches!(
+                        c.kind,
+                        CreditKind::Error | CreditKind::PassedBall | CreditKind::InterferenceAward
+                    )
+                }))
+        {
+            return Err(TransitionError::IllegalCredit);
+        }
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
         let is_substitution = event.kind == EventKind::Substitution;
         if is_substitution {

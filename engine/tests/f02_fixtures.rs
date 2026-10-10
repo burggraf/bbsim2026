@@ -105,6 +105,7 @@ fn event(
             changes: vec![],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     }
 }
 

@@ -4,7 +4,10 @@
 //! `None`, not zero. No game-state score is used to accumulate a line.
 use std::collections::BTreeMap;
 
-use crate::{CreditKind, Destination, EventKind, EventTransition, GameState, Half};
+use crate::{
+    Base, CreditKind, Destination, Event, EventKind, EventTransition, FieldingReview, GameState,
+    Half, RunnerEvent,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BatterLine {
@@ -54,7 +57,9 @@ pub struct PitcherLine {
     pub credited_hit_batters: u32,
     pub credited_sacrifice_bunts: u32,
     pub credited_sacrifice_flies: u32,
-    /// Earned runs need error/passed-ball reconstruction, not run totals.
+    /// Segment ER: positive counts require a completed, fully observed half
+    /// with reviewed clean plays. Any uncertain charged run makes this None.
+    /// Some(0) means no runs charged in this segment, not known career/game ER.
     pub earned_runs: Option<u32>,
 }
 impl Default for PitcherLine {
@@ -70,7 +75,7 @@ impl Default for PitcherLine {
             credited_hit_batters: 0,
             credited_sacrifice_bunts: 0,
             credited_sacrifice_flies: 0,
-            earned_runs: None,
+            earned_runs: Some(0),
         }
     }
 }
@@ -110,6 +115,74 @@ fn starts_game(state: &GameState) -> bool {
         && state.bases.iter().all(Option::is_none)
 }
 
+/// A deliberately narrow errorless-play proof. Absence of an Error credit
+/// alone is not proof: generic contact/advancement may conceal a misplay.
+fn clean_play(event: &Event) -> bool {
+    if event.fielding_review != FieldingReview::NoMisplay {
+        return false;
+    }
+    if event.delta.credits.iter().any(|c| {
+        matches!(
+            c.kind,
+            CreditKind::Error | CreditKind::PassedBall | CreditKind::InterferenceAward
+        )
+    }) {
+        return false;
+    }
+    match event.kind {
+        EventKind::Substitution | EventKind::OutOfParkHomeRun => true,
+        EventKind::PlateAppearance => {
+            let m = &event.delta.moves;
+            m.len() == 1
+                && m[0].from == Base::Plate
+                && event.delta.runs == 0
+                && ((m[0].to == Destination::Out
+                    && event.delta.outs == 1
+                    && event
+                        .delta
+                        .credits
+                        .iter()
+                        .any(|c| c.kind == CreditKind::Strikeout))
+                    || (m[0].to == Destination::First
+                        && event.delta.outs == 0
+                        && event
+                            .delta
+                            .credits
+                            .iter()
+                            .any(|c| c.kind == CreditKind::Walk)))
+        }
+        EventKind::RunnerOnly(RunnerEvent::WildPitch) => {
+            let m = &event.delta.moves;
+            m.len() == 1
+                && event.delta.outs == 0
+                && matches!(
+                    (m[0].from, m[0].to),
+                    (Base::First, Destination::Second)
+                        | (Base::Second, Destination::Third)
+                        | (Base::Third, Destination::Home)
+                )
+        }
+        _ => false,
+    }
+}
+
+fn finish_half(
+    accounting: &mut GameAccounting,
+    runs: &BTreeMap<(usize, String), u32>,
+    certified: bool,
+) {
+    for ((side, id), count) in runs {
+        let pitcher = accounting.pitchers[*side].entry(id.clone()).or_default();
+        if certified {
+            if let Some(earned) = &mut pitcher.earned_runs {
+                *earned += count;
+            }
+        } else {
+            pitcher.earned_runs = None;
+        }
+    }
+}
+
 pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, AccountingError> {
     let first = log.first().ok_or(AccountingError::EmptyLog)?;
     if log
@@ -126,9 +199,21 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         fielders: std::array::from_fn(|_| BTreeMap::new()),
         complete_game: starts_game(first.before()) && log.last().unwrap().after().over,
     };
-    for transition in log {
+    let mut frame = (first.before().inning, first.before().half);
+    // A later zero-out/empty-base snapshot alone is not evidence of a half's
+    // start (it could follow an unobserved solo HR). Later halves must follow
+    // an observed boundary in this contiguous log.
+    let mut clean_half = starts_game(first.before());
+    let mut half_runs: BTreeMap<(usize, String), u32> = BTreeMap::new();
+    for (index, transition) in log.iter().enumerate() {
         let before = transition.before();
         let event = transition.event();
+        if index > 0 && (before.inning, before.half) != frame {
+            frame = (before.inning, before.half);
+            clean_half = before.outs == 0 && before.bases.iter().all(Option::is_none);
+            half_runs.clear();
+        }
+        clean_half &= clean_play(event);
         let offense = before.half.offense();
         let defense = 1 - offense;
         let credited_runs = event
@@ -251,10 +336,12 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                                 && movement.runner.player_id == credit.player_id
                         })
                         .expect("validated Run credit");
+                    let responsible = scorer.runner.responsible_pitcher.clone();
                     result.pitchers[defense]
-                        .entry(scorer.runner.responsible_pitcher.clone())
+                        .entry(responsible.clone())
                         .or_default()
                         .runs_allowed += 1;
+                    *half_runs.entry((defense, responsible)).or_default() += 1;
                 }
                 CreditKind::Rbi => batter.credited_rbi += 1,
                 CreditKind::StolenBase => batter.credited_steals += 1,
@@ -287,6 +374,11 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 | CreditKind::Error
                 | CreditKind::PassedBall => unreachable!(),
             }
+        }
+        let ended = transition.after().over
+            || (transition.after().inning, transition.after().half) != frame;
+        if ended || index + 1 == log.len() {
+            finish_half(&mut result, &half_runs, clean_half && ended);
         }
     }
     let last = log.last().unwrap().after();

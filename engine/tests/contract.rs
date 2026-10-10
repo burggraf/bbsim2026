@@ -72,6 +72,7 @@ fn wild_pitch_event(before: &GameState) -> Event {
             changes: vec![],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     }
 }
 
@@ -159,6 +160,7 @@ fn strikeout_and_steal_share_a_single_pa_transition() {
             changes: vec![],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     };
     assert!(EventTransition::try_new(before, event, after).is_ok());
 }
@@ -192,6 +194,7 @@ fn third_out_retains_play_outs_but_normalizes_next_half() {
             changes: vec![],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     };
     let transition = EventTransition::try_new(before, event, after).unwrap();
     assert_eq!(transition.event().delta.outs, 1);
@@ -247,6 +250,7 @@ fn continuity_uses_complete_snapshots() {
                 }],
                 third_out: None,
             },
+            fielding_review: bbsim_engine::FieldingReview::Unknown,
         },
         next_after,
     )
@@ -262,14 +266,14 @@ fn versioned_record_roundtrips_and_rejects_corruption() {
     let transition =
         EventTransition::try_new(before.clone(), wild_pitch_event(&before), after).unwrap();
     let bytes = transition.to_bytes();
-    assert!(bytes.starts_with(b"BBE9"));
+    assert!(bytes.starts_with(b"BBE10"));
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     assert!(EventTransition::from_bytes(&bytes[..bytes.len() - 1]).is_err());
     let mut trailing = bytes.clone();
     trailing.push(0);
     assert!(EventTransition::from_bytes(&trailing).is_err());
     let mut wrong_version = bytes;
-    wrong_version[3] = b'1';
+    wrong_version[4] = b'1';
     assert!(EventTransition::from_bytes(&wrong_version).is_err());
 }
 
@@ -312,6 +316,7 @@ fn substitution_preserves_batting_cursor_and_roundtrips() {
             changes: vec![],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     };
     // A personnel change must be named in the delta, not hidden in `after`.
     assert!(EventTransition::try_new(before.clone(), event.clone(), after.clone()).is_err());
@@ -372,6 +377,7 @@ fn strikeout_passed_ball_can_reach_without_an_out() {
             changes: vec![],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     };
     let transition = EventTransition::try_new(before, event, after).unwrap();
     assert_eq!(
@@ -423,6 +429,7 @@ fn substitution_records_lineup_and_pinch_runner_responsibility() {
             ],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     };
     let transition =
         EventTransition::try_new(before.clone(), event.clone(), after.clone()).unwrap();
@@ -493,6 +500,7 @@ fn simultaneous_out_and_score_reconciles_both_deltas() {
             changes: vec![],
             third_out: None,
         },
+        fielding_review: bbsim_engine::FieldingReview::Unknown,
     };
     assert!(EventTransition::try_new(before, event, after).is_ok());
 }
