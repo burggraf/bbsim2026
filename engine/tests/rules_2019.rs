@@ -1,6 +1,7 @@
 use bbsim_engine::{
     apply, Base, Credit, CreditKind, Delta, Destination, Event, EventKind, EventTransition,
-    GameState, Half, Participants, Runner, RunnerMove, TeamState, TransitionError,
+    GameState, Half, Participants, Runner, RunnerMove, TeamState, ThirdOut, ThirdOutKind,
+    TransitionError,
 };
 
 fn state(inning: u16, half: Half, outs: u8, score: [u16; 2]) -> GameState {
@@ -59,6 +60,7 @@ fn batter_event(
             runs,
             credits,
             changes: vec![],
+            third_out: None,
         },
     }
 }
@@ -247,4 +249,227 @@ fn run_credit_must_identify_the_runner_who_reached_home() {
         },
     ];
     assert!(apply(&before, batter_event(&before, moves, 1, 1, &["not_r3"])).is_err());
+}
+
+fn on_base(id: &str) -> Runner {
+    Runner {
+        player_id: id.into(),
+        responsible_pitcher: "prior_pitcher".into(),
+    }
+}
+fn batter_reaches_first(before: &GameState) -> RunnerMove {
+    let mut movement = batter_out(before);
+    movement.to = Destination::First;
+    movement
+}
+fn to_home(before: &GameState, index: usize, from: Base) -> RunnerMove {
+    RunnerMove {
+        runner: before.bases[index].clone().unwrap(),
+        from,
+        to: Destination::Home,
+    }
+}
+
+#[test]
+fn force_third_out_voids_runner_who_physically_crossed_home() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases[0] = Some(on_base("r1"));
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![
+        batter_reaches_first(&before),
+        RunnerMove {
+            runner: before.bases[0].clone().unwrap(),
+            from: Base::First,
+            to: Destination::Out,
+        },
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 1, 0, &[]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "r1".into(),
+        kind: ThirdOutKind::Force,
+        home_before_out: vec!["r3".into()],
+    });
+    let next = apply(&before, event).unwrap();
+    assert_eq!(next.after().score, [4, 4]);
+    assert_eq!(
+        (next.after().inning, next.after().half, next.after().outs),
+        (9, Half::Top, 0)
+    );
+    assert_eq!(next.event().delta.moves[2].to, Destination::Home);
+    assert_eq!(EventTransition::from_bytes(&next.to_bytes()).unwrap(), next);
+}
+
+#[test]
+fn batter_before_first_third_out_voids_home_crossing() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![batter_out(&before), to_home(&before, 2, Base::Third)];
+    let mut event = batter_event(&before, moves, 1, 0, &[]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "home0".into(),
+        kind: ThirdOutKind::BatterBeforeFirst,
+        home_before_out: vec!["r3".into()],
+    });
+    let next = apply(&before, event).unwrap();
+    assert_eq!(next.after().score, [4, 4]);
+}
+
+#[test]
+fn nonforce_third_out_counts_only_runs_before_the_tag() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases[1] = Some(on_base("r2"));
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![
+        batter_reaches_first(&before),
+        RunnerMove {
+            runner: before.bases[1].clone().unwrap(),
+            from: Base::Second,
+            to: Destination::Out,
+        },
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 1, 1, &["r3"]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "r2".into(),
+        kind: ThirdOutKind::Timing,
+        home_before_out: vec!["r3".into()],
+    });
+    let next = apply(&before, event).unwrap();
+    assert_eq!(next.after().score, [4, 5]);
+    assert_eq!(next.event().delta.runs, 1);
+}
+
+#[test]
+fn preceding_runner_appeal_voids_following_runners_only() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases = [
+        Some(on_base("r1")),
+        Some(on_base("r2")),
+        Some(on_base("r3")),
+    ];
+    let moves = vec![
+        batter_reaches_first(&before),
+        to_home(&before, 0, Base::First),
+        RunnerMove {
+            runner: before.bases[1].clone().unwrap(),
+            from: Base::Second,
+            to: Destination::Out,
+        },
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 1, 1, &["r3"]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "r2".into(),
+        kind: ThirdOutKind::PrecedingRunnerAppeal,
+        home_before_out: vec!["r1".into(), "r3".into()],
+    });
+    let next = apply(&before, event).unwrap();
+    assert_eq!(next.after().score, [4, 5]);
+    assert_eq!(
+        next.event()
+            .delta
+            .moves
+            .iter()
+            .filter(|m| m.to == Destination::Home)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn force_label_cannot_override_batter_retired_before_first() {
+    let mut before = state(8, Half::Bottom, 1, [4, 4]);
+    before.bases[0] = Some(on_base("r1"));
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![
+        batter_out(&before),
+        RunnerMove {
+            runner: before.bases[0].clone().unwrap(),
+            from: Base::First,
+            to: Destination::Out,
+        },
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 2, 0, &[]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "r1".into(),
+        kind: ThirdOutKind::Force,
+        home_before_out: vec!["r3".into()],
+    });
+    assert!(apply(&before, event).is_err());
+}
+
+#[test]
+fn runner_on_second_is_not_forced_without_runner_on_first() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases[1] = Some(on_base("r2"));
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![
+        batter_reaches_first(&before),
+        RunnerMove {
+            runner: before.bases[1].clone().unwrap(),
+            from: Base::Second,
+            to: Destination::Out,
+        },
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 1, 0, &[]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "r2".into(),
+        kind: ThirdOutKind::Force,
+        home_before_out: vec!["r3".into()],
+    });
+    assert!(apply(&before, event).is_err());
+}
+
+#[test]
+fn timing_out_of_batter_requires_proof_he_reached_first() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![batter_out(&before), to_home(&before, 2, Base::Third)];
+    let mut event = batter_event(&before, moves, 1, 1, &["r3"]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "home0".into(),
+        kind: ThirdOutKind::Timing,
+        home_before_out: vec!["r3".into()],
+    });
+    assert!(matches!(
+        apply(&before, event),
+        Err(TransitionError::UnsupportedRule)
+    ));
+}
+
+#[test]
+fn multi_out_force_sequence_needs_ordering_before_voiding_runs() {
+    let mut before = state(8, Half::Bottom, 1, [4, 4]);
+    before.bases = [
+        Some(on_base("r1")),
+        Some(on_base("r2")),
+        Some(on_base("r3")),
+    ];
+    let moves = vec![
+        batter_reaches_first(&before),
+        RunnerMove {
+            runner: before.bases[0].clone().unwrap(),
+            from: Base::First,
+            to: Destination::Out,
+        },
+        RunnerMove {
+            runner: before.bases[1].clone().unwrap(),
+            from: Base::Second,
+            to: Destination::Out,
+        },
+        to_home(&before, 2, Base::Third),
+    ];
+    let mut event = batter_event(&before, moves, 2, 0, &[]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "r2".into(),
+        kind: ThirdOutKind::Force,
+        home_before_out: vec!["r3".into()],
+    });
+    assert!(matches!(
+        apply(&before, event),
+        Err(TransitionError::UnsupportedRule)
+    ));
 }

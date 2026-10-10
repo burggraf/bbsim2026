@@ -62,6 +62,7 @@ fn derives_f02_runner_only_wild_pitch_without_advancing_batter() {
             runs: 0,
             credits: vec![],
             changes: vec![],
+            third_out: None,
         },
     };
     let transition = apply(&before, event).unwrap();
@@ -102,6 +103,7 @@ fn pa(
             runs,
             credits,
             changes: vec![],
+            third_out: None,
         },
     }
 }
@@ -166,6 +168,7 @@ fn caught_stealing_third_out_clears_stranded_runners() {
                 kind: CreditKind::CaughtStealing,
             }],
             changes: vec![],
+            third_out: None,
         },
     };
     let next = apply(&before, event).unwrap();
@@ -291,6 +294,7 @@ fn substitution_changes_pitcher_and_inherits_pinch_runner_responsibility() {
                     },
                 },
             ],
+            third_out: None,
         },
     };
     let next = apply(&before, event).unwrap();
@@ -322,6 +326,7 @@ fn illegal_collision_does_not_mutate_caller_state() {
             runs: 0,
             credits: vec![],
             changes: vec![],
+            third_out: None,
         },
     };
     assert!(apply(&before, event).is_err());
@@ -445,6 +450,7 @@ fn pickoff_follows_prior_event_without_plate_appearance() {
             runs: 0,
             credits: vec![],
             changes: vec![],
+            third_out: None,
         },
     };
     let next = apply(prior.after(), event).unwrap();

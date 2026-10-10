@@ -143,13 +143,32 @@ pub enum PersonnelChange {
         incoming: Runner,
     },
 }
+/// Why the final out occurred. A timing out can preserve runs that crossed
+/// first; a force or batter-runner out before first cannot (2019 Rule 5.08(a)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThirdOutKind {
+    BatterBeforeFirst,
+    Force,
+    Timing,
+    PrecedingRunnerAppeal,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThirdOut {
+    pub runner_id: String,
+    pub kind: ThirdOutKind,
+    /// Home-crossing runner IDs that reached home before the final out.
+    /// This is observed/sampled play order, not inferred from Vec order.
+    pub home_before_out: Vec<String>,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Delta {
     pub moves: Vec<RunnerMove>,
     pub outs: u8,
+    /// Legally credited runs, potentially fewer than physical home crossings.
     pub runs: u8,
     pub credits: Vec<Credit>,
     pub changes: Vec<PersonnelChange>,
+    pub third_out: Option<ThirdOut>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
@@ -311,7 +330,6 @@ impl EventTransition {
         let mut destinations = Vec::new();
         let mut occupied_origins = [false; 4];
         let mut outs_made = 0u8;
-        let mut runs_scored = 0u8;
         for movement in &event.delta.moves {
             let origin = match movement.from {
                 Base::Plate => 0,
@@ -344,27 +362,24 @@ impl EventTransition {
                         .checked_add(1)
                         .ok_or(TransitionError::DeltaMismatch)?
                 }
-                Destination::Home => {
-                    runs_scored = runs_scored
-                        .checked_add(1)
-                        .ok_or(TransitionError::DeltaMismatch)?
-                }
+                Destination::Home => {}
                 destination => destinations.push((destination, movement.runner.clone())),
             }
         }
-        if occupied_origins[0] != is_pa
-            || outs_made != event.delta.outs
-            || runs_scored != event.delta.runs
-        {
+        if occupied_origins[0] != is_pa || outs_made != event.delta.outs {
             return Err(TransitionError::DeltaMismatch);
         }
-        let mut scored: Vec<_> = event
-            .delta
-            .moves
-            .iter()
-            .filter(|movement| movement.to == Destination::Home)
-            .map(|movement| movement.runner.player_id.as_str())
-            .collect();
+        let total_outs = before
+            .outs
+            .checked_add(event.delta.outs)
+            .ok_or(TransitionError::DeltaMismatch)?;
+        if total_outs > 3 {
+            return Err(TransitionError::DeltaMismatch);
+        }
+        let mut scored = rules::scored_runners(&before, &event, total_outs)?;
+        if scored.len() != usize::from(event.delta.runs) {
+            return Err(TransitionError::DeltaMismatch);
+        }
         let mut run_credits: Vec<_> = event
             .delta
             .credits
@@ -374,7 +389,7 @@ impl EventTransition {
             .collect();
         scored.sort_unstable();
         run_credits.sort_unstable();
-        if scored != run_credits {
+        if scored.iter().map(String::as_str).collect::<Vec<_>>() != run_credits {
             return Err(TransitionError::IllegalCredit);
         }
         for (destination, runner) in destinations {
@@ -393,13 +408,6 @@ impl EventTransition {
             || before.score[offense].checked_add(u16::from(event.delta.runs))
                 != Some(after.score[offense])
         {
-            return Err(TransitionError::DeltaMismatch);
-        }
-        let total_outs = before
-            .outs
-            .checked_add(event.delta.outs)
-            .ok_or(TransitionError::DeltaMismatch)?;
-        if total_outs > 3 {
             return Err(TransitionError::DeltaMismatch);
         }
         let ending = rules::ending(&before, &event, total_outs)?;

@@ -57,6 +57,7 @@ fn wild_pitch_event(before: &GameState) -> Event {
             runs: 0,
             credits: vec![],
             changes: vec![],
+            third_out: None,
         },
     }
 }
@@ -143,6 +144,7 @@ fn strikeout_and_steal_share_a_single_pa_transition() {
                 },
             ],
             changes: vec![],
+            third_out: None,
         },
     };
     assert!(EventTransition::try_new(before, event, after).is_ok());
@@ -175,6 +177,7 @@ fn third_out_retains_play_outs_but_normalizes_next_half() {
                 kind: CreditKind::CaughtStealing,
             }],
             changes: vec![],
+            third_out: None,
         },
     };
     let transition = EventTransition::try_new(before, event, after).unwrap();
@@ -227,6 +230,7 @@ fn continuity_uses_complete_snapshots() {
                     outgoing: "away_pitcher".into(),
                     incoming: "reliever".into(),
                 }],
+                third_out: None,
             },
         },
         next_after,
@@ -243,7 +247,7 @@ fn versioned_record_roundtrips_and_rejects_corruption() {
     let transition =
         EventTransition::try_new(before.clone(), wild_pitch_event(&before), after).unwrap();
     let bytes = transition.to_bytes();
-    assert!(bytes.starts_with(b"BBE3"));
+    assert!(bytes.starts_with(b"BBE4"));
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     assert!(EventTransition::from_bytes(&bytes[..bytes.len() - 1]).is_err());
     let mut trailing = bytes.clone();
@@ -289,6 +293,7 @@ fn substitution_preserves_batting_cursor_and_roundtrips() {
             runs: 0,
             credits: vec![],
             changes: vec![],
+            third_out: None,
         },
     };
     // A personnel change must be named in the delta, not hidden in `after`.
@@ -348,6 +353,7 @@ fn strikeout_passed_ball_can_reach_without_an_out() {
                 },
             ],
             changes: vec![],
+            third_out: None,
         },
     };
     let transition = EventTransition::try_new(before, event, after).unwrap();
@@ -391,6 +397,7 @@ fn substitution_records_lineup_and_pinch_runner_responsibility() {
                     incoming: after.bases[0].clone().unwrap(),
                 },
             ],
+            third_out: None,
         },
     };
     let transition =
@@ -459,6 +466,7 @@ fn simultaneous_out_and_score_reconciles_both_deltas() {
                 },
             ],
             changes: vec![],
+            third_out: None,
         },
     };
     assert!(EventTransition::try_new(before, event, after).is_ok());

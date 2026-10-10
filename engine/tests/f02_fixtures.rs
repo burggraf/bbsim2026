@@ -90,6 +90,7 @@ fn event(
             runs,
             credits,
             changes: vec![],
+            third_out: None,
         },
     }
 }
