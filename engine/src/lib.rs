@@ -2,6 +2,8 @@
 //! The reducer, statistical accounting and era rules are later work packages.
 
 mod codec;
+mod reducer;
+pub use reducer::apply;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TeamSide {
@@ -384,15 +386,16 @@ impl EventTransition {
         if total_outs > 3 {
             return Err(TransitionError::DeltaMismatch);
         }
-        let (next_inning, next_half) = match before.half {
-            Half::Top => (before.inning, Half::Bottom),
-            Half::Bottom => (
+        let (next_inning, next_half) = match (before.half, total_outs) {
+            (Half::Top, _) => (before.inning, Half::Bottom),
+            (Half::Bottom, 3) => (
                 before
                     .inning
                     .checked_add(1)
                     .ok_or(TransitionError::DeltaMismatch)?,
                 Half::Top,
             ),
+            (Half::Bottom, _) => (before.inning, Half::Top),
         };
         if (total_outs == 3
             && !after.over
