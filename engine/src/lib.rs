@@ -1,6 +1,7 @@
 //! Deterministic, storage-independent 2019 event-state contract.
 //! The reducer, statistical accounting and era rules are later work packages.
 
+pub mod accounting;
 mod codec;
 mod reducer;
 mod rules;
@@ -429,6 +430,57 @@ impl EventTransition {
         scored.sort_unstable();
         run_credits.sort_unstable();
         if scored.iter().map(String::as_str).collect::<Vec<_>>() != run_credits {
+            return Err(TransitionError::IllegalCredit);
+        }
+        let defense_team = &before.teams[1 - offense];
+        for credit in &event.delta.credits {
+            let eligible = match credit.kind {
+                CreditKind::PlateAppearance | CreditKind::Run => true, // checked above
+                CreditKind::Hit | CreditKind::Walk | CreditKind::Strikeout | CreditKind::Rbi => {
+                    is_pa && event.participants.batter.as_deref() == Some(credit.player_id.as_str())
+                }
+                CreditKind::StolenBase => event.delta.moves.iter().any(|m| {
+                    m.runner.player_id == credit.player_id
+                        && matches!(
+                            (m.from, m.to),
+                            (
+                                Base::First,
+                                Destination::Second | Destination::Third | Destination::Home
+                            ) | (Base::Second, Destination::Third | Destination::Home)
+                                | (Base::Third, Destination::Home)
+                        )
+                }),
+                CreditKind::CaughtStealing => event.delta.moves.iter().any(|m| {
+                    m.from != Base::Plate
+                        && m.runner.player_id == credit.player_id
+                        && m.to == Destination::Out
+                }),
+                CreditKind::Putout
+                | CreditKind::Assist
+                | CreditKind::Error
+                | CreditKind::PassedBall => {
+                    credit.player_id == defense_team.pitcher
+                        || defense_team.batting_order.contains(&credit.player_id)
+                }
+            };
+            if !eligible {
+                return Err(TransitionError::IllegalCredit);
+            }
+        }
+        let count = |kind| {
+            event
+                .delta
+                .credits
+                .iter()
+                .filter(|c| c.kind == kind)
+                .count()
+        };
+        let outcomes =
+            count(CreditKind::Hit) + count(CreditKind::Walk) + count(CreditKind::Strikeout);
+        if outcomes > 1
+            || count(CreditKind::Rbi) > usize::from(event.delta.runs)
+            || count(CreditKind::Putout) > usize::from(event.delta.outs)
+        {
             return Err(TransitionError::IllegalCredit);
         }
         for (destination, runner) in destinations {

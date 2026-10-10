@@ -2,8 +2,8 @@
 //! fixture report. Historical runner-to-pitcher responsibility is not present
 //! in that audit; the explicit placeholder below tests preservation only.
 use bbsim_engine::{
-    apply, Base, Credit, CreditKind, Delta, Destination, Event, EventKind, GameState, Half,
-    Participants, Runner, RunnerEvent, RunnerMove, TeamState,
+    accounting::derive_accounting, apply, Base, Credit, CreditKind, Delta, Destination, Event,
+    EventKind, GameState, Half, Participants, Runner, RunnerEvent, RunnerMove, TeamState,
 };
 
 fn state(
@@ -217,6 +217,13 @@ fn ana201904040_99_batter_out_and_runner_scores() {
         "bourj002"
     );
     assert_eq!(next.after().bases[2], None);
+    let accounted = derive_accounting(&[next]).unwrap();
+    assert_eq!(accounted.innings[&9], [None, Some(1)]);
+    assert_eq!(
+        accounted.pitchers[0]["unverified_prior_pitcher"].runs_allowed,
+        1
+    );
+    assert_eq!(accounted.pitchers[0]["dowdk001"].outs_recorded, 1);
 }
 
 #[test]
@@ -261,6 +268,11 @@ fn ana201904050_4_strikeout_and_steal() {
         "odorr001"
     );
     assert_eq!(next.after().teams[0].next_batter, 1);
+    let accounted = derive_accounting(&[next]).unwrap();
+    assert_eq!(accounted.batters[0]["mazan001"].plate_appearances, 1);
+    assert_eq!(accounted.batters[0]["mazan001"].credited_strikeouts, 1);
+    assert_eq!(accounted.batters[0]["andre001"].credited_steals, 1);
+    assert_eq!(accounted.pitchers[1]["penaf002"].outs_recorded, 1);
 }
 
 #[test]
@@ -297,4 +309,13 @@ fn ana201904070_3_caught_stealing_keeps_batter() {
     );
     assert_eq!(next.after().bases, [None, None, None]);
     assert_eq!(next.after().teams[0].next_batter, 0);
+    let accounted = derive_accounting(&[next]).unwrap();
+    assert_eq!(accounted.batters[0]["odorr001"].credited_caught_stealing, 1);
+    assert_eq!(
+        accounted.batters[0]
+            .get("andre001")
+            .map(|b| b.plate_appearances),
+        None
+    );
+    assert_eq!(accounted.pitchers[1]["strac001"].outs_recorded, 1);
 }

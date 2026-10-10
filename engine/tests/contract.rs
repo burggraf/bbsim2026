@@ -23,12 +23,14 @@ fn state() -> GameState {
     let mut home = team("home", "home_pitcher");
     home.batting_order[7] = "runner_a".into();
     home.batting_order[6] = "runner_b".into();
+    let mut away = team("away", "away_pitcher");
+    away.batting_order[5] = "catcher".into();
     GameState {
         inning: 3,
         half: Half::Bottom,
         outs: 2,
         score: [11, 2],
-        teams: [team("away", "away_pitcher"), home],
+        teams: [away, home],
         bases: [
             Some(Runner {
                 player_id: "runner_a".into(),
