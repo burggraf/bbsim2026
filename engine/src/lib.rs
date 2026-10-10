@@ -550,6 +550,25 @@ impl EventTransition {
         {
             return Err(TransitionError::IllegalCredit);
         }
+        // Rules 5.05(a)(2), 5.09(a)(3): with first occupied before
+        // two outs, the third strike retires the batter automatically. A
+        // same-play runner advance cannot make him eligible after the fact.
+        if count(CreditKind::Strikeout) > 0
+            && before.outs < 2
+            && before.bases[0].is_some()
+            && (event
+                .delta
+                .moves
+                .iter()
+                .any(|m| m.from == Base::Plate && m.to != Destination::Out)
+                || event
+                    .delta
+                    .third_out
+                    .as_ref()
+                    .is_some_and(|out| out.kind == ThirdOutKind::BatterAfterFirstTiming))
+        {
+            return Err(TransitionError::IllegalStateChange);
+        }
         if count(CreditKind::Walk)
             + count(CreditKind::HitByPitch)
             + count(CreditKind::InterferenceAward)
