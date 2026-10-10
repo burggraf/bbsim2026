@@ -4,9 +4,9 @@
 //! `None`, not zero. No game-state score is used to accumulate a line.
 use std::collections::BTreeMap;
 
-use crate::{CreditKind, Destination, EventTransition, GameState, Half};
+use crate::{CreditKind, Destination, EventKind, EventTransition, GameState, Half};
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BatterLine {
     pub plate_appearances: u32,
     pub credited_hits: u32,
@@ -16,18 +16,63 @@ pub struct BatterLine {
     pub credited_rbi: u32,
     pub credited_steals: u32,
     pub credited_caught_stealing: u32,
-    /// AB needs HBP, sacrifices, interference and other PA classification.
+    pub credited_hit_by_pitch: u32,
+    pub credited_sacrifice_bunts: u32,
+    pub credited_sacrifice_flies: u32,
+    pub credited_interference_awards: u32,
+    /// None if any PA for this player in the segment lacks AB classification.
     pub at_bats: Option<u32>,
 }
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+impl Default for BatterLine {
+    fn default() -> Self {
+        Self {
+            plate_appearances: 0,
+            credited_hits: 0,
+            credited_walks: 0,
+            credited_strikeouts: 0,
+            credited_runs: 0,
+            credited_rbi: 0,
+            credited_steals: 0,
+            credited_caught_stealing: 0,
+            credited_hit_by_pitch: 0,
+            credited_sacrifice_bunts: 0,
+            credited_sacrifice_flies: 0,
+            credited_interference_awards: 0,
+            at_bats: Some(0),
+        }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PitcherLine {
     pub outs_recorded: u32,
+    pub batters_faced: u32,
+    pub at_bats_against: Option<u32>,
     pub runs_allowed: u32,
     pub credited_hits_allowed: u32,
     pub credited_walks_allowed: u32,
     pub credited_strikeouts: u32,
+    pub credited_hit_batters: u32,
+    pub credited_sacrifice_bunts: u32,
+    pub credited_sacrifice_flies: u32,
     /// Earned runs need error/passed-ball reconstruction, not run totals.
     pub earned_runs: Option<u32>,
+}
+impl Default for PitcherLine {
+    fn default() -> Self {
+        Self {
+            outs_recorded: 0,
+            batters_faced: 0,
+            at_bats_against: Some(0),
+            runs_allowed: 0,
+            credited_hits_allowed: 0,
+            credited_walks_allowed: 0,
+            credited_strikeouts: 0,
+            credited_hit_batters: 0,
+            credited_sacrifice_bunts: 0,
+            credited_sacrifice_flies: 0,
+            earned_runs: None,
+        }
+    }
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FielderLine {
@@ -102,6 +147,53 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             .entry(current_pitcher.into())
             .or_default()
             .outs_recorded += u32::from(event.delta.outs);
+        if matches!(
+            event.kind,
+            EventKind::PlateAppearance | EventKind::OutOfParkHomeRun
+        ) {
+            let has = |kind| event.delta.credits.iter().any(|credit| credit.kind == kind);
+            let excluded = [
+                CreditKind::Walk,
+                CreditKind::HitByPitch,
+                CreditKind::SacrificeBunt,
+                CreditKind::SacrificeFly,
+                CreditKind::InterferenceAward,
+            ]
+            .into_iter()
+            .any(has);
+            let counted = event.kind == EventKind::OutOfParkHomeRun
+                || [CreditKind::AtBat, CreditKind::Hit, CreditKind::Strikeout]
+                    .into_iter()
+                    .any(has);
+            let at_bat = if excluded {
+                Some(false)
+            } else if counted {
+                Some(true)
+            } else {
+                None
+            };
+            let batter = event.participants.batter.as_deref().expect("validated PA");
+            let batting_line = result.batters[offense].entry(batter.into()).or_default();
+            let pitching_line = result.pitchers[defense]
+                .entry(current_pitcher.into())
+                .or_default();
+            pitching_line.batters_faced += 1;
+            match at_bat {
+                Some(true) => {
+                    if let Some(n) = &mut batting_line.at_bats {
+                        *n += 1;
+                    }
+                    if let Some(n) = &mut pitching_line.at_bats_against {
+                        *n += 1;
+                    }
+                }
+                None => {
+                    batting_line.at_bats = None;
+                    pitching_line.at_bats_against = None;
+                }
+                Some(false) => {}
+            }
+        }
         for credit in &event.delta.credits {
             if matches!(
                 credit.kind,
@@ -167,6 +259,29 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 CreditKind::Rbi => batter.credited_rbi += 1,
                 CreditKind::StolenBase => batter.credited_steals += 1,
                 CreditKind::CaughtStealing => batter.credited_caught_stealing += 1,
+                CreditKind::AtBat => {} // already included in the PA classification
+                CreditKind::HitByPitch => {
+                    batter.credited_hit_by_pitch += 1;
+                    result.pitchers[defense]
+                        .entry(current_pitcher.into())
+                        .or_default()
+                        .credited_hit_batters += 1;
+                }
+                CreditKind::SacrificeBunt => {
+                    batter.credited_sacrifice_bunts += 1;
+                    result.pitchers[defense]
+                        .entry(current_pitcher.into())
+                        .or_default()
+                        .credited_sacrifice_bunts += 1;
+                }
+                CreditKind::SacrificeFly => {
+                    batter.credited_sacrifice_flies += 1;
+                    result.pitchers[defense]
+                        .entry(current_pitcher.into())
+                        .or_default()
+                        .credited_sacrifice_flies += 1;
+                }
+                CreditKind::InterferenceAward => batter.credited_interference_awards += 1,
                 CreditKind::Putout
                 | CreditKind::Assist
                 | CreditKind::Error

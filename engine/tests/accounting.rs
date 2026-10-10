@@ -174,7 +174,9 @@ fn golden_partial_log_derives_lines_and_charges_inherited_run_to_prior_pitcher()
     assert_eq!(box_score.batters[0]["away0"].plate_appearances, 1);
     assert_eq!(box_score.batters[0]["away0"].credited_hits, 1);
     assert_eq!(box_score.batters[0]["runner"].credited_runs, 1);
-    assert_eq!(box_score.batters[0]["away0"].at_bats, None);
+    assert_eq!(box_score.batters[0]["away0"].at_bats, Some(1));
+    assert_eq!(box_score.batters[0]["away1"].at_bats, None);
+    assert_eq!(box_score.pitchers[1]["home_reliever"].at_bats_against, None);
     assert_eq!(box_score.pitchers[1]["home_starter"].runs_allowed, 1);
     assert_eq!(box_score.pitchers[1]["home_starter"].outs_recorded, 0);
     assert_eq!(box_score.pitchers[1]["home_reliever"].outs_recorded, 2);
@@ -564,4 +566,191 @@ fn a_single_plate_appearance_cannot_credit_two_hits() {
         vec![],
     );
     assert!(apply(&before, action).is_err());
+}
+
+#[test]
+fn official_at_bats_are_derived_only_from_classified_plate_appearances() {
+    let mut before = state();
+    before.bases = [None, None, None];
+    let action = event(
+        &before,
+        EventKind::PlateAppearance,
+        vec![batter_move(&before, Destination::Out)],
+        1,
+        0,
+        vec![credit("away0", CreditKind::AtBat)],
+        vec![],
+    );
+    let first = apply(&before, action).unwrap();
+    let s = first.after();
+    let action = event(
+        s,
+        EventKind::PlateAppearance,
+        vec![batter_move(s, Destination::First)],
+        0,
+        0,
+        vec![credit("away1", CreditKind::Walk)],
+        vec![],
+    );
+    let second = apply(s, action).unwrap();
+    let s = second.after();
+    let action = event(
+        s,
+        EventKind::PlateAppearance,
+        vec![
+            batter_move(s, Destination::First),
+            RunnerMove {
+                runner: s.bases[0].clone().unwrap(),
+                from: Base::First,
+                to: Destination::Second,
+            },
+        ],
+        0,
+        0,
+        vec![credit("away2", CreditKind::HitByPitch)],
+        vec![],
+    );
+    let third = apply(s, action).unwrap();
+    let result = derive_accounting(&[first, second, third]).unwrap();
+    assert_eq!(result.batters[0]["away0"].at_bats, Some(1));
+    assert_eq!(result.batters[0]["away1"].at_bats, Some(0));
+    assert_eq!(result.batters[0]["away2"].at_bats, Some(0));
+    assert_eq!(result.batters[0]["away2"].credited_hit_by_pitch, 1);
+    assert_eq!(result.pitchers[1]["home_starter"].at_bats_against, Some(1));
+    assert_eq!(result.pitchers[1]["home_starter"].batters_faced, 3);
+
+    let mut before = state();
+    before.bases = [None, None, None];
+    let unknown = apply(
+        &before,
+        event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![],
+            vec![],
+        ),
+    )
+    .unwrap();
+    let result = derive_accounting(&[unknown]).unwrap();
+    assert_eq!(result.batters[0]["away0"].at_bats, None);
+    assert_eq!(result.pitchers[1]["home_starter"].at_bats_against, None);
+}
+
+#[test]
+fn sacrifice_fly_and_interference_award_do_not_create_at_bats() {
+    let mut before = state();
+    before.bases = [
+        None,
+        None,
+        Some(Runner {
+            player_id: "away6".into(),
+            responsible_pitcher: "home_starter".into(),
+        }),
+    ];
+    let action = event(
+        &before,
+        EventKind::PlateAppearance,
+        vec![
+            batter_move(&before, Destination::Out),
+            RunnerMove {
+                runner: before.bases[2].clone().unwrap(),
+                from: Base::Third,
+                to: Destination::Home,
+            },
+        ],
+        1,
+        1,
+        vec![
+            credit("away0", CreditKind::SacrificeFly),
+            credit("away6", CreditKind::Run),
+            credit("away0", CreditKind::Rbi),
+        ],
+        vec![],
+    );
+    let first = apply(&before, action).unwrap();
+    let s = first.after();
+    let action = event(
+        s,
+        EventKind::PlateAppearance,
+        vec![batter_move(s, Destination::First)],
+        0,
+        0,
+        vec![credit("away1", CreditKind::InterferenceAward)],
+        vec![],
+    );
+    let second = apply(s, action).unwrap();
+    let s = second.after();
+    let action = event(
+        s,
+        EventKind::PlateAppearance,
+        vec![
+            batter_move(s, Destination::Out),
+            RunnerMove {
+                runner: s.bases[0].clone().unwrap(),
+                from: Base::First,
+                to: Destination::Second,
+            },
+        ],
+        1,
+        0,
+        vec![credit("away2", CreditKind::SacrificeBunt)],
+        vec![],
+    );
+    let third = apply(s, action).unwrap();
+    let result = derive_accounting(&[first, second, third]).unwrap();
+    assert_eq!(result.batters[0]["away0"].credited_sacrifice_flies, 1);
+    assert_eq!(result.batters[0]["away0"].at_bats, Some(0));
+    assert_eq!(result.batters[0]["away1"].credited_interference_awards, 1);
+    assert_eq!(result.batters[0]["away1"].at_bats, Some(0));
+    assert_eq!(result.batters[0]["away2"].credited_sacrifice_bunts, 1);
+    assert_eq!(result.batters[0]["away2"].at_bats, Some(0));
+    assert_eq!(
+        result.pitchers[1]["home_starter"].credited_sacrifice_bunts,
+        1
+    );
+    assert_eq!(result.runs, [1, 0]);
+}
+
+#[test]
+fn conflicting_pa_classification_cannot_claim_a_hit_and_hit_by_pitch() {
+    let mut before = state();
+    before.bases = [None, None, None];
+    let action = event(
+        &before,
+        EventKind::PlateAppearance,
+        vec![batter_move(&before, Destination::First)],
+        0,
+        0,
+        vec![
+            credit("away0", CreditKind::Hit),
+            credit("away0", CreditKind::HitByPitch),
+        ],
+        vec![],
+    );
+    assert!(apply(&before, action).is_err());
+}
+
+#[test]
+fn awarded_first_base_cannot_end_with_batter_out_without_touch_metadata() {
+    let mut before = state();
+    before.bases = [None, None, None];
+    for kind in [
+        CreditKind::Walk,
+        CreditKind::HitByPitch,
+        CreditKind::InterferenceAward,
+    ] {
+        let action = event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![credit("away0", kind)],
+            vec![],
+        );
+        assert!(apply(&before, action).is_err(), "{kind:?}");
+    }
 }

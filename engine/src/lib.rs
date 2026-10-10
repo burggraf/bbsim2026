@@ -130,6 +130,12 @@ pub enum CreditKind {
     Assist,
     Error,
     PassedBall,
+    /// Explicit official at-bat classification when hits/strikeouts do not identify it.
+    AtBat,
+    HitByPitch,
+    SacrificeBunt,
+    SacrificeFly,
+    InterferenceAward,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credit {
@@ -436,7 +442,15 @@ impl EventTransition {
         for credit in &event.delta.credits {
             let eligible = match credit.kind {
                 CreditKind::PlateAppearance | CreditKind::Run => true, // checked above
-                CreditKind::Hit | CreditKind::Walk | CreditKind::Strikeout | CreditKind::Rbi => {
+                CreditKind::Hit
+                | CreditKind::Walk
+                | CreditKind::Strikeout
+                | CreditKind::Rbi
+                | CreditKind::AtBat
+                | CreditKind::HitByPitch
+                | CreditKind::SacrificeBunt
+                | CreditKind::SacrificeFly
+                | CreditKind::InterferenceAward => {
                     is_pa && event.participants.batter.as_deref() == Some(credit.player_id.as_str())
                 }
                 CreditKind::StolenBase => event.delta.moves.iter().any(|m| {
@@ -477,11 +491,35 @@ impl EventTransition {
         };
         let outcomes =
             count(CreditKind::Hit) + count(CreditKind::Walk) + count(CreditKind::Strikeout);
+        let exclusions = count(CreditKind::Walk)
+            + count(CreditKind::HitByPitch)
+            + count(CreditKind::SacrificeBunt)
+            + count(CreditKind::SacrificeFly)
+            + count(CreditKind::InterferenceAward);
         if outcomes > 1
+            || exclusions > 1
+            || count(CreditKind::AtBat) > 1
+            || (exclusions > 0
+                && count(CreditKind::AtBat) + count(CreditKind::Hit) + count(CreditKind::Strikeout)
+                    > 0)
             || count(CreditKind::Rbi) > usize::from(event.delta.runs)
             || count(CreditKind::Putout) > usize::from(event.delta.outs)
         {
             return Err(TransitionError::IllegalCredit);
+        }
+        if count(CreditKind::Walk)
+            + count(CreditKind::HitByPitch)
+            + count(CreditKind::InterferenceAward)
+            > 0
+            && !event
+                .delta
+                .moves
+                .iter()
+                .any(|m| m.from == Base::Plate && m.to != Destination::Out)
+        {
+            // A batter retired after actually touching first needs touch/order
+            // metadata; Plate -> Out alone cannot establish the award.
+            return Err(TransitionError::UnsupportedRule);
         }
         for (destination, runner) in destinations {
             let index = match destination {
