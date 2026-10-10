@@ -1,5 +1,7 @@
 # MLB season simulator — high-level plan
 
+For numbered work packages and release gates, see [docs/EXECUTION.md](docs/EXECUTION.md). For the current task and restart handoff, see [docs/PROGRESS.md](docs/PROGRESS.md). Repository methodology is in [AGENTS.md](AGENTS.md).
+
 ## Product contract and initial decisions
 
 Build a desktop application in **Rust + Tauri + Svelte**, with **shadcn-svelte components for application controls, forms, dialogs, navigation, and tables**. Custom baseball views (field, scorecard, charts) will use the same design tokens and accessibility conventions. A user selects one MLB season; its data is imported once, cached locally, and playable offline. The first playable deliverable is a complete, automatically managed head-to-head game between two teams from that season. The long-term deliverable is a full regular-season replay with statistical validation.
