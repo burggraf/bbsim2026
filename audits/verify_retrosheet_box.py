@@ -67,7 +67,7 @@ def box_metrics(rows):
     return teams, totals
 
 
-def read_games(archive, wanted):
+def read_games(archive, wanted, parser=box_metrics):
     found = {}
     with zipfile.ZipFile(archive) as z:
         for member in ('2019.EBA', '2019.EBN'):
@@ -80,7 +80,7 @@ def read_games(archive, wanted):
                     if current is not None:
                         if current in found:
                             raise ValueError(f'duplicate box game: {current}')
-                        found[current] = box_metrics(rows)
+                        found[current] = parser(rows)
                     current = row[1] if row[1] in wanted else None
                     rows = []
                 elif current is not None:
@@ -88,7 +88,7 @@ def read_games(archive, wanted):
             if current is not None:
                 if current in found:
                     raise ValueError(f'duplicate box game: {current}')
-                found[current] = box_metrics(rows)
+                found[current] = parser(rows)
     missing = wanted - found.keys()
     if missing:
         raise ValueError(f'missing box game: {sorted(missing)}')
