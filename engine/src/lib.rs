@@ -3,6 +3,7 @@
 
 mod codec;
 mod reducer;
+mod rules;
 pub use reducer::apply;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,6 +167,7 @@ pub enum TransitionError {
     IllegalCredit,
     Discontinuous,
     InvalidEncoding,
+    UnsupportedRule,
 }
 
 /// Construct once; only immutable access is exposed to consumers.
@@ -194,11 +196,6 @@ impl EventTransition {
             || before.over
         {
             return Err(TransitionError::InvalidState);
-        }
-        // E-03 will define terminal-game normalization; do not accept arbitrary
-        // `over` snapshots before that rule is implemented.
-        if after.over {
-            return Err(TransitionError::IllegalStateChange);
         }
         for snapshot in [&before, &after] {
             for (index, runner) in snapshot.bases.iter().enumerate() {
@@ -361,6 +358,25 @@ impl EventTransition {
         {
             return Err(TransitionError::DeltaMismatch);
         }
+        let mut scored: Vec<_> = event
+            .delta
+            .moves
+            .iter()
+            .filter(|movement| movement.to == Destination::Home)
+            .map(|movement| movement.runner.player_id.as_str())
+            .collect();
+        let mut run_credits: Vec<_> = event
+            .delta
+            .credits
+            .iter()
+            .filter(|credit| credit.kind == CreditKind::Run)
+            .map(|credit| credit.player_id.as_str())
+            .collect();
+        scored.sort_unstable();
+        run_credits.sort_unstable();
+        if scored != run_credits {
+            return Err(TransitionError::IllegalCredit);
+        }
         for (destination, runner) in destinations {
             let index = match destination {
                 Destination::First => 0,
@@ -386,24 +402,28 @@ impl EventTransition {
         if total_outs > 3 {
             return Err(TransitionError::DeltaMismatch);
         }
-        let (next_inning, next_half) = match (before.half, total_outs) {
-            (Half::Top, _) => (before.inning, Half::Bottom),
-            (Half::Bottom, 3) => (
-                before
-                    .inning
-                    .checked_add(1)
-                    .ok_or(TransitionError::DeltaMismatch)?,
-                Half::Top,
-            ),
-            (Half::Bottom, _) => (before.inning, Half::Top),
+        let ending = rules::ending(&before, &event, total_outs)?;
+        if after.over != (ending != rules::Ending::Continue) {
+            return Err(TransitionError::IllegalStateChange);
+        }
+        let expected_frame = match ending {
+            rules::Ending::ThirdOut => (before.inning, before.half, 0),
+            rules::Ending::WalkOff => (before.inning, before.half, total_outs),
+            rules::Ending::Continue if total_outs == 3 => match before.half {
+                Half::Top => (before.inning, Half::Bottom, 0),
+                Half::Bottom => (
+                    before
+                        .inning
+                        .checked_add(1)
+                        .ok_or(TransitionError::DeltaMismatch)?,
+                    Half::Top,
+                    0,
+                ),
+            },
+            rules::Ending::Continue => (before.inning, before.half, total_outs),
         };
-        if (total_outs == 3
-            && !after.over
-            && (after.inning, after.half, after.outs) != (next_inning, next_half, 0))
-            || (total_outs < 3
-                && (after.inning, after.half, after.outs)
-                    != (before.inning, before.half, total_outs))
-            || (total_outs == 3 && !after.over && after.bases.iter().any(Option::is_some))
+        if (after.inning, after.half, after.outs) != expected_frame
+            || (total_outs == 3 && after.bases.iter().any(Option::is_some))
             || (total_outs < 3 && after.bases != expected_bases)
         {
             return Err(TransitionError::IllegalStateChange);

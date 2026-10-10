@@ -96,21 +96,31 @@ pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, Transi
     if outs > 3 {
         return Err(TransitionError::DeltaMismatch);
     }
-    if outs == 3 {
-        after.outs = 0;
-        after.bases = [None, None, None];
-        match before.half {
-            Half::Top => after.half = Half::Bottom,
-            Half::Bottom => {
-                after.half = Half::Top;
-                after.inning = before
-                    .inning
-                    .checked_add(1)
-                    .ok_or(TransitionError::DeltaMismatch)?;
+    match rules::ending(before, &event, outs)? {
+        rules::Ending::ThirdOut => {
+            after.over = true;
+            after.outs = 0;
+            after.bases = [None, None, None];
+        }
+        rules::Ending::WalkOff => {
+            after.over = true;
+            after.outs = outs;
+        }
+        rules::Ending::Continue if outs == 3 => {
+            after.outs = 0;
+            after.bases = [None, None, None];
+            match before.half {
+                Half::Top => after.half = Half::Bottom,
+                Half::Bottom => {
+                    after.half = Half::Top;
+                    after.inning = before
+                        .inning
+                        .checked_add(1)
+                        .ok_or(TransitionError::DeltaMismatch)?;
+                }
             }
         }
-    } else {
-        after.outs = outs;
+        rules::Ending::Continue => after.outs = outs,
     }
     EventTransition::try_new(before.clone(), event, after)
 }

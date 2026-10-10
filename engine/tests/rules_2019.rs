@@ -1,0 +1,250 @@
+use bbsim_engine::{
+    apply, Base, Credit, CreditKind, Delta, Destination, Event, EventKind, EventTransition,
+    GameState, Half, Participants, Runner, RunnerMove, TeamState, TransitionError,
+};
+
+fn state(inning: u16, half: Half, outs: u8, score: [u16; 2]) -> GameState {
+    GameState {
+        inning,
+        half,
+        outs,
+        score,
+        over: false,
+        teams: [
+            TeamState {
+                batting_order: std::array::from_fn(|i| format!("away{i}")),
+                next_batter: 0,
+                pitcher: "away_pitcher".into(),
+            },
+            TeamState {
+                batting_order: std::array::from_fn(|i| format!("home{i}")),
+                next_batter: 0,
+                pitcher: "home_pitcher".into(),
+            },
+        ],
+        bases: [None, None, None],
+    }
+}
+
+fn batter_event(
+    before: &GameState,
+    runner_moves: Vec<RunnerMove>,
+    outs: u8,
+    runs: u8,
+    scoring: &[&str],
+) -> Event {
+    let offense = before.half.offense();
+    let batter =
+        before.teams[offense].batting_order[before.teams[offense].next_batter as usize].clone();
+    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let mut credits = vec![Credit {
+        player_id: batter.clone(),
+        kind: CreditKind::PlateAppearance,
+    }];
+    for &id in scoring {
+        credits.push(Credit {
+            player_id: id.into(),
+            kind: CreditKind::Run,
+        });
+    }
+    Event {
+        kind: EventKind::PlateAppearance,
+        participants: Participants {
+            batter: Some(batter),
+            pitcher,
+        },
+        delta: Delta {
+            moves: runner_moves,
+            outs,
+            runs,
+            credits,
+            changes: vec![],
+        },
+    }
+}
+
+fn batter_out(before: &GameState) -> RunnerMove {
+    let offense = before.half.offense();
+    RunnerMove {
+        runner: Runner {
+            player_id: before.teams[offense].batting_order
+                [before.teams[offense].next_batter as usize]
+                .clone(),
+            responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+        },
+        from: Base::Plate,
+        to: Destination::Out,
+    }
+}
+
+#[test]
+fn home_lead_after_top_ninth_ends_without_bottom_ninth() {
+    let before = state(9, Half::Top, 2, [3, 4]);
+    let next = apply(
+        &before,
+        batter_event(&before, vec![batter_out(&before)], 1, 0, &[]),
+    )
+    .unwrap();
+    assert!(next.after().over);
+    assert_eq!(
+        (next.after().inning, next.after().half, next.after().outs),
+        (9, Half::Top, 0)
+    );
+    assert_eq!(next.event().delta.outs, 1);
+    assert_eq!(next.after().bases, [None, None, None]);
+    assert_eq!(EventTransition::from_bytes(&next.to_bytes()).unwrap(), next);
+    let mut forged = next.after().clone();
+    forged.over = false;
+    forged.half = Half::Bottom;
+    assert!(EventTransition::try_new(before.clone(), next.event().clone(), forged).is_err());
+    let continued = batter_event(next.after(), vec![batter_out(next.after())], 1, 0, &[]);
+    assert!(apply(next.after(), continued).is_err());
+}
+
+#[test]
+fn away_lead_after_completed_ninth_ends_game() {
+    let before = state(9, Half::Bottom, 2, [5, 4]);
+    let next = apply(
+        &before,
+        batter_event(&before, vec![batter_out(&before)], 1, 0, &[]),
+    )
+    .unwrap();
+    assert!(next.after().over);
+    assert_eq!(
+        (next.after().inning, next.after().half, next.after().outs),
+        (9, Half::Bottom, 0)
+    );
+}
+
+#[test]
+fn tied_ninth_continues_to_empty_extra_inning() {
+    let top = state(9, Half::Top, 2, [4, 4]);
+    let bottom = apply(&top, batter_event(&top, vec![batter_out(&top)], 1, 0, &[])).unwrap();
+    assert!(!bottom.after().over);
+    assert_eq!(
+        (
+            bottom.after().inning,
+            bottom.after().half,
+            bottom.after().outs
+        ),
+        (9, Half::Bottom, 0)
+    );
+    let mut last = bottom.after().clone();
+    last.outs = 2;
+    let extra = apply(
+        &last,
+        batter_event(&last, vec![batter_out(&last)], 1, 0, &[]),
+    )
+    .unwrap();
+    assert!(!extra.after().over);
+    assert_eq!(
+        (extra.after().inning, extra.after().half, extra.after().outs),
+        (10, Half::Top, 0)
+    );
+    assert_eq!(extra.after().bases, [None, None, None]);
+}
+
+#[test]
+fn winning_run_in_bottom_ninth_ends_immediately() {
+    let mut before = state(9, Half::Bottom, 1, [4, 4]);
+    before.bases[2] = Some(Runner {
+        player_id: "runner_on_third".into(),
+        responsible_pitcher: "prior_pitcher".into(),
+    });
+    let moves = vec![
+        batter_out(&before),
+        RunnerMove {
+            runner: before.bases[2].clone().unwrap(),
+            from: Base::Third,
+            to: Destination::Home,
+        },
+    ];
+    let next = apply(
+        &before,
+        batter_event(&before, moves, 1, 1, &["runner_on_third"]),
+    )
+    .unwrap();
+    assert!(next.after().over);
+    assert_eq!(
+        (next.after().inning, next.after().half, next.after().outs),
+        (9, Half::Bottom, 2)
+    );
+    assert_eq!(next.after().score, [4, 5]);
+}
+
+#[test]
+fn ambiguous_extra_walkoff_runs_need_an_explicit_home_run_or_timing() {
+    let mut before = state(9, Half::Bottom, 0, [4, 4]);
+    before.bases[1] = Some(Runner {
+        player_id: "r2".into(),
+        responsible_pitcher: "prior_pitcher".into(),
+    });
+    before.bases[2] = Some(Runner {
+        player_id: "r3".into(),
+        responsible_pitcher: "prior_pitcher".into(),
+    });
+    let batter = Runner {
+        player_id: "home0".into(),
+        responsible_pitcher: "away_pitcher".into(),
+    };
+    let moves = vec![
+        RunnerMove {
+            runner: batter,
+            from: Base::Plate,
+            to: Destination::First,
+        },
+        RunnerMove {
+            runner: before.bases[1].clone().unwrap(),
+            from: Base::Second,
+            to: Destination::Home,
+        },
+        RunnerMove {
+            runner: before.bases[2].clone().unwrap(),
+            from: Base::Third,
+            to: Destination::Home,
+        },
+    ];
+    assert!(matches!(
+        apply(&before, batter_event(&before, moves, 0, 2, &["r2", "r3"])),
+        Err(TransitionError::UnsupportedRule)
+    ));
+}
+
+#[test]
+fn third_out_run_without_out_reason_and_timing_is_not_credited() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases[2] = Some(Runner {
+        player_id: "r3".into(),
+        responsible_pitcher: "prior_pitcher".into(),
+    });
+    let moves = vec![
+        batter_out(&before),
+        RunnerMove {
+            runner: before.bases[2].clone().unwrap(),
+            from: Base::Third,
+            to: Destination::Home,
+        },
+    ];
+    assert!(matches!(
+        apply(&before, batter_event(&before, moves, 1, 1, &["r3"])),
+        Err(TransitionError::UnsupportedRule)
+    ));
+}
+
+#[test]
+fn run_credit_must_identify_the_runner_who_reached_home() {
+    let mut before = state(8, Half::Bottom, 1, [4, 4]);
+    before.bases[2] = Some(Runner {
+        player_id: "r3".into(),
+        responsible_pitcher: "prior_pitcher".into(),
+    });
+    let moves = vec![
+        batter_out(&before),
+        RunnerMove {
+            runner: before.bases[2].clone().unwrap(),
+            from: Base::Third,
+            to: Destination::Home,
+        },
+    ];
+    assert!(apply(&before, batter_event(&before, moves, 1, 1, &["not_r3"])).is_err());
+}

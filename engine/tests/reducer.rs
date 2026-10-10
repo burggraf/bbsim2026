@@ -212,10 +212,16 @@ fn bases_loaded_walk_forces_a_run_without_loss_of_identity() {
         ],
         0,
         1,
-        vec![Credit {
-            player_id: "home0".into(),
-            kind: CreditKind::Walk,
-        }],
+        vec![
+            Credit {
+                player_id: "home0".into(),
+                kind: CreditKind::Walk,
+            },
+            Credit {
+                player_id: "runner_c".into(),
+                kind: CreditKind::Run,
+            },
+        ],
     );
     let next = apply(&before, event).unwrap();
     assert_eq!(next.after().score, [11, 3]);
@@ -370,10 +376,20 @@ fn two_runners_score_on_one_plate_appearance() {
         ],
         0,
         2,
-        vec![Credit {
-            player_id: "home0".into(),
-            kind: CreditKind::Hit,
-        }],
+        vec![
+            Credit {
+                player_id: "home0".into(),
+                kind: CreditKind::Hit,
+            },
+            Credit {
+                player_id: "runner_b".into(),
+                kind: CreditKind::Run,
+            },
+            Credit {
+                player_id: "runner_c".into(),
+                kind: CreditKind::Run,
+            },
+        ],
     );
     let next = apply(&before, event).unwrap();
     assert_eq!(next.after().score, [11, 4]);
