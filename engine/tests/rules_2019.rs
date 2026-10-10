@@ -354,6 +354,12 @@ fn nonforce_third_out_counts_only_runs_before_the_tag() {
         kind: ThirdOutKind::Timing,
         home_before_out: vec!["r3".into()],
     });
+    let mut forged = event.clone();
+    forged.delta.third_out.as_mut().unwrap().kind = ThirdOutKind::BatterAfterFirstTiming;
+    assert!(matches!(
+        apply(&before, forged),
+        Err(TransitionError::DeltaMismatch)
+    ));
     let next = apply(&before, event).unwrap();
     assert_eq!(next.after().score, [4, 5]);
     assert_eq!(next.event().delta.runs, 1);
@@ -590,4 +596,21 @@ fn no_dh_requires_the_pitcher_in_the_batting_order() {
         apply(&before, event),
         Err(TransitionError::InvalidState)
     ));
+}
+
+#[test]
+fn batter_tagged_after_first_is_a_timing_out_not_before_first() {
+    let mut before = state(8, Half::Bottom, 2, [4, 4]);
+    before.bases[2] = Some(on_base("r3"));
+    let moves = vec![batter_out(&before), to_home(&before, 2, Base::Third)];
+    let mut event = batter_event(&before, moves, 1, 1, &["r3"]);
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: "home0".into(),
+        kind: ThirdOutKind::BatterAfterFirstTiming,
+        home_before_out: vec!["r3".into()],
+    });
+    let next = apply(&before, event).unwrap();
+    assert_eq!(next.after().score, [4, 5]);
+    assert_eq!((next.after().inning, next.after().half), (9, Half::Top));
+    assert_eq!(EventTransition::from_bytes(&next.to_bytes()).unwrap(), next);
 }

@@ -169,6 +169,9 @@ pub enum ThirdOutKind {
     Force,
     Timing,
     PrecedingRunnerAppeal,
+    /// Batter-runner was tagged after touching first; unlike before-first,
+    /// this is a timing out for runners who reached home before the tag.
+    BatterAfterFirstTiming,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ThirdOut {

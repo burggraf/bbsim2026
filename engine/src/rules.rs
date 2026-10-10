@@ -224,6 +224,12 @@ pub(crate) fn scored_runners(
             }
             third.home_before_out.clone()
         }
+        ThirdOutKind::BatterAfterFirstTiming => {
+            if out.from != Base::Plate {
+                return Err(TransitionError::DeltaMismatch);
+            }
+            third.home_before_out.clone()
+        }
         ThirdOutKind::PrecedingRunnerAppeal => {
             if event.delta.outs != 1 && !home.is_empty() {
                 // Fourth-out appeal ordering is not represented yet.
