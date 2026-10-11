@@ -31,6 +31,16 @@ Data feasibility (F) → deterministic event engine (E) → playable probabilist
 | S-03 | Season validation; S-02 | Fixed-opportunity and free-replay runs; at least 100 seeded full seasons (target 200 for rare outcomes). Preserve snapshot/model/rules versions and seeds. Compare player hitting/pitching/fielding rates, playing time, team/league distributions, manager usage and predictive-interval coverage with preregistered tolerances. Publish failures, not only passing metrics. |
 | X-01 | Expanded coverage; S-03 | Audit a contrasting modern era/season, implement its rule differences and per-season capability grade, rerun end-to-end and statistical gates. Add more years only after their own coverage and rules audit; never present incomplete eras as equivalent. |
 
+## Approved experimental sequencing exception
+
+Maintainer D-12 explicitly approves **P-01-preview** before G1 to test a generated
+full-game path. Its contract is [generated preview v1](modeling/generated-preview.md):
+read-only audited league inputs, preregistered smoothing/taxonomy, fictional equal
+teams, deterministic seeded generation, existing-engine validation and multi-seed
+available-stat conservation. It is not E-03/G1/P-01/P-02 completion, calibrated
+player simulation or authorization to narrow the approved accounting matrix.
+Production dependencies/gates below remain unchanged; PROGRESS owns live status.
+
 ## Gates and signoff
 
 - **G0 — data:** F-04 has a coverage report, fixture reconciliation, measured filtered/offline import, attribution/licensing review and an explicit pilot/storage/OS decision. Stop or rescope if required event fields are not reliable.
