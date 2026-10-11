@@ -1,6 +1,12 @@
 # E-03 automatic-K single-delivery WP/PB
 
-**Accepted bounded checkpoint; publication status belongs to PROGRESS.** Parent selected the contract before TDD, consumed the original BLOCK, reproduced/fixed F1 test-first and isolated F2's encoding proof, then consumed retained **OK with notes; no issues found** and unchanged final `proc_87c1`: **310 Rust (30 automatic-K)/59 Python/native1,350/27ER/54boxes/fmt/strictClippy/199 prose links/diff/all26 source/test hashes before-after**. No source/test changes after retained review. Extends the published [pitch-occurrence](pitch-occurrences.md) boundary, using the existing `SingleDeliveryFacts`/`BBE17` representation. [PROGRESS](../PROGRESS.md) owns status. This is neither E-03 completion nor G1 signoff, full box coverage, ER reconstruction or an outcome generator. No new matrix exclusions.
+**Historical accepted bounded checkpoint `ad42cd1`; publication status belongs to PROGRESS.** Parent selected the contract before TDD, consumed the original BLOCK, reproduced/fixed F1 test-first and isolated F2's encoding proof, then consumed retained **OK with notes; no issues found** and unchanged final `proc_87c1`: **310 Rust (30 automatic-K)/59 Python/native1,350/27ER/54boxes/fmt/strictClippy/199 prose links/diff/all26 source/test hashes before-after**. That accepted source/test snapshot was unchanged from retained review through publication. Extends the published [pitch-occurrence](pitch-occurrences.md) boundary, using the existing `SingleDeliveryFacts`/`BBE17` representation. [PROGRESS](../PROGRESS.md) owns status. This is neither E-03 completion nor G1 signoff, full box coverage, ER reconstruction or an outcome generator. No new matrix exclusions.
+
+The accepted [automatic-K plus separate recovery checkpoint](automatic-k-recovery.md)
+reuses this record, adds bounded two-out recovery/timing checks and a separately
+reproduced post-play-score ending correction. Its fresh review and unchanged final
+verification are recorded separately; the historical verification above does not
+certify those later edits.
 
 ## Rules and interpretation
 

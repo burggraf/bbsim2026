@@ -855,7 +855,10 @@ pub(crate) fn ending(
     let (away, home) = (before.score[0], before.score[1]);
     match before.half {
         Half::Top => {
-            if total_outs == 3 && home > away {
+            let new_away = away
+                .checked_add(u16::from(event.delta.runs))
+                .ok_or(TransitionError::DeltaMismatch)?;
+            if total_outs == 3 && home > new_away {
                 Ok(Ending::ThirdOut)
             } else {
                 Ok(Ending::Continue)

@@ -698,7 +698,7 @@ fn ordinary_single_winning_run_and_extra_innings_use_existing_ending_logic() {
 }
 
 #[test]
-fn eligible_retired_and_mixed_recovery_histories_are_not_automatic_safe_reach_contradictions() {
+fn eligible_retired_histories_are_not_automatic_safe_reach_contradictions() {
     for passed in [false, true] {
         let (before, mut eligible) = fixture(Half::Top, 0, 4, 4, passed);
         let after = physical_after(&before, &eligible);
@@ -712,7 +712,12 @@ fn eligible_retired_and_mixed_recovery_histories_are_not_automatic_safe_reach_co
                 reached: Destination::First,
             });
         rejected(&before, eligible, after, TransitionError::UnsupportedRule);
+    }
+}
 
+#[test]
+fn named_advance_before_separate_recovery_out_qualifies_with_automatic_k() {
+    for passed in [false, true] {
         let (before, mut mixed) = fixture(Half::Top, 0, 5, 5, passed);
         mixed.delta.moves[1].to = Destination::Out;
         mixed.delta.outs = 2;
@@ -724,8 +729,586 @@ fn eligible_retired_and_mixed_recovery_histories_are_not_automatic_safe_reach_co
             runner_id: retired,
             advancer_id: advancer,
         };
-        let after = physical_after(&before, &mixed);
-        rejected(&before, mixed, after, TransitionError::UnsupportedRule);
+        let transition = accepted(&before, mixed);
+        assert_eq!(transition.after().outs, 2);
+        assert_eq!(transition.after().score, [1, 0]);
+        assert_eq!(transition.after().teams[Half::Top.offense()].next_batter, 1);
+        assert_eq!(transition.after().bases, [None, None, None]);
+    }
+}
+
+// A separate recovery retirement is named; movement order never supplies its timing.
+fn mixed_recovery_fixture(
+    half: Half,
+    outs: u8,
+    mask: u8,
+    retired_base: usize,
+    advancing_base: usize,
+    passed: bool,
+) -> (GameState, Event) {
+    assert_ne!(retired_base, advancing_base);
+    let (before, mut event) = fixture(half, outs, mask, mask, passed);
+    let retired = before.bases[retired_base]
+        .as_ref()
+        .unwrap()
+        .player_id
+        .clone();
+    let advancer = before.bases[advancing_base]
+        .as_ref()
+        .unwrap()
+        .player_id
+        .clone();
+    event
+        .delta
+        .moves
+        .iter_mut()
+        .find(|m| m.runner.player_id == retired)
+        .unwrap()
+        .to = Destination::Out;
+    event.delta.outs = 2;
+    event
+        .delta
+        .credits
+        .retain(|c| c.kind != CreditKind::Run || c.player_id != retired);
+    event.delta.runs = event
+        .delta
+        .credits
+        .iter()
+        .filter(|c| c.kind == CreditKind::Run)
+        .count() as u8;
+    let facts = event.single_delivery.as_mut().unwrap();
+    facts.advances.retain(|a| a.runner_id != retired);
+    facts.recovery = RecoveryReview::AfterAdvance {
+        runner_id: retired.clone(),
+        advancer_id: advancer,
+    };
+    if outs == 1 {
+        event.delta.third_out = Some(ThirdOut {
+            runner_id: retired,
+            kind: ThirdOutKind::Timing,
+            home_before_out: event
+                .delta
+                .moves
+                .iter()
+                .filter(|m| m.to == Destination::Home)
+                .map(|m| m.runner.player_id.clone())
+                .collect(),
+        });
+    }
+    (before, event)
+}
+
+fn mixed_recovery_positive_matrix(passed: bool) {
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..2 {
+            for mask in [3, 5, 7] {
+                for retired_base in 0..3 {
+                    for advancing_base in 0..3 {
+                        if retired_base == advancing_base
+                            || mask & (1 << retired_base) == 0
+                            || mask & (1 << advancing_base) == 0
+                        {
+                            continue;
+                        }
+                        for reverse in [false, true] {
+                            let (before, mut event) = mixed_recovery_fixture(
+                                half,
+                                outs,
+                                mask,
+                                retired_base,
+                                advancing_base,
+                                passed,
+                            );
+                            let pitcher = event.participants.pitcher.clone();
+                            let batter = event.participants.batter.clone().unwrap();
+                            let catcher =
+                                event.single_delivery.as_ref().unwrap().catcher_id.clone();
+                            let fielder = before.teams[1 - half.offense()].batting_order[2].clone();
+                            event.delta.credits.extend([
+                                credit(&catcher, CreditKind::Putout),
+                                credit(&catcher, CreditKind::Assist),
+                                credit(&fielder, CreditKind::Putout),
+                            ]);
+                            if reverse {
+                                event.delta.moves.reverse();
+                                event.delta.credits.reverse();
+                                event.single_delivery.as_mut().unwrap().advances.reverse();
+                            }
+                            let runs = u32::from(event.delta.runs);
+                            let transition = accepted(&before, event);
+                            assert_eq!(transition.after().outs, if outs == 0 { 2 } else { 0 });
+                            assert_eq!(
+                                transition.after().half,
+                                if outs == 0 {
+                                    half
+                                } else if half == Half::Top {
+                                    Half::Bottom
+                                } else {
+                                    Half::Top
+                                }
+                            );
+                            assert_eq!(
+                                transition.after().inning,
+                                2 + u16::from(outs == 1 && half == Half::Bottom)
+                            );
+                            assert_eq!(transition.after().teams[half.offense()].next_batter, 1);
+                            let accounting =
+                                derive_accounting(std::slice::from_ref(&transition)).unwrap();
+                            assert_eq!(
+                                accounting.batters[half.offense()][&batter],
+                                BatterLine {
+                                    plate_appearances: 1,
+                                    credited_strikeouts: 1,
+                                    at_bats: Some(1),
+                                    ..BatterLine::default()
+                                }
+                            );
+                            assert_eq!(
+                                accounting.pitchers[1 - half.offense()][&pitcher],
+                                PitcherLine {
+                                    outs_recorded: 2,
+                                    batters_faced: 1,
+                                    at_bats_against: Some(1),
+                                    runs_allowed: runs,
+                                    earned_runs: if runs == 0 { Some(0) } else { None },
+                                    credited_strikeouts: 1,
+                                    credited_wild_pitches: u32::from(!passed),
+                                    ..PitcherLine::default()
+                                }
+                            );
+                            assert_eq!(
+                                accounting.fielders[1 - half.offense()][&catcher],
+                                FielderLine {
+                                    credited_putouts: 1,
+                                    credited_assists: 1,
+                                    credited_passed_balls: u32::from(passed),
+                                    ..FielderLine::default()
+                                }
+                            );
+                            assert_eq!(
+                                accounting.fielders[1 - half.offense()][&fielder].credited_putouts,
+                                1
+                            );
+                            assert_eq!(accounting.runs[half.offense()], runs);
+                            assert!(!accounting.complete_game);
+                            assert!(!accounting.batters[half.offense()].contains_key(&pitcher));
+                            assert!(!accounting.batters[half.offense()].contains_key(&catcher));
+                            frames += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 80);
+}
+
+#[test]
+fn automatic_k_separate_after_advance_recovery_wp_matrix() {
+    mixed_recovery_positive_matrix(false);
+}
+
+#[test]
+fn automatic_k_separate_after_advance_recovery_pb_matrix() {
+    mixed_recovery_positive_matrix(true);
+}
+
+#[test]
+fn automatic_k_separate_recovery_qualified_unit_omission_is_known_in_both_apis() {
+    for passed in [false, true] {
+        for half in [Half::Top, Half::Bottom] {
+            for outs in 0..2 {
+                let (before, mut event) = mixed_recovery_fixture(half, outs, 5, 0, 2, passed);
+                let after = physical_after(&before, &event);
+                without_units(&mut event);
+                rejected(&before, event, after, TransitionError::IllegalCredit);
+            }
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_third_out_cannot_be_the_earlier_automatic_batter() {
+    for passed in [false, true] {
+        for units in [false, true] {
+            for unknown_steals in [false, true] {
+                let (before, original) = mixed_recovery_fixture(Half::Top, 1, 3, 0, 1, passed);
+                let after = physical_after(&before, &original);
+                let mut event = original;
+                event.delta.third_out = Some(ThirdOut {
+                    runner_id: event.participants.batter.clone().unwrap(),
+                    kind: ThirdOutKind::BatterBeforeFirst,
+                    home_before_out: vec![],
+                });
+                if unknown_steals {
+                    event.single_delivery.as_mut().unwrap().pre_delivery_steals = None;
+                }
+                if !units {
+                    without_units(&mut event);
+                }
+                rejected(&before, event, after, TransitionError::DeltaMismatch);
+            }
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_legal_home_cannot_return_in_a_non_third_out_frame() {
+    for passed in [false, true] {
+        for units in [false, true] {
+            for unknown_recovery in [false, true] {
+                let (before, mut event) = mixed_recovery_fixture(Half::Top, 0, 3, 0, 1, passed);
+                event.single_delivery.as_mut().unwrap().advances[0].reached = Destination::Home;
+                event.delta.moves.retain(|m| m.from != Base::Second);
+                if unknown_recovery {
+                    event.single_delivery.as_mut().unwrap().recovery = RecoveryReview::Unknown;
+                }
+                if !units {
+                    without_units(&mut event);
+                }
+                let after = physical_after(&before, &event);
+                rejected(&before, event, after, TransitionError::DeltaMismatch);
+            }
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_missing_and_intermediate_history_stays_unknown() {
+    for passed in [false, true] {
+        for missing in 0..4 {
+            let (before, mut event) = mixed_recovery_fixture(Half::Top, 0, 3, 0, 1, passed);
+            match missing {
+                0 => event.single_delivery.as_mut().unwrap().recovery = RecoveryReview::Unknown,
+                1 => {
+                    event.single_delivery.as_mut().unwrap().recovery =
+                        RecoveryReview::NoRecoveryPutout
+                }
+                2 => event.single_delivery.as_mut().unwrap().pre_delivery_steals = None,
+                3 => {
+                    event.delta.moves.retain(|m| m.from != Base::Second);
+                }
+                _ => unreachable!(),
+            }
+            let after = physical_after(&before, &event);
+            rejected(
+                &before,
+                event.clone(),
+                after.clone(),
+                TransitionError::UnsupportedRule,
+            );
+            without_units(&mut event);
+            assert_eq!(accepted(&before, event).after(), &after);
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_before_any_recovery_suppresses_the_episode_not_the_pa() {
+    for passed in [false, true] {
+        for half in [Half::Top, Half::Bottom] {
+            let (before, mut event) = mixed_recovery_fixture(half, 0, 5, 0, 2, passed);
+            let runner_id = before.bases[0].as_ref().unwrap().player_id.clone();
+            event.single_delivery.as_mut().unwrap().recovery =
+                RecoveryReview::BeforeAnyAdvance { runner_id };
+            without_units(&mut event);
+            let transition = accepted(&before, event.clone());
+            assert_eq!(transition.event().kind, EventKind::PlateAppearance);
+            let accounting = derive_accounting(std::slice::from_ref(&transition)).unwrap();
+            let pitcher = &accounting.pitchers[1 - half.offense()][&event.participants.pitcher];
+            assert_eq!(
+                (
+                    pitcher.outs_recorded,
+                    pitcher.batters_faced,
+                    pitcher.credited_strikeouts,
+                    pitcher.credited_wild_pitches,
+                    pitcher.runs_allowed
+                ),
+                (2, 1, 1, 0, 1)
+            );
+            assert_eq!(transition.after().teams[half.offense()].next_batter, 1);
+            event.delta.credits.push(credit(
+                if passed {
+                    &event.single_delivery.as_ref().unwrap().catcher_id
+                } else {
+                    &event.participants.pitcher
+                },
+                if passed {
+                    CreditKind::PassedBall
+                } else {
+                    CreditKind::WildPitch
+                },
+            ));
+            rejected(
+                &before,
+                event,
+                transition.after().clone(),
+                TransitionError::IllegalCredit,
+            );
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_inherited_run_does_not_transfer_current_participation() {
+    for passed in [false, true] {
+        for half in [Half::Top, Half::Bottom] {
+            let (mut before, mut event) = mixed_recovery_fixture(half, 1, 5, 0, 2, passed);
+            let prior = "prior_pitcher";
+            before.bases[2].as_mut().unwrap().responsible_pitcher = prior.into();
+            event
+                .delta
+                .moves
+                .iter_mut()
+                .find(|m| m.from == Base::Third)
+                .unwrap()
+                .runner
+                .responsible_pitcher = prior.into();
+            let pitcher = event.participants.pitcher.clone();
+            let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
+            let transition = accepted(&before, event);
+            let accounting = derive_accounting(std::slice::from_ref(&transition)).unwrap();
+            assert_eq!(
+                accounting.pitchers[1 - half.offense()][&pitcher],
+                PitcherLine {
+                    outs_recorded: 2,
+                    batters_faced: 1,
+                    at_bats_against: Some(1),
+                    earned_runs: Some(0),
+                    credited_strikeouts: 1,
+                    credited_wild_pitches: u32::from(!passed),
+                    ..PitcherLine::default()
+                }
+            );
+            assert_eq!(
+                accounting.pitchers[1 - half.offense()][prior].runs_allowed,
+                1
+            );
+            assert_eq!(
+                accounting.pitchers[1 - half.offense()][prior].earned_runs,
+                None
+            );
+            assert_eq!(
+                accounting.pitchers[1 - half.offense()][prior].outs_recorded,
+                0
+            );
+            assert_eq!(
+                accounting.pitchers[1 - half.offense()][prior].batters_faced,
+                0
+            );
+            if passed {
+                assert_eq!(
+                    accounting.fielders[1 - half.offense()][&catcher].credited_passed_balls,
+                    1
+                );
+            }
+            assert!(!accounting.batters[half.offense()].contains_key(&pitcher));
+            assert!(!accounting.batters[half.offense()].contains_key(prior));
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_complete_wire_qualifies_and_rejects_unit_omission() {
+    for passed in [false, true] {
+        for half in [Half::Top, Half::Bottom] {
+            for outs in 0..2 {
+                let (before, original) = mixed_recovery_fixture(half, outs, 5, 0, 2, passed);
+                let bytes = forged(&before, &original, &original);
+                let decoded = EventTransition::from_bytes(&bytes);
+                assert!(
+                    decoded.is_ok(),
+                    "complete valid episode was rejected: {decoded:?}"
+                );
+                assert_eq!(decoded.unwrap().event(), &original);
+                let mut omitted = original.clone();
+                without_units(&mut omitted);
+                assert_eq!(
+                    EventTransition::from_bytes(&forged(&before, &original, &omitted)),
+                    Err(TransitionError::IllegalCredit)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_complete_wire_rechecks_known_home_and_last_out() {
+    for passed in [false, true] {
+        for units in [false, true] {
+            for unknown_steals in [false, true] {
+                let (before, original) = mixed_recovery_fixture(Half::Top, 1, 3, 0, 1, passed);
+                let mut wrong_out = original.clone();
+                wrong_out.delta.third_out = Some(ThirdOut {
+                    runner_id: original.participants.batter.clone().unwrap(),
+                    kind: ThirdOutKind::BatterBeforeFirst,
+                    home_before_out: vec![],
+                });
+                if unknown_steals {
+                    wrong_out
+                        .single_delivery
+                        .as_mut()
+                        .unwrap()
+                        .pre_delivery_steals = None;
+                }
+                if !units {
+                    without_units(&mut wrong_out);
+                }
+                assert_eq!(
+                    EventTransition::from_bytes(&forged(&before, &original, &wrong_out)),
+                    Err(TransitionError::DeltaMismatch)
+                );
+            }
+            let (before, mut held) = mixed_recovery_fixture(Half::Top, 0, 3, 0, 1, passed);
+            held.delta.moves.retain(|m| m.from != Base::Second);
+            let mut wrong_home = held.clone();
+            wrong_home.single_delivery.as_mut().unwrap().advances[0].reached = Destination::Home;
+            wrong_home.single_delivery.as_mut().unwrap().recovery = RecoveryReview::Unknown;
+            if !units {
+                without_units(&mut wrong_home);
+            }
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &held, &wrong_home)),
+                Err(TransitionError::DeltaMismatch)
+            );
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_third_out_cannot_recreate_a_force_or_batter_retirement() {
+    for passed in [false, true] {
+        for units in [false, true] {
+            for kind in [
+                ThirdOutKind::Force,
+                ThirdOutKind::BatterBeforeFirst,
+                ThirdOutKind::BatterAfterFirstTiming,
+            ] {
+                let (before, original) = mixed_recovery_fixture(Half::Top, 1, 3, 0, 1, passed);
+                let after = physical_after(&before, &original);
+                let mut event = original.clone();
+                event.delta.third_out.as_mut().unwrap().kind = kind;
+                event.single_delivery.as_mut().unwrap().pre_delivery_steals = None;
+                if !units {
+                    without_units(&mut event);
+                }
+                // Existing K eligibility rejects an after-first claim before
+                // third-out actor reconciliation; preserve that public error.
+                let error = if kind == ThirdOutKind::BatterAfterFirstTiming {
+                    TransitionError::IllegalStateChange
+                } else {
+                    TransitionError::DeltaMismatch
+                };
+                rejected(&before, event.clone(), after, error.clone());
+                assert_eq!(
+                    EventTransition::from_bytes(&forged(&before, &original, &event)),
+                    Err(error)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_recovery_known_timing_run_count_precedes_missing_pitch_review() {
+    for passed in [false, true] {
+        for units in [false, true] {
+            let (before, original) = mixed_recovery_fixture(Half::Top, 1, 5, 0, 2, passed);
+            let after = physical_after(&before, &original);
+            let mut event = original.clone();
+            event.single_delivery.as_mut().unwrap().recovery = RecoveryReview::Unknown;
+            event.single_delivery.as_mut().unwrap().pre_delivery_steals = None;
+            event.delta.runs = 0;
+            event.delta.credits.retain(|c| c.kind != CreditKind::Run);
+            if !units {
+                without_units(&mut event);
+            }
+            rejected(
+                &before,
+                event.clone(),
+                after,
+                TransitionError::DeltaMismatch,
+            );
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &original, &event)),
+                Err(TransitionError::DeltaMismatch)
+            );
+        }
+    }
+}
+
+#[test]
+fn top_ninth_timing_run_ties_the_game_instead_of_ending_on_the_old_score() {
+    let (mut before, mut control) = mixed_recovery_fixture(Half::Top, 1, 5, 0, 2, false);
+    before.inning = 9;
+    before.score = [0, 1];
+    control.single_delivery = None;
+    without_units(&mut control);
+    let mut after = physical_after(&before, &control);
+    after.over = false;
+    after.half = Half::Bottom;
+    let reduced = apply(&before, control.clone()).map(|t| (t.after().over, t.after().half));
+    let direct = EventTransition::try_new(before, control, after).map(|_| ());
+    assert_eq!((reduced, direct), (Ok((false, Half::Bottom)), Ok(())));
+}
+
+#[test]
+fn automatic_k_separate_recovery_top_ninth_uses_the_post_play_score() {
+    for passed in [false, true] {
+        for home in 0..3 {
+            let (mut before, event) = mixed_recovery_fixture(Half::Top, 1, 5, 0, 2, passed);
+            before.inning = 9;
+            before.score = [0, home];
+            let transition = accepted(&before, event);
+            assert_eq!(transition.after().score, [1, home]);
+            assert_eq!(transition.after().over, home > 1);
+            assert_eq!(
+                transition.after().half,
+                if home > 1 { Half::Top } else { Half::Bottom }
+            );
+            assert_eq!(transition.after().outs, 0);
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_before_any_recovery_supports_an_ordinary_winning_run() {
+    for passed in [false, true] {
+        for inning in [9, 10] {
+            let (mut before, mut event) = mixed_recovery_fixture(Half::Bottom, 0, 5, 0, 2, passed);
+            before.inning = inning;
+            event.single_delivery.as_mut().unwrap().recovery = RecoveryReview::BeforeAnyAdvance {
+                runner_id: before.bases[0].as_ref().unwrap().player_id.clone(),
+            };
+            without_units(&mut event);
+            let transition = accepted(&before, event);
+            assert!(transition.after().over);
+            assert_eq!(transition.after().score, [0, 1]);
+            assert_eq!(transition.after().outs, 2);
+            assert_eq!(transition.after().half, Half::Bottom);
+        }
+    }
+}
+
+#[test]
+fn automatic_k_separate_after_advance_recovery_needs_winning_run_end_order() {
+    for passed in [false, true] {
+        for inning in [9, 10] {
+            let (mut before, event) = mixed_recovery_fixture(Half::Bottom, 0, 5, 0, 2, passed);
+            before.inning = inning;
+            let after = physical_after(&before, &event);
+            rejected(
+                &before,
+                event.clone(),
+                after,
+                TransitionError::UnsupportedRule,
+            );
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &event, &event)),
+                Err(TransitionError::UnsupportedRule)
+            );
+        }
     }
 }
 
@@ -865,10 +1448,7 @@ fn wire_delivery(facts: &SingleDeliveryFacts) -> Vec<u8> {
 fn wire_event(event: &Event) -> Vec<u8> {
     assert_eq!(event.kind, EventKind::PlateAppearance);
     assert!(
-        event.delta.changes.is_empty()
-            && event.delta.third_out.is_none()
-            && event.two_out_contact.is_none()
-            && event.balk.is_none()
+        event.delta.changes.is_empty() && event.two_out_contact.is_none() && event.balk.is_none()
     );
     let mut bytes = vec![0]; // PlateAppearance
     match &event.participants.batter {
@@ -909,7 +1489,25 @@ fn wire_event(event: &Event) -> Vec<u8> {
         });
     }
     bytes.extend_from_slice(&0u64.to_le_bytes()); // no changes
-    bytes.extend_from_slice(&[0, 0]); // no third_out/contact
+    match &event.delta.third_out {
+        None => bytes.push(0),
+        Some(third) => {
+            bytes.push(1);
+            wire_string(&mut bytes, &third.runner_id);
+            bytes.push(match third.kind {
+                ThirdOutKind::BatterBeforeFirst => 0,
+                ThirdOutKind::Force => 1,
+                ThirdOutKind::Timing => 2,
+                ThirdOutKind::PrecedingRunnerAppeal => 3,
+                ThirdOutKind::BatterAfterFirstTiming => 4,
+            });
+            bytes.extend_from_slice(&(third.home_before_out.len() as u64).to_le_bytes());
+            for id in &third.home_before_out {
+                wire_string(&mut bytes, id);
+            }
+        }
+    }
+    bytes.push(0); // no contact
     match &event.single_delivery {
         Some(facts) => bytes.extend_from_slice(&wire_delivery(facts)),
         None => bytes.push(0),

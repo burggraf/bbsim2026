@@ -118,18 +118,21 @@ fn stolen_base_history(
     Ok(unresolved)
 }
 
-/// This one automatic batter out is not a defensive recovery retirement.
-/// Other retirement/touch histories remain unbound; never subtract all K outs.
-fn automatic_out_only(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> bool {
+/// Definite automatic retirement, not a subtraction of arbitrary K outs.
+fn automatic_batter_out(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> bool {
     facts.context == DeliveryContext::UncaughtThirdStrike
         && crate::rules::strikeout_first_ineligible(before, event)
-        && event.delta.outs == 1
-        && event.delta.third_out.is_none()
         && event
             .delta
             .moves
             .iter()
             .any(|m| m.from == Base::Plate && m.to == Destination::Out)
+}
+
+fn automatic_out_only(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> bool {
+    automatic_batter_out(before, event, facts)
+        && event.delta.outs == 1
+        && event.delta.third_out.is_none()
         && event
             .delta
             .moves
@@ -137,18 +140,39 @@ fn automatic_out_only(before: &GameState, event: &Event, facts: &SingleDeliveryF
             .all(|m| m.from == Base::Plate || m.to != Destination::Out)
 }
 
+/// The one additional out is bound to this delivery's named recovery actor.
+fn automatic_recovery_out(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> bool {
+    if !automatic_batter_out(before, event, facts) || event.delta.outs != 2 {
+        return false;
+    }
+    let id = match &facts.recovery {
+        RecoveryReview::BeforeAnyAdvance { runner_id }
+        | RecoveryReview::AfterAdvance { runner_id, .. } => runner_id,
+        _ => return false,
+    };
+    let mut retired = event
+        .delta
+        .moves
+        .iter()
+        .filter(|m| m.from != Base::Plate && m.to == Destination::Out);
+    retired.next().is_some_and(|m| &m.runner.player_id == id) && retired.next().is_none()
+}
+
 /// Supported final reaches, awards, steal starts and bounded recovery order.
 fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> Option<bool> {
     if event.kind == EventKind::RunnerOnly(RunnerEvent::Balk) {
         return None;
     }
-    let automatic = automatic_out_only(before, event, facts);
+    let recovery_automatic = automatic_recovery_out(before, event, facts);
+    let automatic = automatic_out_only(before, event, facts) || recovery_automatic;
     match &facts.recovery {
         RecoveryReview::BeforeAnyAdvance { .. }
         | RecoveryReview::RecoveredThirdStrikeBatterBeforeFirst => return Some(false),
         RecoveryReview::Unknown => return None,
         RecoveryReview::NoRecoveryPutout if event.delta.outs != 0 && !automatic => return None,
-        RecoveryReview::AfterAdvance { .. } if event.delta.outs != 1 => return None,
+        RecoveryReview::AfterAdvance { .. } if event.delta.outs != 1 && !recovery_automatic => {
+            return None
+        }
         _ => {}
     }
     if facts.advances.iter().any(|a| {
@@ -282,6 +306,19 @@ fn recovery_facts(
             return Err(TransitionError::IllegalCredit);
         }
         if let Some(third) = &event.delta.third_out {
+            if automatic_recovery_out(before, event, facts)
+                && (third.runner_id != id
+                    || matches!(
+                        third.kind,
+                        crate::ThirdOutKind::Force
+                            | crate::ThirdOutKind::BatterBeforeFirst
+                            | crate::ThirdOutKind::BatterAfterFirstTiming
+                    ))
+            {
+                // The automatic K precedes this pitch's recovery out and
+                // cannot leave a batter-created force on the before runner.
+                return Err(TransitionError::DeltaMismatch);
+            }
             if third.runner_id == id {
                 match &facts.recovery {
                     RecoveryReview::BeforeAnyAdvance { .. }
@@ -406,7 +443,15 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
         )?;
         let _ = crate::rules::move_destinations(before.bases.clone(), event)?;
         let total_outs = crate::rules::validate_outs(before, event)?;
-        if total_outs < 3 {
+        let known_runner_timing = event.delta.third_out.as_ref().is_some_and(|third| {
+            third.kind == crate::ThirdOutKind::Timing
+                && event.delta.moves.iter().any(|m| {
+                    m.from != Base::Plate
+                        && m.to == Destination::Out
+                        && m.runner.player_id == third.runner_id
+                })
+        });
+        if total_outs < 3 || known_runner_timing {
             crate::rules::validate_run_credits(before, event, total_outs)?;
         }
     }
@@ -417,7 +462,8 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
             .iter()
             .find(|m| m.runner.player_id == advance.runner_id);
         if advance.reached == Destination::Home
-            && automatic_out_only(before, event, facts)
+            && automatic_batter_out(before, event, facts)
+            && before.outs + event.delta.outs < 3
             && before
                 .bases
                 .iter()
@@ -439,7 +485,7 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
                         .as_ref()
                         .is_some_and(|r| r.player_id == advance.runner_id)
                 })
-                .filter(|_| automatic_out_only(before, event, facts))
+                .filter(|_| automatic_batter_out(before, event, facts))
                 .ok_or(TransitionError::IllegalCredit)?;
             if destination_rank(advance.reached).is_none_or(|rank| rank <= origin as u8 + 1) {
                 return Err(TransitionError::IllegalCredit);
@@ -495,6 +541,19 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
     if stolen_base_history(before, event, facts)?
         || (qualification(before, event, facts).is_none() && supplied_units(event) != 0)
     {
+        return Err(TransitionError::UnsupportedRule);
+    }
+    if automatic_recovery_out(before, event, facts)
+        && matches!(facts.recovery, RecoveryReview::AfterAdvance { .. })
+        && before.half == crate::Half::Bottom
+        && before.inning >= 9
+        && before.score[1]
+            .checked_add(u16::from(event.delta.runs))
+            .is_some_and(|home| home > before.score[0])
+    {
+        // AfterAdvance binds its witness before recovery, not recovery before
+        // the game's winning run. End-game/appeal order is still unrepresented;
+        // BeforeAnyAdvance, by contrast, supplies that earlier-out ordering.
         return Err(TransitionError::UnsupportedRule);
     }
     Ok(())
