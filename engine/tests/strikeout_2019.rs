@@ -88,6 +88,7 @@ fn safe_reach(before: &GameState, destination: Destination) -> (Event, GameState
             pitcher,
         },
         fielding_review: FieldingReview::Unknown,
+        two_out_contact: None,
         delta: Delta {
             moves,
             outs: 0,

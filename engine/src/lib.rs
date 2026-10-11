@@ -3,6 +3,7 @@
 
 pub mod accounting;
 mod codec;
+mod contact;
 mod reducer;
 mod rules;
 pub use reducer::apply;
@@ -154,6 +155,8 @@ pub enum CreditKind {
     /// Walk classifications are modifiers, not additional base-on-balls units.
     OrdinaryWalk,
     IntentionalWalk,
+    /// Scorer-qualified ground force/reverse-force double play, one batter unit.
+    GroundedIntoDoublePlay,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credit {
@@ -219,12 +222,73 @@ pub enum FieldingReview {
     NoMisplay,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContactClass {
+    Grounded,
+    NotGrounded,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContactContinuity {
+    Continuous,
+    Discontinuous,
+    Unknown,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ForceLoss {
+    /// The force was active immediately before the first named retirement.
+    RemovedByFirstOut,
+    PreviouslyRemoved,
+    NeverForced,
+    Unknown,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RetirementCause {
+    /// Defensive tag of first base or batter before first touch; not catch,
+    /// automatic retirement, interference penalty or appeal.
+    BatterPutoutBeforeFirstTouch,
+    Force {
+        at: Destination,
+    },
+    Tag {
+        at: Destination,
+        force_loss: ForceLoss,
+    },
+    BatterAfterFirstTag {
+        at: Destination,
+    },
+    RunnerInterference,
+    BatterByPrecedingRunnerInterference {
+        interferer_id: String,
+    },
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RetirementFact {
+    pub runner_id: String,
+    pub cause: RetirementCause,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReviewedErrorPlacement {
+    /// All relevant between-out chances were reviewed, including absence.
+    pub between_outs: Vec<String>,
+    /// Placement of supplied units only; no exhaustive outside/ER review.
+    pub outside_interval: Vec<String>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TwoOutContactFacts {
+    pub contact: ContactClass,
+    /// These fields assert order; movement/credit vector order does not.
+    pub first_out: RetirementFact,
+    pub second_out: RetirementFact,
+    pub continuity: ContactContinuity,
+    pub error_placement: Option<ReviewedErrorPlacement>,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
     pub participants: Participants,
     pub fielding_review: FieldingReview,
     pub delta: Delta,
+    pub two_out_contact: Option<TwoOutContactFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -506,7 +570,8 @@ impl EventTransition {
                 | CreditKind::Double
                 | CreditKind::Triple
                 | CreditKind::OrdinaryWalk
-                | CreditKind::IntentionalWalk => {
+                | CreditKind::IntentionalWalk
+                | CreditKind::GroundedIntoDoublePlay => {
                     is_pa && event.participants.batter.as_deref() == Some(credit.player_id.as_str())
                 }
                 CreditKind::StolenBase => event.delta.moves.iter().any(|m| {

@@ -91,6 +91,7 @@ fn force_event(before: &GameState, out_base: usize, reverse: bool) -> Event {
             }),
         },
         fielding_review: FieldingReview::Unknown,
+        two_out_contact: None,
     }
 }
 
@@ -290,6 +291,7 @@ fn supplied_hits_with_other_retirements_are_not_inferred_as_force_outs() {
                     }),
                 },
                 fielding_review: FieldingReview::Unknown,
+                two_out_contact: None,
             };
             let valid = apply(&before, event).unwrap();
             assert_line(&valid, 1);

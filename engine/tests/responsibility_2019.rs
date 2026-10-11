@@ -53,6 +53,7 @@ fn action(
             pitcher: before.teams[1 - offense].pitcher.clone(),
         },
         fielding_review: FieldingReview::NoMisplay,
+        two_out_contact: None,
         delta: Delta {
             moves,
             outs,

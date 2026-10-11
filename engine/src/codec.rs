@@ -142,9 +142,57 @@ binary_enum!(Half { Top = 0, Bottom = 1 });
 binary_enum!(Base { Plate = 0, First = 1, Second = 2, Third = 3 });
 binary_enum!(Destination { First = 0, Second = 1, Third = 2, Home = 3, Out = 4 });
 binary_enum!(RunnerEvent { WildPitch = 0, PassedBall = 1, StealAttempt = 2, Pickoff = 3, Balk = 4 });
-binary_enum!(CreditKind { PlateAppearance = 0, Strikeout = 1, Walk = 2, Hit = 3, Run = 4, Rbi = 5, StolenBase = 6, CaughtStealing = 7, Putout = 8, Assist = 9, Error = 10, PassedBall = 11, AtBat = 12, HitByPitch = 13, SacrificeBunt = 14, SacrificeFly = 15, InterferenceAward = 16, Single = 17, Double = 18, Triple = 19, OrdinaryWalk = 20, IntentionalWalk = 21 });
+binary_enum!(CreditKind { PlateAppearance = 0, Strikeout = 1, Walk = 2, Hit = 3, Run = 4, Rbi = 5, StolenBase = 6, CaughtStealing = 7, Putout = 8, Assist = 9, Error = 10, PassedBall = 11, AtBat = 12, HitByPitch = 13, SacrificeBunt = 14, SacrificeFly = 15, InterferenceAward = 16, Single = 17, Double = 18, Triple = 19, OrdinaryWalk = 20, IntentionalWalk = 21, GroundedIntoDoublePlay = 22 });
 binary_enum!(ThirdOutKind { BatterBeforeFirst = 0, Force = 1, Timing = 2, PrecedingRunnerAppeal = 3, BatterAfterFirstTiming = 4 });
 binary_enum!(FieldingReview { Unknown = 0, NoMisplay = 1 });
+binary_enum!(ContactClass { Grounded = 0, NotGrounded = 1 });
+binary_enum!(ContactContinuity { Continuous = 0, Discontinuous = 1, Unknown = 2 });
+binary_enum!(ForceLoss { RemovedByFirstOut = 0, PreviouslyRemoved = 1, NeverForced = 2, Unknown = 3 });
+impl Binary for RetirementCause {
+    fn encode(&self, out: &mut Vec<u8>) {
+        match self {
+            Self::BatterPutoutBeforeFirstTouch => 0u8.encode(out),
+            Self::Force { at } => {
+                1u8.encode(out);
+                at.encode(out);
+            }
+            Self::Tag { at, force_loss } => {
+                2u8.encode(out);
+                at.encode(out);
+                force_loss.encode(out);
+            }
+            Self::BatterAfterFirstTag { at } => {
+                3u8.encode(out);
+                at.encode(out);
+            }
+            Self::RunnerInterference => 4u8.encode(out),
+            Self::BatterByPrecedingRunnerInterference { interferer_id } => {
+                5u8.encode(out);
+                interferer_id.encode(out);
+            }
+        }
+    }
+    fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
+        match u8::decode(reader)? {
+            0 => Ok(Self::BatterPutoutBeforeFirstTouch),
+            1 => Ok(Self::Force {
+                at: Binary::decode(reader)?,
+            }),
+            2 => Ok(Self::Tag {
+                at: Binary::decode(reader)?,
+                force_loss: Binary::decode(reader)?,
+            }),
+            3 => Ok(Self::BatterAfterFirstTag {
+                at: Binary::decode(reader)?,
+            }),
+            4 => Ok(Self::RunnerInterference),
+            5 => Ok(Self::BatterByPrecedingRunnerInterference {
+                interferer_id: Binary::decode(reader)?,
+            }),
+            _ => Err(TransitionError::InvalidEncoding),
+        }
+    }
+}
 impl Binary for EventKind {
     fn encode(&self, out: &mut Vec<u8>) {
         match self {
@@ -276,17 +324,30 @@ binary_struct!(Delta {
     changes,
     third_out
 });
+binary_struct!(RetirementFact { runner_id, cause });
+binary_struct!(ReviewedErrorPlacement {
+    between_outs,
+    outside_interval
+});
+binary_struct!(TwoOutContactFacts {
+    contact,
+    first_out,
+    second_out,
+    continuity,
+    error_placement
+});
 binary_struct!(Event {
     kind,
     participants,
     fielding_review,
-    delta
+    delta,
+    two_out_contact
 });
 
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE13".to_vec();
+        let mut out = b"BBE14".to_vec();
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
@@ -294,7 +355,7 @@ impl EventTransition {
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
         let payload = bytes
-            .strip_prefix(b"BBE13")
+            .strip_prefix(b"BBE14")
             .ok_or(TransitionError::InvalidEncoding)?;
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;

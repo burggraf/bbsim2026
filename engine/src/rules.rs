@@ -124,6 +124,7 @@ pub(crate) fn batter_charge<'a>(
     // Credit-only contradictions must not be masked by unknown FC lineage.
     let _ = hit_value_credit(event)?;
     let _ = walk_classification(before, event)?;
+    super::contact::validate(before, event)?;
     let current = before.teams[1 - before.half.offense()].pitcher.as_str();
     if event.kind == EventKind::FieldersChoice {
         if before.bases.iter().flatten().count() != 1
@@ -294,8 +295,9 @@ pub(crate) fn scored_runners(
             Vec::new()
         }
         ThirdOutKind::Force => {
-            if event.delta.outs != 1 && !home.is_empty() {
-                // Earlier outs can remove a force; their order is not encoded.
+            if event.delta.outs != 1 && !home.is_empty() && event.two_out_contact.is_none() {
+                // Legacy records lack order. Typed contact facts have already
+                // validated that the first retirement did not remove this force.
                 return Err(TransitionError::UnsupportedRule);
             }
             // A force exists while the batter becomes a runner and every

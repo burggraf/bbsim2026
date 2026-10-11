@@ -76,6 +76,7 @@ fn derives_f02_runner_only_wild_pitch_without_advancing_batter() {
             third_out: None,
         },
         fielding_review: bbsim_engine::FieldingReview::Unknown,
+        two_out_contact: None,
     };
     let transition = apply(&before, event).unwrap();
     let mut expected = before.clone();
@@ -118,6 +119,7 @@ fn pa(
             third_out: None,
         },
         fielding_review: bbsim_engine::FieldingReview::Unknown,
+        two_out_contact: None,
     }
 }
 
@@ -184,6 +186,7 @@ fn caught_stealing_third_out_clears_stranded_runners() {
             third_out: None,
         },
         fielding_review: bbsim_engine::FieldingReview::Unknown,
+        two_out_contact: None,
     };
     let next = apply(&before, event).unwrap();
     assert_eq!(
@@ -312,6 +315,7 @@ fn substitution_changes_pitcher_and_inherits_pinch_runner_responsibility() {
             third_out: None,
         },
         fielding_review: bbsim_engine::FieldingReview::Unknown,
+        two_out_contact: None,
     };
     let next = apply(&before, event).unwrap();
     assert_eq!(next.after().teams[0].pitcher, "reliever");
@@ -345,6 +349,7 @@ fn illegal_collision_does_not_mutate_caller_state() {
             third_out: None,
         },
         fielding_review: bbsim_engine::FieldingReview::Unknown,
+        two_out_contact: None,
     };
     assert!(apply(&before, event).is_err());
     assert_eq!(before, original);
@@ -471,6 +476,7 @@ fn pickoff_follows_prior_event_without_plate_appearance() {
             third_out: None,
         },
         fielding_review: bbsim_engine::FieldingReview::Unknown,
+        two_out_contact: None,
     };
     let next = apply(prior.after(), event).unwrap();
     assert!(next.follows(&prior).is_ok());

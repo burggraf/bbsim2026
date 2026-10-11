@@ -82,6 +82,7 @@ fn play(before: &GameState, kind: CreditKind, fielder: &str) -> Event {
             pitcher,
         },
         fielding_review: FieldingReview::Unknown,
+        two_out_contact: None,
         delta: Delta {
             moves: vec![movement],
             outs: u8::from(!pb),

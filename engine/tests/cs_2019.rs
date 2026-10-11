@@ -49,6 +49,7 @@ fn event(before: &GameState, kind: EventKind, review: FieldingReview) -> Event {
             pitcher: before.teams[1 - offense].pitcher.clone(),
         },
         fielding_review: review,
+        two_out_contact: None,
         delta: Delta {
             moves: vec![],
             outs: 0,

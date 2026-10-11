@@ -35,6 +35,7 @@ pub struct BatterLine {
     pub credited_walks: u32,
     /// None if a supplied Walk in this batter segment lacks intent classification.
     pub credited_intentional_walks: Option<u32>,
+    pub credited_grounded_into_double_plays: u32,
     pub credited_strikeouts: u32,
     pub credited_runs: u32,
     pub credited_rbi: u32,
@@ -55,6 +56,7 @@ impl Default for BatterLine {
             credited_hit_breakdown: Some(HitBreakdown::default()),
             credited_walks: 0,
             credited_intentional_walks: Some(0),
+            credited_grounded_into_double_plays: 0,
             credited_strikeouts: 0,
             credited_runs: 0,
             credited_rbi: 0,
@@ -299,9 +301,14 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             let counted = matches!(
                 event.kind,
                 EventKind::OutOfParkHomeRun | EventKind::FieldersChoice
-            ) || [CreditKind::AtBat, CreditKind::Hit, CreditKind::Strikeout]
-                .into_iter()
-                .any(has);
+            ) || [
+                CreditKind::AtBat,
+                CreditKind::Hit,
+                CreditKind::Strikeout,
+                CreditKind::GroundedIntoDoublePlay,
+            ]
+            .into_iter()
+            .any(has);
             let at_bat = if excluded {
                 Some(false)
             } else if counted {
@@ -435,7 +442,10 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 | CreditKind::Double
                 | CreditKind::Triple
                 | CreditKind::OrdinaryWalk
-                | CreditKind::IntentionalWalk => {} // classification, not another credit unit
+                | CreditKind::IntentionalWalk => {}
+                CreditKind::GroundedIntoDoublePlay => {
+                    batter.credited_grounded_into_double_plays += 1
+                }
                 CreditKind::HitByPitch => {
                     batter.credited_hit_by_pitch += 1;
                     result.pitchers[defense]

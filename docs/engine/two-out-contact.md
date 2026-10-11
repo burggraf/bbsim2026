@@ -1,0 +1,32 @@
+# E-03 bounded two-out contact contract
+
+Parent synthesis of the cached 2019 Rules 9.02(a)(17), 9.04(b)(1), 5.09(a)(10), 6.01(a)(6) and the Double Play/Force Play definitions. The [approved matrix](g1-accounting-scope.md) is unchanged. [PROGRESS.md](../PROGRESS.md) owns implementation status; this contract is not completion evidence.
+
+## Explicit facts
+
+Keep generic `EventKind::PlateAppearance`. Add optional `Event.two_out_contact: Option<TwoOutContactFacts>`; legacy/historical events use `None`, not inferred facts.
+
+- `ContactClass::{Grounded, NotGrounded}` classifies fair batted contact and `ContactContinuity::{Continuous, Discontinuous, Unknown}`.
+- Explicit `first_out` and `second_out: RetirementFact { runner_id, cause }`; order is never taken from movements/credits.
+- `RetirementCause::BatterPutoutBeforeFirstTouch`: actual defensive putout by tagging first base **or the batter before first touch**. Not a catch, automatic out, interference penalty or appeal. It maps to final-out before-first scoring consequences, never the converse.
+- Runner `Force { at: Destination }` or `Tag { at, force_loss: ForceLoss }`, with `ForceLoss::{RemovedByFirstOut, PreviouslyRemoved, NeverForced, Unknown}`. Tag is an explicitly nonforce retirement; Unknown lacks the prior-force-loss history needed to qualify a reverse-force DP. A removed-by-first assertion includes an active force immediately before that first retirement; validate the initial force chain and causal trailing actor. Actual force bases must be the next forced base. `Destination::Out` is not a retirement location.
+- `BatterAfterFirstTag { at }`, `RunnerInterference` and `BatterByPrecedingRunnerInterference { interferer_id }` preserve known nonqualifying mechanics. Penalty-out order does not establish defensive timing; complex interference resolution remains unsupported. The simple two-penalty/no-run/non-third-out pair supports held survivors only; unexplained survivor base changes need prior-action/last-touch chronology and remain UnsupportedRule, not automatically illegal.
+- Optional `ReviewedErrorPlacement { between_outs: Vec<String>, outside_interval: Vec<String> }`. Combined actor multiplicities reconcile supplied Error units without deduplication. The between interval reviews **all relevant chances**, including absent error credits. Outside placement asserts only that supplied units occurred outside, not earlier/later ordering, exhaustive outside review or ER cleanliness. Missing review stays unknown.
+
+Append scorer credit `GroundedIntoDoublePlay` at tag 22. Internal prefix `BBE14` rejects earlier versions; no compatibility promise, dependency or general position/trajectory schema is added. Event wire order retains kind/participants/fielding_review/Delta then appends optional context. Context order is contact/first_out/second_out/continuity/optional error_placement; retirement is length-prefixed ID then cause. Contact tags Grounded0/NotGrounded1; continuity Continuous0/Discontinuous1/Unknown2; causes before-first0/Force1/Tag2/after-first3/runner-interference4/batter-penalty5 (locations, force loss or interferer ID follow as applicable). ForceLoss tags RemovedByFirstOut0/PreviouslyRemoved1/NeverForced2/Unknown3; existing Destination tags and all prior credit tags remain unchanged. Error lists preserve actor multiplicities; standard Option/Vec encodings apply.
+
+## Validation and accounting
+
+Names match exactly two actual retired actors/movements, with two outs and before-outs 0/1. A qualifying ground DP is continuous, has reviewed no between-out error, and is either two force-like putouts or a force-like first putout followed by a tag whose force was removed by that first out. The batter need not retire. Wrong forces, location/actor/order facts and represented contradictions are rejected; insufficient force history/review/timing is unsupported, not an impossible legal outcome. Unknown tag history can leave reverse-force qualification possible only with the represented initial force chain and a causal trailing first retirement; it cannot override a known missing chain or wrong causal actor.
+
+One actual-batter GIDP credit; duplicate/wrong-actor/incompatible PA classifications are illegal. Positive GIDP's zero/one optional AtBat prerequisite is checked before missing context/review exits. Positive GIDP plus preceding-runner interference is illegal before uncertainty can mask that known exclusion. Known qualifying context forbids RBI even if GIDP credit is omitted. Positive GIDP establishes one AB; optional AtBat is not counted twice. Actual PA/BF/pitching outs remain 1/1/2.
+
+The second retirement, when third out, must match `ThirdOut` actor/cause. Force/before-first voids runs; reverse-force tags use explicit home-before-final-out facts. Use validated ordered facts to resolve the bounded force-removal subset, retaining legacy fallback otherwise. Unrepresented winning-run/action timing remains unsupported, never assumed to occur after the outs.
+
+Batter-safe cases with relevant retired charges equal to current pitcher need no replacement exchange; unrelated inherited survivors retain charges. Mixed/inherited carried/scored replacement ambiguity remains unsupported. Preserve the existing non-scoring-third-out exception where no batter charge survives/scores. No general multi-runner FC exchange is added.
+
+`BatterLine.credited_grounded_into_double_plays: u32` counts supplied validated credits only. Omission/two outs alone neither adds GIDP nor certifies official zero. No pitching GIDP field, ER-clean extension, fielding identities or complete-box certificate.
+
+## Observable acceptance
+
+Test force/reverse-force, bag/baseline-tag putouts, batter-safe rulebook example, both halves/before-outs/orders, inherited survivors/charge uncertainty, timing runs and voided force runs; literal PA/AB/BF/outs/GIDP. Earlier outside errors may coexist with GIDP while ER stays unknown; move the same error between outs to reject qualification. Exercise missing facts versus definite credit/context contradictions, preceding-runner interference priority, RBI omission bypass, final-out inconsistency, direct reducer/constructor and well-formed codec forgeries with valid parse controls. Preserve nonground/two-tag/K+CS/unclassified controls, old hit/IBB/FC fixtures and explicit unknowns. Schema failure is separate from behavioral red. Fresh full checks and substantive review precede publication; E-03/G1 remain incomplete.
