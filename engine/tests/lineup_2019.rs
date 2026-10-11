@@ -1,6 +1,7 @@
 use bbsim_engine::{
-    apply, Base, Credit, CreditKind, Delta, Destination, Event, EventKind, GameState, Half,
-    Participants, PersonnelChange, Runner, RunnerMove, TeamSide, TeamState, TransitionError,
+    accounting::derive_accounting, apply, Base, Credit, CreditKind, Delta, Destination, Event,
+    EventKind, EventTransition, GameState, Half, Participants, PersonnelChange, Runner, RunnerMove,
+    TeamSide, TeamState, TransitionError,
 };
 
 fn team(prefix: &str) -> TeamState {
@@ -26,13 +27,15 @@ fn state() -> GameState {
     }
 }
 fn substitution(before: &GameState, changes: Vec<PersonnelChange>) -> Event {
+    let offense = before.half.offense();
     Event {
         kind: EventKind::Substitution,
         participants: Participants {
             batter: Some(
-                before.teams[1].batting_order[before.teams[1].next_batter as usize].clone(),
+                before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
+                    .clone(),
             ),
-            pitcher: before.teams[0].pitcher.clone(),
+            pitcher: before.teams[1 - offense].pitcher.clone(),
         },
         delta: Delta {
             moves: vec![],
@@ -249,6 +252,214 @@ fn starting_dh_obligation_clears_when_he_bats() {
     before.teams[1].dh_must_bat = true;
     let next = apply(&before, batter_out(&before)).unwrap();
     assert!(!next.after().teams[1].dh_must_bat);
+}
+
+fn configuration(half: Half, dh: bool) -> GameState {
+    let mut before = state();
+    before.half = half;
+    if !dh {
+        for team in &mut before.teams {
+            team.dh_slot = None;
+            team.batting_order[8] = team.pitcher.clone();
+        }
+    }
+    before
+}
+
+fn retained_swap_cases() -> Vec<(GameState, Event, GameState)> {
+    let mut cases = vec![];
+    for half in [Half::Top, Half::Bottom] {
+        for dh in [false, true] {
+            for side in 0..2 {
+                for first in 0..9 {
+                    for second in first + 1..9 {
+                        for reverse in [false, true] {
+                            let before = configuration(half, dh);
+                            let team = [TeamSide::Away, TeamSide::Home][side];
+                            let order = &before.teams[side].batting_order;
+                            let mut changes = vec![
+                                PersonnelChange::BattingSlot {
+                                    team,
+                                    slot: first as u8,
+                                    outgoing: order[first].clone(),
+                                    incoming: order[second].clone(),
+                                },
+                                PersonnelChange::BattingSlot {
+                                    team,
+                                    slot: second as u8,
+                                    outgoing: order[second].clone(),
+                                    incoming: order[first].clone(),
+                                },
+                            ];
+                            if reverse {
+                                changes.reverse();
+                            }
+                            let action = substitution(&before, changes);
+                            let mut after = before.clone();
+                            after.teams[side].batting_order.swap(first, second);
+                            cases.push((before, action, after));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(cases.len(), 576);
+    cases
+}
+
+#[test]
+fn reducer_rejects_retained_hitter_slot_permutations_without_mutating_caller() {
+    for (before, action, _) in retained_swap_cases() {
+        let original = before.clone();
+        assert_eq!(
+            apply(&before, action),
+            Err(TransitionError::IllegalStateChange)
+        );
+        assert_eq!(before, original);
+    }
+}
+
+#[test]
+fn constructor_rejects_retained_hitter_slot_permutations() {
+    for (before, action, after) in retained_swap_cases() {
+        assert_eq!(
+            EventTransition::try_new(before, action, after),
+            Err(TransitionError::IllegalStateChange)
+        );
+    }
+}
+
+fn encoded_name(id: &str) -> Vec<u8> {
+    let mut encoded = (id.len() as u64).to_le_bytes().to_vec();
+    encoded.extend_from_slice(id.as_bytes());
+    encoded
+}
+
+fn unique_wire_offset(bytes: &[u8], marker: &[u8]) -> usize {
+    let offsets: Vec<_> = bytes
+        .windows(marker.len())
+        .enumerate()
+        .filter_map(|(offset, window)| (window == marker).then_some(offset))
+        .collect();
+    assert_eq!(offsets.len(), 1);
+    offsets[0]
+}
+
+#[test]
+fn codec_rejects_retained_hitter_move_hidden_among_a_real_bench_replacement() {
+    for half in [Half::Top, Half::Bottom] {
+        for side in 0..2 {
+            let before = configuration(half, true);
+            let team = [TeamSide::Away, TeamSide::Home][side];
+            let old = &before.teams[side].batting_order[0];
+            let retained = &before.teams[side].batting_order[1];
+            let action = substitution(
+                &before,
+                vec![PersonnelChange::BattingSlot {
+                    team,
+                    slot: 0,
+                    outgoing: old.clone(),
+                    incoming: "sub".into(),
+                }],
+            );
+            let valid = apply(&before, action).unwrap();
+            let mut bytes = valid.to_bytes();
+            assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), valid);
+            // BBE11: replace one real substitution with two slot changes.
+            // Preserve the final active membership/bench/removed transfers,
+            // but put the retained slot-1 hitter into slot 0.
+            let mut change = vec![1, side as u8, 0];
+            change.extend(encoded_name(old));
+            change.extend(encoded_name("sub"));
+            let mut marker = 1u64.to_le_bytes().to_vec();
+            marker.extend(&change);
+            let offset = unique_wire_offset(&bytes, &marker);
+            bytes[offset..offset + 8].copy_from_slice(&2u64.to_le_bytes());
+            let incoming = offset + 8 + 3 + encoded_name(old).len();
+            bytes.splice(
+                incoming..incoming + encoded_name("sub").len(),
+                encoded_name(retained),
+            );
+            let mut second = vec![1, side as u8, 1];
+            second.extend(encoded_name(retained));
+            second.extend(encoded_name("sub"));
+            let end = incoming + encoded_name(retained).len();
+            bytes.splice(end..end, second);
+            let mut after_order = encoded_name("sub");
+            after_order.extend(encoded_name(retained));
+            let offset = unique_wire_offset(&bytes, &after_order);
+            let mut swapped = encoded_name(retained);
+            swapped.extend(encoded_name("sub"));
+            bytes.splice(offset..offset + after_order.len(), swapped);
+            assert_eq!(
+                EventTransition::from_bytes(&bytes),
+                Err(TransitionError::IllegalStateChange)
+            );
+        }
+    }
+}
+
+#[test]
+fn bench_replacements_preserve_retained_slots_and_do_not_add_pa_or_bf() {
+    for half in [Half::Top, Half::Bottom] {
+        for dh in [false, true] {
+            for side in 0..2 {
+                let before = configuration(half, dh);
+                let team = [TeamSide::Away, TeamSide::Home][side];
+                let changes = ["sub", "runner"]
+                    .iter()
+                    .enumerate()
+                    .map(|(slot, id)| PersonnelChange::BattingSlot {
+                        team,
+                        slot: slot as u8,
+                        outgoing: before.teams[side].batting_order[slot].clone(),
+                        incoming: (*id).into(),
+                    })
+                    .collect();
+                let valid = apply(&before, substitution(&before, changes)).unwrap();
+                assert_eq!(
+                    &valid.after().teams[side].batting_order[2..],
+                    &before.teams[side].batting_order[2..]
+                );
+                assert_eq!(
+                    valid.after().teams[side].next_batter,
+                    before.teams[side].next_batter
+                );
+                assert_eq!(
+                    valid.after().teams[side].removed,
+                    before.teams[side].batting_order[..2]
+                );
+                assert_eq!(
+                    EventTransition::from_bytes(&valid.to_bytes()).unwrap(),
+                    valid
+                );
+                assert_eq!(
+                    EventTransition::try_new(before, valid.event().clone(), valid.after().clone())
+                        .unwrap(),
+                    valid
+                );
+                let line = derive_accounting(std::slice::from_ref(&valid)).unwrap();
+                assert_eq!(line.runs, [0, 0]);
+                assert_eq!(
+                    line.batters
+                        .iter()
+                        .flat_map(|team| team.values())
+                        .map(|b| b.plate_appearances)
+                        .sum::<u32>(),
+                    0
+                );
+                assert_eq!(
+                    line.pitchers
+                        .iter()
+                        .flat_map(|team| team.values())
+                        .map(|p| p.batters_faced)
+                        .sum::<u32>(),
+                    0
+                );
+            }
+        }
+    }
 }
 
 #[test]

@@ -47,6 +47,13 @@ pub(crate) fn finalize_personnel(
     offense: usize,
 ) -> Result<(), TransitionError> {
     for (side, (old, new)) in before.iter().zip(after.iter_mut()).enumerate() {
+        // Rule 5.04(a)(2): substitutions replace occupants, not the batting
+        // slots of players who remain in the order (including pitchers).
+        for (slot, id) in old.batting_order.iter().enumerate() {
+            if new.batting_order.contains(id) && &new.batting_order[slot] != id {
+                return Err(TransitionError::IllegalStateChange);
+            }
+        }
         if let Some(slot) = old.dh_slot {
             if new.batting_order[slot as usize] == new.pitcher {
                 new.dh_slot = None;
