@@ -1,8 +1,8 @@
 use bbsim_engine::{
     accounting::{derive_accounting, AccountingError},
-    apply, Base, Credit, CreditKind, Delta, Destination, Event, EventKind, FieldingReview,
-    GameState, Half, Participants, PersonnelChange, Runner, RunnerEvent, RunnerMove, TeamSide,
-    TeamState, ThirdOut, ThirdOutKind,
+    apply, Base, Credit, CreditKind, Delta, Destination, Event, EventKind, EventTransition,
+    FieldingReview, GameState, Half, Participants, PersonnelChange, Runner, RunnerEvent,
+    RunnerMove, TeamSide, TeamState, ThirdOut, ThirdOutKind, TransitionError,
 };
 
 fn team(prefix: &str, pitcher: &str) -> TeamState {
@@ -1555,6 +1555,170 @@ fn clean_fc_cannot_certify_unknown_origin_review_or_unfinished_half() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn codec_rejects_corrupted_review_and_well_formed_review_error_contradiction() {
+    for half in [Half::Top, Half::Bottom] {
+        let mut before = state();
+        before.inning = 1;
+        before.half = half;
+        before.outs = 0;
+        before.bases = [None, None, None];
+        let offense = half.offense();
+        let batter = &before.teams[offense].batting_order[0];
+        let action = event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![credit(batter, CreditKind::Strikeout)],
+            vec![],
+        );
+        let unknown = apply(&before, action.clone()).unwrap();
+        let clean = apply(&before, reviewed(action.clone())).unwrap();
+        assert_eq!(unknown.after(), clean.after());
+        let unknown_bytes = unknown.to_bytes();
+        let clean_bytes = clean.to_bytes();
+        assert_eq!(unknown_bytes.len(), clean_bytes.len());
+        let differences: Vec<_> = unknown_bytes
+            .iter()
+            .zip(&clean_bytes)
+            .enumerate()
+            .filter_map(|(index, (left, right))| (left != right).then_some(index))
+            .collect();
+        assert_eq!(differences.len(), 1);
+        let review_offset = differences[0];
+        assert_eq!(unknown_bytes[review_offset], 0);
+        assert_eq!(clean_bytes[review_offset], 1);
+        assert_eq!(
+            EventTransition::from_bytes(&unknown_bytes).unwrap(),
+            unknown
+        );
+        assert_eq!(EventTransition::from_bytes(&clean_bytes).unwrap(), clean);
+        let mut corrupted = clean_bytes;
+        corrupted[review_offset] = 255;
+        assert_eq!(
+            EventTransition::from_bytes(&corrupted),
+            Err(TransitionError::InvalidEncoding)
+        );
+
+        // A missed foul chance can credit Error even if the PA ends in K.
+        // Adding that credit changes no state, only the event's wire length.
+        let fielder = &before.teams[1 - offense].batting_order[5];
+        let mut with_error = action;
+        with_error
+            .delta
+            .credits
+            .push(credit(fielder, CreditKind::Error));
+        let error = apply(&before, with_error).unwrap();
+        assert_eq!(error.after(), unknown.after());
+        let mut forged = error.to_bytes();
+        assert_eq!(EventTransition::from_bytes(&forged).unwrap(), error);
+        // BBE11 writes review after participants and before Delta. Only
+        // Delta changed; the paired-record position has an identical prefix.
+        assert_eq!(&forged[..review_offset], &unknown_bytes[..review_offset]);
+        assert_eq!(forged[review_offset], 0);
+        forged[review_offset] = 1; // Valid NoMisplay tag, conflicting Error retained.
+        assert_eq!(
+            EventTransition::from_bytes(&forged),
+            Err(TransitionError::IllegalCredit)
+        );
+        let line = derive_accounting(std::slice::from_ref(&error)).unwrap();
+        assert_eq!(line.fielders[1 - offense][fielder].credited_errors, 1);
+    }
+}
+
+#[test]
+fn reviewed_clean_terminal_third_out_certifies_only_observed_completed_segment() {
+    for half in [Half::Top, Half::Bottom] {
+        let mut before = state();
+        before.outs = 0;
+        before.bases = [None, None, None];
+        // Observe the preceding boundary, not an invented complete-game
+        // origin. The earlier three runs are outside this segment's lines.
+        match half {
+            Half::Top => {
+                before.inning = 8;
+                before.half = Half::Bottom;
+                before.score = [0, 3];
+            }
+            Half::Bottom => {
+                before.inning = 9;
+                before.half = Half::Top;
+                before.score = [3, 0];
+            }
+        }
+        let mut log = vec![];
+        finish_with_three_strikeouts(before, &mut log, FieldingReview::NoMisplay);
+        let s = log.last().unwrap().after();
+        assert_eq!((s.inning, s.half, s.outs), (9, half, 0));
+        let offense = half.offense();
+        let pitcher = s.teams[1 - offense].pitcher.clone();
+        let batter = &s.teams[offense].batting_order[s.teams[offense].next_batter as usize];
+        let homer = reviewed(event(
+            s,
+            EventKind::OutOfParkHomeRun,
+            vec![batter_move(s, Destination::Home)],
+            0,
+            1,
+            vec![
+                credit(batter, CreditKind::PlateAppearance),
+                credit(batter, CreditKind::Hit),
+                credit(batter, CreditKind::Run),
+            ],
+            vec![],
+        ));
+        let next = apply(s, homer).unwrap();
+        log.push(next);
+        for _ in 0..3 {
+            let s = log.last().unwrap().after();
+            let batter = &s.teams[offense].batting_order[s.teams[offense].next_batter as usize];
+            let out = reviewed(event(
+                s,
+                EventKind::PlateAppearance,
+                vec![batter_move(s, Destination::Out)],
+                1,
+                0,
+                vec![credit(batter, CreditKind::Strikeout)],
+                vec![],
+            ));
+            let next = apply(s, out).unwrap();
+            log.push(next);
+        }
+        let final_state = log.last().unwrap().after();
+        assert!(final_state.over);
+        assert_eq!(
+            (final_state.inning, final_state.half, final_state.outs),
+            (9, half, 0)
+        );
+        let decoded: Vec<_> = log
+            .iter()
+            .map(|t| EventTransition::from_bytes(&t.to_bytes()).unwrap())
+            .collect();
+        assert_eq!(decoded, log);
+        let line = derive_accounting(&decoded).unwrap();
+        let mut runs = [0, 0];
+        runs[offense] = 1;
+        assert_eq!(line.runs, runs);
+        assert!(!line.complete_game);
+        assert_eq!(line.pitchers[1 - offense][&pitcher].runs_allowed, 1);
+        assert_eq!(line.pitchers[1 - offense][&pitcher].earned_runs, Some(1));
+        assert_eq!(line.pitchers[1 - offense][&pitcher].outs_recorded, 3);
+        assert_eq!(line.pitchers[1 - offense][&pitcher].batters_faced, 4);
+        assert_eq!(
+            line.innings[&9],
+            if half == Half::Top {
+                [Some(1), None]
+            } else {
+                [Some(0), Some(1)]
+            }
+        );
+        let unfinished = derive_accounting(&log[..log.len() - 1]).unwrap();
+        assert_eq!(unfinished.pitchers[1 - offense][&pitcher].runs_allowed, 1);
+        assert_eq!(unfinished.pitchers[1 - offense][&pitcher].earned_runs, None);
     }
 }
 

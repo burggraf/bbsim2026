@@ -194,7 +194,10 @@ fn codec_rejects_hit_credit_forgery_on_force_but_parses_nonforce_control() {
             marker.push(1);
             let offset = unique_offset(&bytes, &marker) + 8 + batter.len();
             bytes[offset] = 3; // Hit: structurally valid, only credit changed.
-            assert!(EventTransition::from_bytes(&bytes).is_err());
+            assert_eq!(
+                EventTransition::from_bytes(&bytes),
+                Err(TransitionError::IllegalCredit)
+            );
 
             // Prove valid parsing, not corruption detection: a supplied
             // nonforce tag beyond second can coexist with a genuine single.
