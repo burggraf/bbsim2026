@@ -548,7 +548,7 @@ fn codec_revalidates_walk_classification_forgeries_and_roundtrips_controls() {
         EventTransition::from_bytes(&intentional.to_bytes()).unwrap(),
         intentional
     );
-    assert!(ordinary.to_bytes().starts_with(b"BBE17"));
+    assert!(ordinary.to_bytes().starts_with(b"BBE18"));
     let batter = ordinary.event().participants.batter.as_ref().unwrap();
 
     // Replace the sole Walk on a generic record with an IntentionalWalk:

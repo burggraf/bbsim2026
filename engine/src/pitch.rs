@@ -158,6 +158,14 @@ fn automatic_recovery_out(before: &GameState, event: &Event, facts: &SingleDeliv
     retired.next().is_some_and(|m| &m.runner.player_id == id) && retired.next().is_none()
 }
 
+fn ordinary_winning_run(before: &GameState, event: &Event) -> bool {
+    before.half == crate::Half::Bottom
+        && before.inning >= 9
+        && before.score[1]
+            .checked_add(u16::from(event.delta.runs))
+            .is_some_and(|home| home > before.score[0])
+}
+
 /// Supported final reaches, awards, steal starts and bounded recovery order.
 fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> Option<bool> {
     if event.kind == EventKind::RunnerOnly(RunnerEvent::Balk) {
@@ -165,6 +173,21 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
     }
     let recovery_automatic = automatic_recovery_out(before, event, facts);
     let automatic = automatic_out_only(before, event, facts) || recovery_automatic;
+    let after_first_throw = match &facts.recovery {
+        RecoveryReview::ThirdStrikeBatterAfterFirstThrow { at, .. } => {
+            if event.delta.outs != 1
+                || !matches!(
+                    at,
+                    Destination::Second | Destination::Third | Destination::Home
+                )
+                || ordinary_winning_run(before, event)
+            {
+                return None;
+            }
+            true
+        }
+        _ => false,
+    };
     match &facts.recovery {
         RecoveryReview::BeforeAnyAdvance { .. }
         | RecoveryReview::RecoveredThirdStrikeBatterBeforeFirst => return Some(false),
@@ -176,18 +199,25 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
         _ => {}
     }
     if facts.advances.iter().any(|a| {
-        !event
-            .delta
-            .moves
-            .iter()
-            .any(|m| m.runner.player_id == a.runner_id && m.to == a.reached)
+        !event.delta.moves.iter().any(|m| {
+            m.runner.player_id == a.runner_id
+                && (m.to == a.reached
+                    || (after_first_throw
+                        && m.from == Base::Plate
+                        && m.to == Destination::Out
+                        && a.reached == Destination::First))
+        })
     }) || (facts.context == DeliveryContext::UncaughtThirdStrike
         && !automatic
-        && !event
-            .delta
-            .moves
-            .iter()
-            .any(|m| m.from == Base::Plate && m.to == Destination::First))
+        && !event.delta.moves.iter().any(|m| {
+            m.from == Base::Plate
+                && (m.to == Destination::First
+                    || (after_first_throw
+                        && m.to == Destination::Out
+                        && facts.advances.iter().any(|a| {
+                            a.runner_id == m.runner.player_id && a.reached == Destination::First
+                        })))
+        }))
     {
         return None;
     }
@@ -216,8 +246,13 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
             .moves
             .iter()
             .find(|m| m.runner.player_id == advance.runner_id)?;
-        if movement.to != advance.reached {
-            return None; // Intermediate reaches need more chronology, not endpoint inference.
+        if movement.to != advance.reached
+            && !(after_first_throw
+                && movement.from == Base::Plate
+                && movement.to == Destination::Out
+                && advance.reached == Destination::First)
+        {
+            return None; // Other intermediate reaches still need their own chronology.
         }
         let reached = destination_rank(advance.reached)?;
         let origin = base_rank(movement.from);
@@ -255,6 +290,49 @@ fn recovery_facts(
     event: &Event,
     facts: &SingleDeliveryFacts,
 ) -> Result<(), TransitionError> {
+    if let RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+        putout_fielder_id,
+        at,
+    } = &facts.recovery
+    {
+        let batter = event
+            .participants
+            .batter
+            .as_deref()
+            .ok_or(TransitionError::IllegalCredit)?;
+        let defense = &before.teams[1 - before.half.offense()];
+        if facts.context != DeliveryContext::UncaughtThirdStrike
+            || crate::rules::strikeout_first_ineligible(before, event)
+            || putout_fielder_id == &facts.catcher_id
+            || !crate::rules::fielding_eligible(defense, putout_fielder_id)
+            || *at == Destination::Out
+            || !event.delta.moves.iter().any(|m| {
+                m.runner.player_id == batter && m.from == Base::Plate && m.to == Destination::Out
+            })
+            || (event.delta.outs == 1
+                && event
+                    .delta
+                    .credits
+                    .iter()
+                    .any(|c| c.kind == CreditKind::Putout && &c.player_id != putout_fielder_id))
+        {
+            return Err(TransitionError::IllegalCredit);
+        }
+        if let Some(third) = event
+            .delta
+            .third_out
+            .as_ref()
+            .filter(|t| t.runner_id == batter)
+        {
+            match third.kind {
+                crate::ThirdOutKind::BatterBeforeFirst => {
+                    return Err(TransitionError::IllegalCredit)
+                }
+                crate::ThirdOutKind::Force => return Err(TransitionError::DeltaMismatch),
+                _ => {}
+            }
+        }
+    }
     let retired = match &facts.recovery {
         RecoveryReview::BeforeAnyAdvance { runner_id }
         | RecoveryReview::AfterAdvance { runner_id, .. } => Some(runner_id.as_str()),
@@ -427,6 +505,7 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
     if !context_matches {
         return Err(TransitionError::IllegalCredit);
     }
+    let mut unresolved_run_history = false;
     if facts.context == DeliveryContext::UncaughtThirdStrike {
         crate::rules::validate_event_shape(event)?;
         // A retired batter cannot be an ambiguous safe FC replacement. Its
@@ -451,8 +530,23 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
                         && m.runner.player_id == third.runner_id
                 })
         });
-        if total_outs < 3 || known_runner_timing {
-            crate::rules::validate_run_credits(before, event, total_outs)?;
+        let bound_batter_throw = retired_batter
+            && event.delta.outs == 1
+            && matches!(
+                facts.recovery,
+                RecoveryReview::ThirdStrikeBatterAfterFirstThrow { .. }
+            );
+        if total_outs < 3 || known_runner_timing || bound_batter_throw {
+            // The one-out throw review supplies actual First touch/out order.
+            // Canonical third-out actors and runs precede unit qualification.
+            match crate::rules::validate_run_credits(before, event, total_outs) {
+                Err(TransitionError::UnsupportedRule) if bound_batter_throw => {
+                    // Missing Home timing must not mask definite receiving
+                    // fielder, handling, or required-unit contradictions.
+                    unresolved_run_history = true;
+                }
+                result => result?,
+            }
         }
     }
     for advance in &facts.advances {
@@ -539,6 +633,9 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
             return Err(TransitionError::IllegalCredit);
         }
     }
+    if unresolved_run_history {
+        return Err(TransitionError::UnsupportedRule);
+    }
     Ok(())
 }
 
@@ -555,15 +652,15 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
     {
         return Err(TransitionError::UnsupportedRule);
     }
-    if automatic_recovery_out(before, event, facts)
-        && matches!(facts.recovery, RecoveryReview::AfterAdvance { .. })
-        && before.half == crate::Half::Bottom
-        && before.inning >= 9
-        && before.score[1]
-            .checked_add(u16::from(event.delta.runs))
-            .is_some_and(|home| home > before.score[0])
+    if ((automatic_recovery_out(before, event, facts)
+        && matches!(facts.recovery, RecoveryReview::AfterAdvance { .. }))
+        || matches!(
+            facts.recovery,
+            RecoveryReview::ThirdStrikeBatterAfterFirstThrow { .. }
+        ))
+        && ordinary_winning_run(before, event)
     {
-        // AfterAdvance binds its witness before recovery, not recovery before
+        // These reviews bind an advance before recovery, not recovery before
         // the game's winning run. End-game/appeal order is still unrepresented;
         // BeforeAnyAdvance, by contrast, supplies that earlier-out ordering.
         return Err(TransitionError::UnsupportedRule);

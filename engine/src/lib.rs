@@ -321,6 +321,13 @@ pub enum RecoveryReview {
         advancer_id: String,
     },
     RecoveredThirdStrikeBatterBeforeFirst,
+    /// Actual legal First touch precedes this delivery's catcher throw to a
+    /// different receiving fielder for the batter's retirement at `at`.
+    /// Handling-caused First acquisition is separately bound in `advances`.
+    ThirdStrikeBatterAfterFirstThrow {
+        putout_fielder_id: String,
+        at: Destination,
+    },
 }
 /// One legal-delivery episode and its supplied WP/PB units; not complete PA/game coverage.
 #[derive(Clone, Debug, PartialEq, Eq)]

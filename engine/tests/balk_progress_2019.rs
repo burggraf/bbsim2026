@@ -134,7 +134,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
     assert_eq!(direct, reduced);
     assert_eq!(reduced.after(), physical.after());
     let bytes = reduced.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE17");
+    assert_eq!(&bytes[..5], b"BBE18");
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), reduced);
     reduced
 }

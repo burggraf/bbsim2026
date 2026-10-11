@@ -85,7 +85,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
         transition
     );
     let bytes = transition.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE17");
+    assert_eq!(&bytes[..5], b"BBE18");
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     transition
 }
@@ -1321,6 +1321,14 @@ fn wire_delivery(facts: &SingleDeliveryFacts) -> Vec<u8> {
             wire_string(&mut bytes, advancer_id);
         }
         RecoveryReview::RecoveredThirdStrikeBatterBeforeFirst => bytes.push(4),
+        RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+            putout_fielder_id,
+            at,
+        } => {
+            bytes.push(5);
+            wire_string(&mut bytes, putout_fielder_id);
+            bytes.push(wire_destination(*at));
+        }
     }
     bytes
 }

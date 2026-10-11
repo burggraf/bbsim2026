@@ -279,9 +279,11 @@ fn versioned_record_roundtrips_and_rejects_corruption() {
     let transition =
         EventTransition::try_new(before.clone(), wild_pitch_event(&before), after).unwrap();
     let bytes = transition.to_bytes();
-    assert!(bytes.starts_with(b"BBE17"));
+    assert!(bytes.starts_with(b"BBE18"));
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
-    for earlier_prefix in [b"BBE16", b"BBE15", b"BBE14", b"BBE13", b"BBE12", b"BBE11"] {
+    for earlier_prefix in [
+        b"BBE17", b"BBE16", b"BBE15", b"BBE14", b"BBE13", b"BBE12", b"BBE11",
+    ] {
         let mut earlier = bytes.clone();
         earlier[..5].copy_from_slice(earlier_prefix);
         assert_eq!(

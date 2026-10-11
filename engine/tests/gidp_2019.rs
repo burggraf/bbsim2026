@@ -344,7 +344,7 @@ fn well_formed_gidp_and_contact_forgeries_are_semantically_rejected() {
     let (before, event) = fixture(Half::Top, 0, false, false);
     let valid = apply(&before, event).unwrap();
     let original = valid.to_bytes();
-    assert!(original.starts_with(b"BBE17"));
+    assert!(original.starts_with(b"BBE18"));
     assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
     let mut credit_forgery = original.clone();
     let kind = unique_tag(&credit_forgery, "away0", 22);

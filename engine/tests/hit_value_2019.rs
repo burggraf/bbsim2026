@@ -668,7 +668,7 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
             event.fielding_review = review;
             let valid = apply(&before, event).unwrap();
             let original = valid.to_bytes();
-            assert!(original.starts_with(b"BBE17"));
+            assert!(original.starts_with(b"BBE18"));
             assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
             let batter = valid.event().participants.batter.as_ref().unwrap();
             let mut marker = (batter.len() as u64).to_le_bytes().to_vec();

@@ -157,7 +157,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
     );
     let reduced = reduced.unwrap();
     assert_eq!(direct.unwrap(), reduced);
-    assert_eq!(&reduced.to_bytes()[..5], b"BBE17");
+    assert_eq!(&reduced.to_bytes()[..5], b"BBE18");
     assert_eq!(
         EventTransition::from_bytes(&reduced.to_bytes()).unwrap(),
         reduced
@@ -723,6 +723,781 @@ fn explicit_legal_first_acquisition_cannot_be_a_before_first_third_out() {
             Err(TransitionError::IllegalCredit)
         )
     );
+}
+
+#[test]
+fn complete_wire_accepts_explicit_first_touch_then_catcher_throw_to_second() {
+    let (before, mut event) = fixture(Half::Top, 0, 0, 0, false);
+    let batter = event.participants.batter.clone().unwrap();
+    event.single_delivery.as_mut().unwrap().recovery = RecoveryReview::Unknown;
+    event
+        .single_delivery
+        .as_mut()
+        .unwrap()
+        .advances
+        .push(HandlingAdvance {
+            runner_id: batter,
+            reached: Destination::First,
+        });
+    let receiver = before.teams[1].batting_order[2].clone();
+    let mut bytes = forged(&before, &event, &event);
+    let old = wire_event(&event);
+    let offset = unique_offset(&bytes, &old);
+    let mut changed = old.clone();
+    assert_eq!(&changed[changed.len() - 2..], &[0, 0]);
+    changed.truncate(changed.len() - 2); // Unknown recovery, then no balk
+    changed.push(5); // new bound after-First catcher throw
+    wire_string(&mut changed, &receiver);
+    changed.push(wire_destination(Destination::Second));
+    changed.push(0); // no balk
+    bytes.splice(offset..offset + old.len(), changed);
+    bytes[..5].copy_from_slice(b"BBE18");
+    assert_eq!(
+        EventTransition::from_bytes(&bytes).map(|t| t.event().delta.outs),
+        Ok(1)
+    );
+}
+
+fn after_first_throw_fixture(
+    half: Half,
+    outs: u8,
+    mask: u8,
+    passed: bool,
+    at: Destination,
+    pitcher_receiver: bool,
+) -> (GameState, Event) {
+    let (before, mut event) = fixture(half, outs, mask, 0, passed);
+    let batter = event.participants.batter.clone().unwrap();
+    let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
+    let receiver = if pitcher_receiver {
+        event.participants.pitcher.clone()
+    } else {
+        before.teams[1 - half.offense()].batting_order[2].clone()
+    };
+    let facts = event.single_delivery.as_mut().unwrap();
+    facts.recovery = RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+        putout_fielder_id: receiver.clone(),
+        at,
+    };
+    facts.advances.push(HandlingAdvance {
+        runner_id: batter.clone(),
+        reached: Destination::First,
+    });
+    event.delta.credits.extend([
+        credit(&receiver, CreditKind::Putout),
+        credit(&catcher, CreditKind::Assist),
+    ]);
+    if outs == 2 {
+        event.delta.third_out = Some(ThirdOut {
+            runner_id: batter,
+            kind: ThirdOutKind::BatterAfterFirstTiming,
+            home_before_out: vec![],
+        });
+    }
+    (before, event)
+}
+
+#[test]
+fn after_first_throw_positive_matrix_binds_the_touch_cause_and_receiver() {
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 0..8 {
+                if outs < 2 && mask & 1 != 0 {
+                    continue;
+                }
+                for passed in [false, true] {
+                    for at in [Destination::Second, Destination::Third, Destination::Home] {
+                        for pitcher_receiver in [false, true] {
+                            for reverse in [false, true] {
+                                let (before, mut event) = after_first_throw_fixture(
+                                    half,
+                                    outs,
+                                    mask,
+                                    passed,
+                                    at,
+                                    pitcher_receiver,
+                                );
+                                event.single_delivery.as_mut().unwrap().pre_delivery_steals = None;
+                                if reverse {
+                                    event.delta.moves.reverse();
+                                    event.delta.credits.reverse();
+                                    event.single_delivery.as_mut().unwrap().advances.reverse();
+                                }
+                                let transition = accepted(&before, event);
+                                assert_eq!(transition.event().delta.outs, 1);
+                                assert_eq!(
+                                    transition.after().outs,
+                                    if outs == 2 { 0 } else { outs + 1 }
+                                );
+                                assert_eq!(transition.after().teams[half.offense()].next_batter, 1);
+                                frames += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 768);
+}
+
+#[test]
+fn after_first_throw_accounting_keeps_participation_charge_and_fielding_distinct() {
+    for half in [Half::Top, Half::Bottom] {
+        for passed in [false, true] {
+            for reverse in [false, true] {
+                let (mut before, mut event) =
+                    after_first_throw_fixture(half, 2, 4, passed, Destination::Second, false);
+                let offense = half.offense();
+                let defense = 1 - offense;
+                let prior = before.teams[defense].bench[0].clone();
+                before.bases[2].as_mut().unwrap().responsible_pitcher = prior.clone();
+                let runner = before.bases[2].clone().unwrap();
+                event.delta.moves.push(RunnerMove {
+                    runner: runner.clone(),
+                    from: Base::Third,
+                    to: Destination::Home,
+                });
+                event.delta.runs = 1;
+                event
+                    .delta
+                    .credits
+                    .push(credit(&runner.player_id, CreditKind::Run));
+                event
+                    .delta
+                    .third_out
+                    .as_mut()
+                    .unwrap()
+                    .home_before_out
+                    .push(runner.player_id.clone());
+                event
+                    .single_delivery
+                    .as_mut()
+                    .unwrap()
+                    .advances
+                    .push(HandlingAdvance {
+                        runner_id: runner.player_id.clone(),
+                        reached: Destination::Home,
+                    });
+                if reverse {
+                    event.delta.moves.reverse();
+                    event.delta.credits.reverse();
+                    event.single_delivery.as_mut().unwrap().advances.reverse();
+                }
+                let transition = accepted(&before, event.clone());
+                let accounting = derive_accounting(&[transition]).unwrap();
+                let batter = event.participants.batter.as_ref().unwrap();
+                let pitcher = &event.participants.pitcher;
+                let catcher = &event.single_delivery.as_ref().unwrap().catcher_id;
+                let receiver = &before.teams[defense].batting_order[2];
+                assert_eq!(
+                    accounting.batters[offense][batter],
+                    BatterLine {
+                        plate_appearances: 1,
+                        at_bats: Some(1),
+                        credited_strikeouts: 1,
+                        ..BatterLine::default()
+                    }
+                );
+                assert_eq!(
+                    accounting.pitchers[defense][pitcher],
+                    PitcherLine {
+                        outs_recorded: 1,
+                        batters_faced: 1,
+                        at_bats_against: Some(1),
+                        credited_strikeouts: 1,
+                        credited_wild_pitches: u32::from(!passed),
+                        ..PitcherLine::default()
+                    }
+                );
+                assert_eq!(accounting.pitchers[defense][&prior].runs_allowed, 1);
+                assert_eq!(accounting.pitchers[defense][&prior].batters_faced, 0);
+                assert_eq!(
+                    accounting.fielders[defense][receiver],
+                    FielderLine {
+                        credited_putouts: 1,
+                        ..FielderLine::default()
+                    }
+                );
+                assert_eq!(
+                    accounting.fielders[defense][catcher],
+                    FielderLine {
+                        credited_assists: 1,
+                        credited_passed_balls: u32::from(passed),
+                        ..FielderLine::default()
+                    }
+                );
+                assert!(!accounting.batters[defense].contains_key(pitcher));
+                assert!(!accounting.complete_game);
+                event
+                    .delta
+                    .credits
+                    .retain(|c| !matches!(c.kind, CreditKind::Putout | CreditKind::Assist));
+                accepted(&before, event); // Omitted fielding units stay partial, not inferred.
+            }
+        }
+    }
+}
+
+#[test]
+fn after_first_throw_known_contradictions_precede_unrelated_missing_review() {
+    for passed in [false, true] {
+        for malformed in 0..10 {
+            let (before, original) =
+                after_first_throw_fixture(Half::Top, 0, 0, passed, Destination::Second, false);
+            let after = physical_after(&before, &original);
+            let mut event = original.clone();
+            event.single_delivery.as_mut().unwrap().pre_delivery_steals = None;
+            match malformed {
+                0 => without_units(&mut event),
+                1 => {
+                    let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
+                    if let RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+                        putout_fielder_id,
+                        ..
+                    } = &mut event.single_delivery.as_mut().unwrap().recovery
+                    {
+                        *putout_fielder_id = catcher;
+                    }
+                }
+                2 => {
+                    if let RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+                        putout_fielder_id,
+                        ..
+                    } = &mut event.single_delivery.as_mut().unwrap().recovery
+                    {
+                        *putout_fielder_id = before.teams[1].batting_order[8].clone();
+                    }
+                }
+                3 => {
+                    if let RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+                        putout_fielder_id,
+                        ..
+                    } = &mut event.single_delivery.as_mut().unwrap().recovery
+                    {
+                        *putout_fielder_id = "foreign".into();
+                    }
+                }
+                4 => {
+                    if let RecoveryReview::ThirdStrikeBatterAfterFirstThrow { at, .. } =
+                        &mut event.single_delivery.as_mut().unwrap().recovery
+                    {
+                        *at = Destination::Out;
+                    }
+                }
+                5 => {
+                    event
+                        .delta
+                        .credits
+                        .iter_mut()
+                        .find(|c| c.kind == CreditKind::Putout)
+                        .unwrap()
+                        .player_id = event.single_delivery.as_ref().unwrap().catcher_id.clone()
+                }
+                6 => {
+                    event.single_delivery.as_mut().unwrap().context = DeliveryContext::RunnerOnly;
+                }
+                7 => {
+                    let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
+                    let pitcher = event.participants.pitcher.clone();
+                    let unit = event
+                        .delta
+                        .credits
+                        .iter_mut()
+                        .find(|c| matches!(c.kind, CreditKind::WildPitch | CreditKind::PassedBall))
+                        .unwrap();
+                    unit.kind = if passed {
+                        CreditKind::WildPitch
+                    } else {
+                        CreditKind::PassedBall
+                    };
+                    unit.player_id = if passed { pitcher } else { catcher };
+                    event.fielding_review = FieldingReview::Unknown;
+                }
+                8 => {
+                    let unit = event
+                        .delta
+                        .credits
+                        .iter()
+                        .find(|c| matches!(c.kind, CreditKind::WildPitch | CreditKind::PassedBall))
+                        .unwrap()
+                        .clone();
+                    event.delta.credits.push(unit);
+                }
+                9 => {
+                    event
+                        .delta
+                        .credits
+                        .iter_mut()
+                        .find(|c| matches!(c.kind, CreditKind::WildPitch | CreditKind::PassedBall))
+                        .unwrap()
+                        .player_id = before.teams[1].batting_order[2].clone();
+                }
+                _ => unreachable!(),
+            }
+            rejected(
+                &before,
+                event.clone(),
+                after,
+                TransitionError::IllegalCredit,
+            );
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &original, &event)),
+                Err(TransitionError::IllegalCredit)
+            );
+        }
+    }
+}
+
+#[test]
+fn after_first_throw_false_retirement_and_force_facts_are_not_uncertainty() {
+    for passed in [false, true] {
+        let (before, mut event) =
+            after_first_throw_fixture(Half::Top, 0, 0, passed, Destination::Second, false);
+        event.delta.outs = 0;
+        event.delta.moves[0].to = Destination::First;
+        event.delta.credits.retain(|c| c.kind != CreditKind::Putout);
+        let after = physical_after(&before, &event);
+        rejected(
+            &before,
+            event.clone(),
+            after,
+            TransitionError::IllegalCredit,
+        );
+        assert_eq!(
+            EventTransition::from_bytes(&forged(&before, &event, &event)),
+            Err(TransitionError::IllegalCredit)
+        );
+        let (before, original) =
+            after_first_throw_fixture(Half::Top, 2, 0, passed, Destination::Second, false);
+        for (kind, error) in [
+            (
+                ThirdOutKind::BatterBeforeFirst,
+                TransitionError::IllegalCredit,
+            ),
+            (ThirdOutKind::Force, TransitionError::DeltaMismatch),
+        ] {
+            let mut event = original.clone();
+            event.delta.third_out.as_mut().unwrap().kind = kind;
+            // Do not normalize a deliberately false third-out reason.
+            let after = physical_after(&before, &original);
+            rejected(&before, event.clone(), after, error.clone());
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &original, &event)),
+                Err(error)
+            );
+        }
+    }
+}
+
+#[test]
+fn after_first_throw_partial_histories_do_not_gain_positive_certainty() {
+    for passed in [false, true] {
+        for unknown in 0..3 {
+            let (before, original) =
+                after_first_throw_fixture(Half::Top, 0, 0, passed, Destination::Second, false);
+            let mut event = original.clone();
+            match unknown {
+                0 => event.single_delivery.as_mut().unwrap().advances.clear(),
+                1 => {
+                    if let RecoveryReview::ThirdStrikeBatterAfterFirstThrow { at, .. } =
+                        &mut event.single_delivery.as_mut().unwrap().recovery
+                    {
+                        *at = Destination::First;
+                    }
+                }
+                2 => {
+                    event.single_delivery.as_mut().unwrap().recovery =
+                        RecoveryReview::AfterAdvance {
+                            runner_id: event.participants.batter.clone().unwrap(),
+                            advancer_id: event.participants.batter.clone().unwrap(),
+                        }
+                }
+                _ => unreachable!(),
+            }
+            let after = physical_after(&before, &event);
+            rejected(
+                &before,
+                event.clone(),
+                after,
+                TransitionError::UnsupportedRule,
+            );
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &original, &event)),
+                Err(TransitionError::UnsupportedRule)
+            );
+            without_units(&mut event);
+            accepted(&before, event);
+        }
+    }
+}
+
+#[test]
+fn after_first_throw_winning_run_requires_end_order_even_without_units() {
+    for passed in [false, true] {
+        for units in [false, true] {
+            let (mut before, mut event) =
+                after_first_throw_fixture(Half::Bottom, 0, 4, passed, Destination::Second, false);
+            before.inning = 9;
+            let runner = before.bases[2].clone().unwrap();
+            event.delta.moves.push(RunnerMove {
+                runner: runner.clone(),
+                from: Base::Third,
+                to: Destination::Home,
+            });
+            event.delta.runs = 1;
+            event
+                .delta
+                .credits
+                .push(credit(&runner.player_id, CreditKind::Run));
+            event
+                .single_delivery
+                .as_mut()
+                .unwrap()
+                .advances
+                .push(HandlingAdvance {
+                    runner_id: runner.player_id,
+                    reached: Destination::Home,
+                });
+            if !units {
+                without_units(&mut event);
+            }
+            let after = physical_after(&before, &event);
+            rejected(
+                &before,
+                event.clone(),
+                after,
+                TransitionError::UnsupportedRule,
+            );
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &event, &event)),
+                Err(TransitionError::UnsupportedRule)
+            );
+        }
+    }
+}
+
+#[test]
+fn after_first_throw_automatic_claim_is_illegal_without_cause_or_units() {
+    for outs in 0..2 {
+        for mask in [1, 3, 5, 7] {
+            for passed in [false, true] {
+                let (before, original) = after_first_throw_fixture(
+                    Half::Top,
+                    outs,
+                    mask,
+                    passed,
+                    Destination::Second,
+                    false,
+                );
+                for units in [false, true] {
+                    let mut event = original.clone();
+                    event.single_delivery.as_mut().unwrap().advances.clear();
+                    if !units {
+                        without_units(&mut event);
+                    }
+                    let after = physical_after(&before, &event);
+                    rejected(
+                        &before,
+                        event.clone(),
+                        after,
+                        TransitionError::IllegalCredit,
+                    );
+                    assert_eq!(
+                        EventTransition::from_bytes(&forged(&before, &event, &event)),
+                        Err(TransitionError::IllegalCredit)
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn after_first_throw_unbound_other_out_and_intermediate_reach_stay_partial() {
+    for passed in [false, true] {
+        for intermediate in [false, true] {
+            let (before, mut event) =
+                after_first_throw_fixture(Half::Top, 0, 2, passed, Destination::Second, false);
+            let runner = before.bases[1].clone().unwrap();
+            if intermediate {
+                event.delta.moves.push(RunnerMove {
+                    runner: runner.clone(),
+                    from: Base::Second,
+                    to: Destination::Home,
+                });
+                event.delta.runs = 1;
+                event
+                    .delta
+                    .credits
+                    .push(credit(&runner.player_id, CreditKind::Run));
+                event
+                    .single_delivery
+                    .as_mut()
+                    .unwrap()
+                    .advances
+                    .push(HandlingAdvance {
+                        runner_id: runner.player_id,
+                        reached: Destination::Third,
+                    });
+            } else {
+                event.delta.moves.push(RunnerMove {
+                    runner,
+                    from: Base::Second,
+                    to: Destination::Out,
+                });
+                event.delta.outs = 2;
+            }
+            let after = physical_after(&before, &event);
+            rejected(
+                &before,
+                event.clone(),
+                after,
+                TransitionError::UnsupportedRule,
+            );
+            assert_eq!(
+                EventTransition::from_bytes(&forged(&before, &event, &event)),
+                Err(TransitionError::UnsupportedRule)
+            );
+            without_units(&mut event);
+            accepted(&before, event);
+        }
+    }
+}
+
+#[test]
+fn after_first_throw_named_third_out_runs_precede_required_unit_omission() {
+    for units in [false, true] {
+        let (before, mut original) =
+            after_first_throw_fixture(Half::Top, 2, 4, false, Destination::Second, false);
+        let runner = before.bases[2].clone().unwrap();
+        original.delta.moves.push(RunnerMove {
+            runner: runner.clone(),
+            from: Base::Third,
+            to: Destination::Home,
+        });
+        original.delta.runs = 1;
+        original
+            .delta
+            .credits
+            .push(credit(&runner.player_id, CreditKind::Run));
+        original
+            .delta
+            .third_out
+            .as_mut()
+            .unwrap()
+            .home_before_out
+            .push(runner.player_id.clone());
+        original
+            .single_delivery
+            .as_mut()
+            .unwrap()
+            .advances
+            .push(HandlingAdvance {
+                runner_id: runner.player_id,
+                reached: Destination::Home,
+            });
+        let after = physical_after(&before, &original);
+        let mut event = original.clone();
+        event.delta.runs = 0;
+        event.delta.credits.retain(|c| c.kind != CreditKind::Run);
+        if !units {
+            without_units(&mut event);
+        }
+        rejected(
+            &before,
+            event.clone(),
+            after,
+            TransitionError::DeltaMismatch,
+        );
+        assert_eq!(
+            EventTransition::from_bytes(&forged(&before, &original, &event)),
+            Err(TransitionError::DeltaMismatch)
+        );
+    }
+}
+
+#[test]
+fn after_first_throw_wrong_third_out_actor_precedes_unit_omission_on_all_paths() {
+    let (before, original) =
+        after_first_throw_fixture(Half::Top, 2, 4, false, Destination::Second, false);
+    let after = physical_after(&before, &original);
+    let mut event = original.clone();
+    event.delta.third_out.as_mut().unwrap().runner_id =
+        before.bases[2].as_ref().unwrap().player_id.clone();
+    without_units(&mut event);
+    let reduced = apply(&before, event.clone()).map(|_| ());
+    let direct = EventTransition::try_new(before.clone(), event.clone(), after).map(|_| ());
+    let decoded = EventTransition::from_bytes(&forged(&before, &original, &event)).map(|_| ());
+    assert_eq!(
+        (reduced, direct, decoded),
+        (
+            Err(TransitionError::DeltaMismatch),
+            Err(TransitionError::DeltaMismatch),
+            Err(TransitionError::DeltaMismatch)
+        )
+    );
+}
+
+#[test]
+fn after_first_throw_known_receiver_error_precedes_missing_third_out_history() {
+    let (before, mut original) =
+        after_first_throw_fixture(Half::Top, 2, 4, false, Destination::Second, false);
+    let runner = before.bases[2].clone().unwrap();
+    original.delta.moves.push(RunnerMove {
+        runner: runner.clone(),
+        from: Base::Third,
+        to: Destination::Home,
+    });
+    original.delta.runs = 1;
+    original
+        .delta
+        .credits
+        .push(credit(&runner.player_id, CreditKind::Run));
+    original
+        .delta
+        .third_out
+        .as_mut()
+        .unwrap()
+        .home_before_out
+        .push(runner.player_id.clone());
+    original
+        .single_delivery
+        .as_mut()
+        .unwrap()
+        .advances
+        .push(HandlingAdvance {
+            runner_id: runner.player_id,
+            reached: Destination::Home,
+        });
+    let after = physical_after(&before, &original);
+    let mut event = original.clone();
+    event.delta.third_out = None;
+    without_units(&mut event);
+    if let RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+        putout_fielder_id, ..
+    } = &mut event.single_delivery.as_mut().unwrap().recovery
+    {
+        *putout_fielder_id = "foreign".into();
+    }
+    let reduced = apply(&before, event.clone()).map(|_| ());
+    let direct = EventTransition::try_new(before.clone(), event.clone(), after).map(|_| ());
+    let decoded = EventTransition::from_bytes(&forged(&before, &original, &event)).map(|_| ());
+    assert_eq!(
+        (reduced, direct, decoded),
+        (
+            Err(TransitionError::IllegalCredit),
+            Err(TransitionError::IllegalCredit),
+            Err(TransitionError::IllegalCredit)
+        )
+    );
+}
+
+#[test]
+fn after_first_throw_missing_home_timing_keeps_known_units_separate_from_run_unknowns() {
+    let (before, mut original) =
+        after_first_throw_fixture(Half::Top, 2, 4, false, Destination::Second, false);
+    let runner = before.bases[2].clone().unwrap();
+    original.delta.moves.push(RunnerMove {
+        runner: runner.clone(),
+        from: Base::Third,
+        to: Destination::Home,
+    });
+    original.delta.runs = 1;
+    original
+        .delta
+        .credits
+        .push(credit(&runner.player_id, CreditKind::Run));
+    original
+        .delta
+        .third_out
+        .as_mut()
+        .unwrap()
+        .home_before_out
+        .push(runner.player_id.clone());
+    original
+        .single_delivery
+        .as_mut()
+        .unwrap()
+        .advances
+        .push(HandlingAdvance {
+            runner_id: runner.player_id,
+            reached: Destination::Home,
+        });
+    for units in [false, true] {
+        let mut event = original.clone();
+        event.delta.third_out = None;
+        if !units {
+            without_units(&mut event);
+        }
+        let error = if units {
+            TransitionError::UnsupportedRule
+        } else {
+            TransitionError::IllegalCredit
+        };
+        let after = physical_after(&before, &original);
+        let reduced = apply(&before, event.clone()).map(|_| ());
+        let direct = EventTransition::try_new(before.clone(), event.clone(), after).map(|_| ());
+        let decoded = EventTransition::from_bytes(&forged(&before, &original, &event)).map(|_| ());
+        assert_eq!(
+            (reduced, direct, decoded),
+            (Err(error.clone()), Err(error.clone()), Err(error))
+        );
+    }
+}
+
+#[test]
+fn after_first_throw_retired_batter_charge_keeps_canonical_priority() {
+    let (before, original) =
+        after_first_throw_fixture(Half::Top, 0, 0, false, Destination::Second, false);
+    let after = physical_after(&before, &original);
+    let mut event = original.clone();
+    event.delta.moves[0].runner.responsible_pitcher = "wrong".into();
+    event.single_delivery.as_mut().unwrap().advances.clear();
+    without_units(&mut event);
+    rejected(
+        &before,
+        event.clone(),
+        after,
+        TransitionError::DeltaMismatch,
+    );
+    assert_eq!(
+        EventTransition::from_bytes(&forged(&before, &original, &event)),
+        Err(TransitionError::DeltaMismatch)
+    );
+}
+
+#[test]
+fn after_first_throw_codec_rejects_old_prefix_and_isolated_corruption() {
+    let (before, event) =
+        after_first_throw_fixture(Half::Top, 0, 0, false, Destination::Second, false);
+    let original = accepted(&before, event.clone()).to_bytes();
+    let RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+        putout_fielder_id,
+        at,
+    } = &event.single_delivery.as_ref().unwrap().recovery
+    else {
+        unreachable!()
+    };
+    let mut needle = vec![5];
+    wire_string(&mut needle, putout_fielder_id);
+    needle.push(wire_destination(*at));
+    let offset = unique_offset(&original, &needle);
+    let mut unknown = original.clone();
+    unknown[offset] = 6;
+    let mut truncated = original.clone();
+    truncated.truncate(offset + 1);
+    let mut trailing = original.clone();
+    trailing.push(0);
+    let mut earlier = original.clone();
+    earlier[..5].copy_from_slice(b"BBE17");
+    for bytes in [unknown, truncated, trailing, earlier] {
+        assert_eq!(
+            EventTransition::from_bytes(&bytes),
+            Err(TransitionError::InvalidEncoding)
+        );
+    }
 }
 
 fn eligible_first_touch_retirement(half: Half, mask: u8, passed: bool) -> (GameState, Event) {
@@ -1659,14 +2434,17 @@ fn wire_destination(value: Destination) -> u8 {
 fn wire_delivery(facts: &SingleDeliveryFacts) -> Vec<u8> {
     let mut bytes = vec![
         1,
-        1,
+        match facts.context {
+            DeliveryContext::RunnerOnly => 0,
+            DeliveryContext::UncaughtThirdStrike => 1,
+            DeliveryContext::DeliveredFourthBall => 2,
+        },
         if facts.handling == HandlingAssessment::PitcherWild {
             0
         } else {
             1
         },
     ];
-    assert_eq!(facts.context, DeliveryContext::UncaughtThirdStrike);
     wire_string(&mut bytes, &facts.catcher_id);
     bytes.extend_from_slice(&(facts.advances.len() as u64).to_le_bytes());
     for a in &facts.advances {
@@ -1700,6 +2478,14 @@ fn wire_delivery(facts: &SingleDeliveryFacts) -> Vec<u8> {
             wire_string(&mut bytes, advancer_id);
         }
         RecoveryReview::RecoveredThirdStrikeBatterBeforeFirst => bytes.push(4),
+        RecoveryReview::ThirdStrikeBatterAfterFirstThrow {
+            putout_fielder_id,
+            at,
+        } => {
+            bytes.push(5);
+            wire_string(&mut bytes, putout_fielder_id);
+            bytes.push(wire_destination(*at));
+        }
     }
     bytes
 }
@@ -1741,6 +2527,7 @@ fn wire_event(event: &Event) -> Vec<u8> {
             CreditKind::Run => 4,
             CreditKind::StolenBase => 6,
             CreditKind::Putout => 8,
+            CreditKind::Assist => 9,
             CreditKind::Error => 10,
             CreditKind::PassedBall => 11,
             CreditKind::WildPitch => 23,
