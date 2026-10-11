@@ -131,6 +131,9 @@ fn clean_play(event: &Event) -> bool {
     }
     match event.kind {
         EventKind::Substitution | EventKind::OutOfParkHomeRun => true,
+        // Canonical validation bounds FC to one retired runner, batter to
+        // first, one out and no runs; explicit review excludes missed chances.
+        EventKind::FieldersChoice => true,
         EventKind::PlateAppearance => {
             let m = &event.delta.moves;
             m.len() == 1

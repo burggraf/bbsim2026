@@ -1329,6 +1329,235 @@ fn observed_boundary_and_reviewed_walkoff_homer_can_certify_earned_run() {
     assert_eq!(result.pitchers[1]["home_starter"].earned_runs, Some(0));
 }
 
+// Walk -> optional clean WP advances -> relief -> bounded FC -> HR -> two K.
+// The FC replacement carries the walker's charge, not the reliever's BF/outs.
+fn reviewed_fc_half(
+    base: Base,
+    half: Half,
+    walk_review: FieldingReview,
+    fc_review: FieldingReview,
+) -> (Vec<bbsim_engine::EventTransition>, usize) {
+    let mut before = state();
+    before.inning = 1;
+    before.outs = 0;
+    before.bases = [None, None, None];
+    let mut log = vec![];
+    if half == Half::Bottom {
+        finish_with_three_strikeouts(before, &mut log, FieldingReview::NoMisplay);
+        before = log.last().unwrap().after().clone();
+    }
+    let offense = half.offense();
+    let defense = 1 - offense;
+    let walker = before.teams[offense].batting_order[0].clone();
+    let mut walk = event(
+        &before,
+        EventKind::PlateAppearance,
+        vec![batter_move(&before, Destination::First)],
+        0,
+        0,
+        vec![credit(&walker, CreditKind::Walk)],
+        vec![],
+    );
+    walk.fielding_review = walk_review;
+    let next = apply(&before, walk).unwrap();
+    before = next.after().clone();
+    log.push(next);
+    let advances = match base {
+        Base::First => 0,
+        Base::Second => 1,
+        Base::Third => 2,
+        Base::Plate => unreachable!(),
+    };
+    for i in 0..advances {
+        let advance = reviewed(event(
+            &before,
+            EventKind::RunnerOnly(RunnerEvent::WildPitch),
+            vec![RunnerMove {
+                runner: before.bases[i].clone().unwrap(),
+                from: [Base::First, Base::Second][i],
+                to: [Destination::Second, Destination::Third][i],
+            }],
+            0,
+            0,
+            vec![],
+            vec![],
+        ));
+        let next = apply(&before, advance).unwrap();
+        before = next.after().clone();
+        log.push(next);
+    }
+    let relief = reviewed(event(
+        &before,
+        EventKind::Substitution,
+        vec![],
+        0,
+        0,
+        vec![],
+        vec![PersonnelChange::Pitcher {
+            team: if defense == 0 {
+                TeamSide::Away
+            } else {
+                TeamSide::Home
+            },
+            outgoing: before.teams[defense].pitcher.clone(),
+            incoming: before.teams[defense].bench[0].clone(),
+        }],
+    ));
+    let next = apply(&before, relief).unwrap();
+    before = next.after().clone();
+    log.push(next);
+    let runner = before.bases[advances].clone().unwrap();
+    let mut replacement = batter_move(&before, Destination::First);
+    replacement.runner.responsible_pitcher = runner.responsible_pitcher.clone();
+    let batter = replacement.runner.player_id.clone();
+    let mut fc = event(
+        &before,
+        EventKind::FieldersChoice,
+        vec![
+            RunnerMove {
+                runner,
+                from: base,
+                to: Destination::Out,
+            },
+            replacement,
+        ],
+        1,
+        0,
+        vec![credit(&batter, CreditKind::PlateAppearance)],
+        vec![],
+    );
+    fc.fielding_review = fc_review;
+    let fc_index = log.len();
+    let next = apply(&before, fc).unwrap();
+    before = next.after().clone();
+    log.push(next);
+    let batter = before.teams[offense].batting_order[2].clone();
+    let homer = reviewed(event(
+        &before,
+        EventKind::OutOfParkHomeRun,
+        vec![
+            batter_move(&before, Destination::Home),
+            RunnerMove {
+                runner: before.bases[0].clone().unwrap(),
+                from: Base::First,
+                to: Destination::Home,
+            },
+        ],
+        0,
+        2,
+        vec![
+            credit(&batter, CreditKind::PlateAppearance),
+            credit(&batter, CreditKind::Hit),
+            credit(&batter, CreditKind::Run),
+            credit(
+                &before.bases[0].as_ref().unwrap().player_id,
+                CreditKind::Run,
+            ),
+        ],
+        vec![],
+    ));
+    let next = apply(&before, homer).unwrap();
+    before = next.after().clone();
+    log.push(next);
+    for _ in 0..2 {
+        let batter =
+            before.teams[offense].batting_order[before.teams[offense].next_batter as usize].clone();
+        let strikeout = reviewed(event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![credit(&batter, CreditKind::Strikeout)],
+            vec![],
+        ));
+        let next = apply(&before, strikeout).unwrap();
+        before = next.after().clone();
+        log.push(next);
+    }
+    assert_ne!(before.half, half);
+    (log, fc_index)
+}
+
+#[test]
+fn reviewed_clean_fc_replacement_preserves_earned_charge_not_actual_participation() {
+    for half in [Half::Top, Half::Bottom] {
+        for base in [Base::First, Base::Second, Base::Third] {
+            let (log, fc_index) = reviewed_fc_half(
+                base,
+                half,
+                FieldingReview::NoMisplay,
+                FieldingReview::NoMisplay,
+            );
+            for transition in &log {
+                assert_eq!(
+                    bbsim_engine::EventTransition::from_bytes(&transition.to_bytes()).unwrap(),
+                    *transition
+                );
+            }
+            let fc = &log[fc_index];
+            let offense = half.offense();
+            let defense = 1 - offense;
+            let charge = &fc.after().bases[0].as_ref().unwrap().responsible_pitcher;
+            let reliever = &fc.before().teams[defense].pitcher;
+            assert_ne!(charge, reliever);
+            let result = derive_accounting(&log).unwrap();
+            assert_eq!(result.runs[offense], 2);
+            assert_eq!(result.innings[&1][offense], Some(2));
+            assert_eq!(result.pitchers[defense][charge].runs_allowed, 1);
+            assert_eq!(result.pitchers[defense][reliever].runs_allowed, 1);
+            assert_eq!(
+                result.pitchers[defense][charge].earned_runs,
+                Some(1),
+                "{half:?} {base:?}"
+            );
+            assert_eq!(result.pitchers[defense][reliever].earned_runs, Some(1));
+            assert_eq!(result.pitchers[defense][charge].batters_faced, 1);
+            assert_eq!(result.pitchers[defense][charge].outs_recorded, 0);
+            assert_eq!(result.pitchers[defense][reliever].batters_faced, 4);
+            assert_eq!(result.pitchers[defense][reliever].outs_recorded, 3);
+            let batter = fc.event().participants.batter.as_ref().unwrap();
+            assert_eq!(result.batters[offense][batter].plate_appearances, 1);
+            assert_eq!(result.batters[offense][batter].at_bats, Some(1));
+            assert_eq!(result.batters[offense][batter].credited_runs, 1);
+        }
+    }
+}
+
+#[test]
+fn clean_fc_cannot_certify_unknown_origin_review_or_unfinished_half() {
+    for half in [Half::Top, Half::Bottom] {
+        for base in [Base::First, Base::Second, Base::Third] {
+            for (walk_review, fc_review) in [
+                (FieldingReview::Unknown, FieldingReview::NoMisplay),
+                (FieldingReview::NoMisplay, FieldingReview::Unknown),
+                (FieldingReview::NoMisplay, FieldingReview::NoMisplay),
+            ] {
+                let (log, fc_index) = reviewed_fc_half(base, half, walk_review, fc_review);
+                let defense = 1 - half.offense();
+                let charge = &log[fc_index].after().bases[0]
+                    .as_ref()
+                    .unwrap()
+                    .responsible_pitcher;
+                let reliever = &log[fc_index].before().teams[defense].pitcher;
+                let mut uncertain = vec![&log[fc_index..], &log[..log.len() - 1]];
+                if walk_review == FieldingReview::Unknown || fc_review == FieldingReview::Unknown {
+                    uncertain.push(&log);
+                }
+                for partial in uncertain {
+                    let result = derive_accounting(partial).unwrap();
+                    assert_eq!(result.runs[half.offense()], 2);
+                    assert_eq!(
+                        result.pitchers[defense][charge].earned_runs, None,
+                        "{half:?} {base:?} {walk_review:?} {fc_review:?}"
+                    );
+                    assert_eq!(result.pitchers[defense][reliever].earned_runs, None);
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn passed_ball_kind_cannot_claim_no_misplay_even_without_fielding_credit() {
     let before = state();
