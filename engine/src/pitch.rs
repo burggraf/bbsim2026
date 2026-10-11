@@ -461,6 +461,18 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
             .moves
             .iter()
             .find(|m| m.runner.player_id == advance.runner_id);
+        if facts.context == DeliveryContext::UncaughtThirdStrike
+            && advance.reached == Destination::First
+            && movement.is_some_and(|m| m.from == Base::Plate && m.to == Destination::Out)
+            && event.delta.third_out.as_ref().is_some_and(|third| {
+                third.runner_id == advance.runner_id
+                    && third.kind == crate::ThirdOutKind::BatterBeforeFirst
+            })
+        {
+            // Legal First acquisition and a retirement before that touch are
+            // incompatible, regardless of missing recovery or supplied units.
+            return Err(TransitionError::IllegalCredit);
+        }
         if advance.reached == Destination::Home
             && automatic_batter_out(before, event, facts)
             && before.outs + event.delta.outs < 3

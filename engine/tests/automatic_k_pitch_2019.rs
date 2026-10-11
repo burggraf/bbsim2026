@@ -698,6 +698,265 @@ fn ordinary_single_winning_run_and_extra_innings_use_existing_ending_logic() {
 }
 
 #[test]
+fn explicit_legal_first_acquisition_cannot_be_a_before_first_third_out() {
+    let (before, mut event) = fixture(Half::Top, 2, 0, 0, false);
+    let batter = event.participants.batter.clone().unwrap();
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: batter.clone(),
+        kind: ThirdOutKind::BatterBeforeFirst,
+        home_before_out: vec![],
+    });
+    let facts = event.single_delivery.as_mut().unwrap();
+    facts.recovery = RecoveryReview::Unknown;
+    facts.advances.push(HandlingAdvance {
+        runner_id: batter,
+        reached: Destination::First,
+    });
+    without_units(&mut event);
+    let after = physical_after(&before, &event);
+    let reduced = apply(&before, event.clone()).map(|_| ());
+    let direct = EventTransition::try_new(before, event, after).map(|_| ());
+    assert_eq!(
+        (reduced, direct),
+        (
+            Err(TransitionError::IllegalCredit),
+            Err(TransitionError::IllegalCredit)
+        )
+    );
+}
+
+fn eligible_first_touch_retirement(half: Half, mask: u8, passed: bool) -> (GameState, Event) {
+    let (before, mut event) = fixture(half, 2, mask, 0, passed);
+    let batter = event.participants.batter.clone().unwrap();
+    event.delta.third_out = Some(ThirdOut {
+        runner_id: batter.clone(),
+        kind: ThirdOutKind::BatterBeforeFirst,
+        home_before_out: vec![],
+    });
+    let facts = event.single_delivery.as_mut().unwrap();
+    facts.recovery = RecoveryReview::Unknown;
+    facts.advances.push(HandlingAdvance {
+        runner_id: batter,
+        reached: Destination::First,
+    });
+    (before, event)
+}
+
+fn first_touch_contradiction_matrix(codec: bool) {
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for mask in 0..8 {
+            for passed in [false, true] {
+                for recovery in 0..4 {
+                    for units in [false, true] {
+                        for unknown_steals in [false, true] {
+                            for reverse in [false, true] {
+                                let (before, mut event) =
+                                    eligible_first_touch_retirement(half, mask, passed);
+                                let batter = event.participants.batter.clone().unwrap();
+                                let facts = event.single_delivery.as_mut().unwrap();
+                                facts.recovery = match recovery {
+                                    0 => RecoveryReview::Unknown,
+                                    1 => RecoveryReview::NoRecoveryPutout,
+                                    2 => RecoveryReview::AfterAdvance {
+                                        runner_id: batter.clone(),
+                                        advancer_id: batter.clone(),
+                                    },
+                                    3 => RecoveryReview::BeforeAnyAdvance { runner_id: batter },
+                                    _ => unreachable!(),
+                                };
+                                if unknown_steals {
+                                    facts.pre_delivery_steals = None;
+                                }
+                                // A separate valid final reach cannot hide the batter fact.
+                                if let Some(base) = (0..3).rev().find(|i| mask & (1 << i) != 0) {
+                                    let runner = before.bases[base].clone().unwrap();
+                                    let to = [
+                                        Destination::Second,
+                                        Destination::Third,
+                                        Destination::Home,
+                                    ][base];
+                                    facts.advances.push(HandlingAdvance {
+                                        runner_id: runner.player_id.clone(),
+                                        reached: to,
+                                    });
+                                    event.delta.moves.push(RunnerMove {
+                                        runner,
+                                        from: [Base::First, Base::Second, Base::Third][base],
+                                        to,
+                                    });
+                                    // Before-first third out voids a physical Home crossing.
+                                }
+                                if !units {
+                                    without_units(&mut event);
+                                }
+                                if reverse {
+                                    event.delta.moves.reverse();
+                                    event.delta.credits.reverse();
+                                    event.single_delivery.as_mut().unwrap().advances.reverse();
+                                }
+                                if codec {
+                                    assert_eq!(
+                                        EventTransition::from_bytes(&forged(
+                                            &before, &event, &event
+                                        )),
+                                        Err(TransitionError::IllegalCredit)
+                                    );
+                                } else {
+                                    let after = physical_after(&before, &event);
+                                    rejected(&before, event, after, TransitionError::IllegalCredit);
+                                }
+                                frames += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 1024);
+}
+
+#[test]
+fn first_touch_before_first_contradiction_precedes_missing_history_in_both_apis() {
+    first_touch_contradiction_matrix(false);
+}
+
+#[test]
+fn complete_wire_rechecks_first_touch_before_first_contradiction() {
+    first_touch_contradiction_matrix(true);
+}
+
+#[test]
+fn first_touch_controls_preserve_before_first_k_and_partial_after_first_retirement() {
+    for half in [Half::Top, Half::Bottom] {
+        for mask in 0..8 {
+            for passed in [false, true] {
+                let (before, mut event) = eligible_first_touch_retirement(half, mask, passed);
+                without_units(&mut event);
+                let pitcher = event.participants.pitcher.clone();
+                let batter = event.participants.batter.clone().unwrap();
+                event.delta.third_out.as_mut().unwrap().kind = ThirdOutKind::BatterAfterFirstTiming;
+                let transition = accepted(&before, event.clone());
+                assert_eq!(transition.after().outs, 0);
+                assert_eq!(transition.after().bases, [None, None, None]);
+                assert_eq!(transition.after().teams[half.offense()].next_batter, 1);
+                let accounting = derive_accounting(std::slice::from_ref(&transition)).unwrap();
+                assert_eq!(
+                    accounting.batters[half.offense()][&batter],
+                    BatterLine {
+                        plate_appearances: 1,
+                        credited_strikeouts: 1,
+                        at_bats: Some(1),
+                        ..BatterLine::default()
+                    }
+                );
+                assert_eq!(
+                    accounting.pitchers[1 - half.offense()][&pitcher],
+                    PitcherLine {
+                        outs_recorded: 1,
+                        batters_faced: 1,
+                        at_bats_against: Some(1),
+                        earned_runs: Some(0), // zero observed segment charges, not a clean-half proof
+                        credited_strikeouts: 1,
+                        ..PitcherLine::default()
+                    }
+                );
+                assert!(!accounting.complete_game);
+                let mut supplied = event.clone();
+                supplied.delta.credits.push(credit(
+                    if passed {
+                        &supplied.single_delivery.as_ref().unwrap().catcher_id
+                    } else {
+                        &pitcher
+                    },
+                    if passed {
+                        CreditKind::PassedBall
+                    } else {
+                        CreditKind::WildPitch
+                    },
+                ));
+                rejected(
+                    &before,
+                    supplied,
+                    transition.after().clone(),
+                    TransitionError::UnsupportedRule,
+                );
+                event.delta.third_out.as_mut().unwrap().kind = ThirdOutKind::BatterBeforeFirst;
+                event.single_delivery.as_mut().unwrap().advances.clear();
+                accepted(&before, event.clone());
+                event.single_delivery.as_mut().unwrap().recovery =
+                    RecoveryReview::RecoveredThirdStrikeBatterBeforeFirst;
+                accepted(&before, event);
+            }
+        }
+    }
+}
+
+#[test]
+fn canonical_safe_batter_wrong_third_out_actor_keeps_its_delta_error() {
+    for passed in [false, true] {
+        let (before, mut original) = eligible_first_touch_retirement(Half::Top, 1, passed);
+        original.delta.moves[0].to = Destination::First;
+        let retired = before.bases[0].clone().unwrap();
+        original.delta.moves.push(RunnerMove {
+            runner: retired.clone(),
+            from: Base::First,
+            to: Destination::Out,
+        });
+        original.delta.third_out = Some(ThirdOut {
+            runner_id: retired.player_id,
+            kind: ThirdOutKind::Timing,
+            home_before_out: vec![],
+        });
+        without_units(&mut original);
+        let control = accepted(&before, original.clone());
+        let mut wrong = original.clone();
+        wrong.delta.third_out = Some(ThirdOut {
+            runner_id: wrong.participants.batter.clone().unwrap(),
+            kind: ThirdOutKind::BatterBeforeFirst,
+            home_before_out: vec![],
+        });
+        let saved = before.clone();
+        let reduced = apply(&before, wrong.clone()).map(|_| ());
+        let direct =
+            EventTransition::try_new(before.clone(), wrong.clone(), control.after().clone())
+                .map(|_| ());
+        let decoded = EventTransition::from_bytes(&forged(&before, &original, &wrong)).map(|_| ());
+        assert_eq!(before, saved);
+        assert_eq!(
+            (reduced, direct, decoded),
+            (
+                Err(TransitionError::DeltaMismatch),
+                Err(TransitionError::DeltaMismatch),
+                Err(TransitionError::DeltaMismatch),
+            )
+        );
+    }
+}
+
+#[test]
+fn canonical_retired_batter_charge_precedes_first_touch_contradiction() {
+    for passed in [false, true] {
+        let (before, mut event) = eligible_first_touch_retirement(Half::Top, 0, passed);
+        let after = physical_after(&before, &event);
+        event.delta.moves[0].runner.responsible_pitcher = "wrong_charge".into();
+        without_units(&mut event);
+        rejected(
+            &before,
+            event.clone(),
+            after,
+            TransitionError::DeltaMismatch,
+        );
+        let (before, original) = eligible_first_touch_retirement(Half::Top, 0, passed);
+        assert_eq!(
+            EventTransition::from_bytes(&forged(&before, &original, &event)),
+            Err(TransitionError::DeltaMismatch)
+        );
+    }
+}
+
+#[test]
 fn eligible_retired_histories_are_not_automatic_safe_reach_contradictions() {
     for passed in [false, true] {
         let (before, mut eligible) = fixture(Half::Top, 0, 4, 4, passed);

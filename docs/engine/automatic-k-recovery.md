@@ -1,6 +1,6 @@
 # E-03 automatic strikeout with a separate recovery retirement
 
-**Accepted bounded checkpoint; local commit status belongs to PROGRESS. Contract selected before TDD.** This follows the
+**Historical accepted bounded checkpoint `a0938f6`; publication status belongs to PROGRESS. Contract selected before TDD.** This follows the
 [automatic-K delivery checkpoint](automatic-k-pitches.md) and the
 [approved G1 matrix](g1-accounting-scope.md). [PROGRESS](../PROGRESS.md) owns live
 status. E-03 remains incomplete and G1 pending.
@@ -104,7 +104,7 @@ Unchanged final `proc_f4de`, exact
 `bash /tmp/bbsim-e03-mixed-recovery-final-checks.sh`, passed **327 Rust (47
 automatic-K), 59 Python, native 1,350, 27 shared-upstream ER/54 box comparisons,
 fmt, strict Clippy, 207 prose links and diff checks**. All 26 source/test hashes
-were identical before/after and remain the reviewed snapshot. Separate baseline,
+were identical before/after for that reviewed/published snapshot. Separate baseline,
 pre-review and final native outputs preserve earlier evidence. Semantic reds,
 the separately corrected test-authored error-taxonomy mismatch and the independent
 legacy ending red remain recorded in PROGRESS and raw logs, not rewritten.
