@@ -152,7 +152,26 @@ binary_enum!(DeliveryContext { RunnerOnly = 0, UncaughtThirdStrike = 1, Delivere
 binary_enum!(HandlingAssessment { PitcherWild = 0, CatcherPassed = 1 });
 binary_enum!(BalkCause { Unknown = 0, PitcherAction602a = 1, SqueezeOrStealHomeInterference601g = 2, PitchingProhibition602d = 3 });
 binary_enum!(BalkDisposition { Unknown = 0, PenaltyApplied = 1, PlayProceedsWithoutReference = 2 });
-binary_enum!(BalkResolution { Unknown = 0, ExactProtectedAwards = 1 });
+impl Binary for BalkResolution {
+    fn encode(&self, out: &mut Vec<u8>) {
+        match self {
+            Self::Unknown => 0u8.encode(out),
+            Self::ExactProtectedAwards => 1u8.encode(out),
+            Self::ActualMinimumProgress(facts) => {
+                2u8.encode(out);
+                facts.encode(out);
+            }
+        }
+    }
+    fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
+        match u8::decode(reader)? {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::ExactProtectedAwards),
+            2 => Ok(Self::ActualMinimumProgress(Binary::decode(reader)?)),
+            _ => Err(TransitionError::InvalidEncoding),
+        }
+    }
+}
 impl Binary for RecoveryReview {
     fn encode(&self, out: &mut Vec<u8>) {
         match self {
@@ -387,6 +406,11 @@ binary_struct!(SingleDeliveryFacts {
     pre_delivery_steals,
     recovery
 });
+binary_struct!(NamedBaseTouch { runner_id, base });
+binary_struct!(BalkProgressFacts {
+    batter_first_touch,
+    runner_next_touches
+});
 binary_struct!(BalkFacts {
     cause,
     disposition,
@@ -405,7 +429,7 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE16".to_vec();
+        let mut out = b"BBE17".to_vec();
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
@@ -413,7 +437,7 @@ impl EventTransition {
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
         let payload = bytes
-            .strip_prefix(b"BBE16")
+            .strip_prefix(b"BBE17")
             .ok_or(TransitionError::InvalidEncoding)?;
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;

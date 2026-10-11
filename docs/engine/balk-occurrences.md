@@ -1,6 +1,6 @@
 # E-03 first balk-occurrence slice
 
-**Accepted bounded checkpoint; publication pending in PROGRESS.** Builds on accepted/pushed `3059fbc` and the [approved accounting matrix](g1-accounting-scope.md). [PROGRESS](../PROGRESS.md) owns current status. This first slice is one ordinary Rule6.02(a) imposed occurrence with exact protected awards beginning at the before-state, not every balk cause, a pitching-motion/count engine, complete boxes or G1 signoff.
+**Accepted/pushed bounded checkpoint `b96b02a`.** Builds on accepted/pushed `3059fbc` and the [approved accounting matrix](g1-accounting-scope.md). [PROGRESS](../PROGRESS.md) owns current status. This first slice is one ordinary Rule6.02(a) imposed occurrence with exact protected awards beginning at the before-state, not every balk cause, a pitching-motion/count engine, complete boxes or G1 signoff.
 
 ## Primary evidence and boundary
 
@@ -13,7 +13,7 @@ Scoring:9.02(c)(15),4322, counts pitching balks;9.07 opening4654–4658 excludes
 ## Parent-selected API / wire
 
 - `CreditKind::Balk`, appended scorer tag24; `PitcherLine.credited_balks: u32`, supplied validated units for the actual current pitcher. Zero is credited-only, not certified official zero.
-- `Event.balk: Option<BalkFacts>`, appended after `single_delivery`. `None` preserves valid old partial labels/credits; a new positive Balk credit needs sufficient facts. Internal codec `BBE16` preserves earlier tags and rejects earlier prefixes, including15.
+- `Event.balk: Option<BalkFacts>`, appended after `single_delivery`. `None` preserves valid old partial labels/credits; a new positive Balk credit needs sufficient facts. Introduced codec `BBE16` preserves earlier tags and rejects earlier prefixes, including15. The separate [accepted progress checkpoint](balk-progress.md) adds `BBE17`, without changing this accepted checkpoint's historical evidence.
 - `BalkFacts { cause: BalkCause, disposition: BalkDisposition, resolution: BalkResolution }` scopes **one occurrence and all supplied Balk units in the event**; it is not a complete PA/game history certificate. No redundant pitcher field: canonical participants/current before-defense pitcher own attribution.
 - `BalkCause::{Unknown, PitcherAction602a, SqueezeOrStealHomeInterference601g, PitchingProhibition602d}`. These causes must not be substituted for each other. Wire tags0–3 in this order.
 - `BalkDisposition::{Unknown, PenaltyApplied, PlayProceedsWithoutReference}`; wire0–2. An ordinary disregarded occurrence contributes no Balk unit, but its actual PA is not nullified. The enum alone cannot certify minimum progress or legal delivery.
@@ -51,4 +51,4 @@ Parent consumed the full retained Sol-high follow-up `b170de13-6c85-4d40-b936-ce
 
 ## Required follow-on work (not exclusions)
 
-Ordinary play-proceeds progress witnesses (including eligible uncaught K/other lawful first reaches), missed-base appeal exception, beyond-award wild throws/protection/location/additional entitlements and terminal order;601g interference with attempting-score/defender/action/batter award facts;602d election/automatic-ball/PA completion; cause-bound error/steal/pitch interactions; richer WP/PB/SB/K chronology, Rule9.16 reconstruction and the matrix's complete-field/coverage/literal-box evidence. No executor handoff or implementation authority came from the advisor; parent owns this interface and TDD.
+The [parent-selected all-safe nonterminal progress checkpoint](balk-progress.md) is accepted after retained review and unchanged final verification. It adds explicit touch payload tag2, not endpoint inference, and preserves F1–F3; PROGRESS owns its live proof/status. Richer required work still includes retired/returned/terminal ordinary play-proceeds progress histories, missed-base appeal exception, beyond-award wild throws/protection/location/additional entitlements and terminal order;601g interference with attempting-score/defender/action/batter award facts;602d election/automatic-ball/PA completion; cause-bound error/steal/pitch interactions; richer WP/PB/SB/K chronology, Rule9.16 reconstruction and the matrix's complete-field/coverage/literal-box evidence. No executor handoff or implementation authority came from the advisor; parent owns this interface and TDD.

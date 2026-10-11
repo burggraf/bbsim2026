@@ -347,11 +347,25 @@ pub enum BalkDisposition {
     PenaltyApplied,
     PlayProceedsWithoutReference,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Named actual legal touch, not an entitlement or handling-caused advance.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedBaseTouch {
+    pub runner_id: String,
+    pub base: Destination,
+}
+/// Qualification-threshold assertions, not a complete movement/touch history.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BalkProgressFacts {
+    pub batter_first_touch: NamedBaseTouch,
+    pub runner_next_touches: Vec<NamedBaseTouch>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BalkResolution {
     Unknown,
     /// Ordinary imposed awards originate at before bases with no extra action sequence.
     ExactProtectedAwards,
+    /// Named actual first/next touches during the play, before disposition.
+    ActualMinimumProgress(BalkProgressFacts),
 }
 /// One cause-bound balk occurrence; not complete PA/game or fielding-review coverage.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -408,19 +422,7 @@ impl EventTransition {
         let batter_charge = rules::batter_charge(&before, &event)?;
         rules::validate_fielding_review(&event)?;
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
-        let is_substitution = event.kind == EventKind::Substitution;
-        if is_substitution {
-            if event.delta.changes.is_empty()
-                || !event.delta.moves.is_empty()
-                || event.delta.outs != 0
-                || event.delta.runs != 0
-                || !event.delta.credits.is_empty()
-            {
-                return Err(TransitionError::IllegalStateChange);
-            }
-        } else if !event.delta.changes.is_empty() {
-            return Err(TransitionError::IllegalStateChange);
-        }
+        rules::validate_event_shape(&event)?;
         let mut expected_teams = before.teams.clone();
         expected_teams[offense].next_batter = expected_slot;
         rules::validate_pa_credits(&event)?;
@@ -496,72 +498,23 @@ impl EventTransition {
         if after.teams != expected_teams {
             return Err(TransitionError::IllegalStateChange);
         }
+        rules::validate_move_origins(&expected_bases, &event, Some(batter_charge))?;
         let mut destinations = Vec::new();
-        let mut occupied_origins = [false; 4];
-        let mut outs_made = 0u8;
         for movement in &event.delta.moves {
-            let origin = match movement.from {
-                Base::Plate => 0,
-                Base::First => 1,
-                Base::Second => 2,
-                Base::Third => 3,
-            };
-            if occupied_origins[origin]
-                || movement.runner.player_id.is_empty()
-                || movement.runner.responsible_pitcher.is_empty()
-            {
-                return Err(TransitionError::DeltaMismatch);
-            }
-            occupied_origins[origin] = true;
-            if origin == 0 {
-                if !is_pa
-                    || event.participants.batter.as_deref() != Some(&movement.runner.player_id)
-                    || movement.runner.responsible_pitcher != batter_charge
-                {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-            } else if expected_bases[origin - 1].as_ref() == Some(&movement.runner) {
-                expected_bases[origin - 1] = None;
-            } else {
-                return Err(TransitionError::DeltaMismatch);
+            match movement.from {
+                Base::Plate => {}
+                Base::First => expected_bases[0] = None,
+                Base::Second => expected_bases[1] = None,
+                Base::Third => expected_bases[2] = None,
             }
             match movement.to {
-                Destination::Out => {
-                    outs_made = outs_made
-                        .checked_add(1)
-                        .ok_or(TransitionError::DeltaMismatch)?
-                }
-                Destination::Home => {}
+                Destination::Out | Destination::Home => {}
                 destination => destinations.push((destination, movement.runner.clone())),
             }
         }
-        if occupied_origins[0] != is_pa || outs_made != event.delta.outs {
-            return Err(TransitionError::DeltaMismatch);
-        }
-        let total_outs = before
-            .outs
-            .checked_add(event.delta.outs)
-            .ok_or(TransitionError::DeltaMismatch)?;
-        if total_outs > 3 {
-            return Err(TransitionError::DeltaMismatch);
-        }
+        let total_outs = rules::validate_outs(&before, &event)?;
         rules::validate_home_run(&before, &event)?;
-        let mut scored = rules::scored_runners(&before, &event, total_outs)?;
-        if scored.len() != usize::from(event.delta.runs) {
-            return Err(TransitionError::DeltaMismatch);
-        }
-        let mut run_credits: Vec<_> = event
-            .delta
-            .credits
-            .iter()
-            .filter(|credit| credit.kind == CreditKind::Run)
-            .map(|credit| credit.player_id.as_str())
-            .collect();
-        scored.sort_unstable();
-        run_credits.sort_unstable();
-        if scored.iter().map(String::as_str).collect::<Vec<_>>() != run_credits {
-            return Err(TransitionError::IllegalCredit);
-        }
+        rules::validate_run_credits(&before, &event, total_outs)?;
         for credit in &event.delta.credits {
             let eligible = match credit.kind {
                 CreditKind::StolenBase => event.delta.moves.iter().any(|m| {

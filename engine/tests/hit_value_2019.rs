@@ -668,7 +668,7 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
             event.fielding_review = review;
             let valid = apply(&before, event).unwrap();
             let original = valid.to_bytes();
-            assert!(original.starts_with(b"BBE16"));
+            assert!(original.starts_with(b"BBE17"));
             assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
             let batter = valid.event().participants.batter.as_ref().unwrap();
             let mut marker = (batter.len() as u64).to_le_bytes().to_vec();
@@ -686,7 +686,7 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
                 EventTransition::from_bytes(&bytes),
                 Err(TransitionError::InvalidEncoding)
             );
-            for earlier_prefix in [b"BBE15", b"BBE14", b"BBE13", b"BBE12", b"BBE11"] {
+            for earlier_prefix in [b"BBE16", b"BBE15", b"BBE14", b"BBE13", b"BBE12", b"BBE11"] {
                 let mut old_version = original.clone();
                 old_version[..5].copy_from_slice(earlier_prefix);
                 assert_eq!(

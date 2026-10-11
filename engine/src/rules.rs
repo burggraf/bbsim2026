@@ -1,7 +1,7 @@
 //! Bounded 2019 scoring, lineup and regulation-ending rules.
 use super::{
-    Base, CreditKind, Destination, Event, EventKind, GameState, Half, TeamState, ThirdOutKind,
-    TransitionError,
+    Base, CreditKind, Destination, Event, EventKind, GameState, Half, Runner, TeamState,
+    ThirdOutKind, TransitionError,
 };
 
 pub(crate) fn valid_team(team: &TeamState) -> bool {
@@ -188,18 +188,22 @@ pub(crate) fn credit_role_eligible(
     }
 }
 
-pub(crate) fn validate_strikeout_eligibility(
-    before: &GameState,
-    event: &Event,
-) -> Result<(), TransitionError> {
+pub(crate) fn strikeout_first_ineligible(before: &GameState, event: &Event) -> bool {
     // Rules 5.05(a)(2), 5.09(a)(3): before occupancy, not same-play vacating.
-    if event
+    event
         .delta
         .credits
         .iter()
         .any(|c| c.kind == CreditKind::Strikeout)
         && before.outs < 2
         && before.bases[0].is_some()
+}
+
+pub(crate) fn validate_strikeout_eligibility(
+    before: &GameState,
+    event: &Event,
+) -> Result<(), TransitionError> {
+    if strikeout_first_ineligible(before, event)
         && (event
             .delta
             .moves
@@ -311,7 +315,7 @@ pub(crate) fn batter_charge<'a>(
     let _ = hit_value_credit(event)?;
     let _ = walk_classification(before, event)?;
     super::contact::validate(before, event)?;
-    super::balk::validate(event)?;
+    super::balk::validate(before, event)?;
     super::pitch::validate(before, event)?;
     let current = before.teams[1 - before.half.offense()].pitcher.as_str();
     if event.kind == EventKind::FieldersChoice {
@@ -547,6 +551,109 @@ pub(crate) fn scored_runners(
         }
     };
     Ok(scored)
+}
+
+/// Canonical event/personnel shape, independent of unresolved occurrence facts.
+pub(crate) fn validate_event_shape(event: &Event) -> Result<(), TransitionError> {
+    if event.kind == EventKind::Substitution {
+        if event.delta.changes.is_empty()
+            || !event.delta.moves.is_empty()
+            || event.delta.outs != 0
+            || event.delta.runs != 0
+            || !event.delta.credits.is_empty()
+        {
+            return Err(TransitionError::IllegalStateChange);
+        }
+    } else if !event.delta.changes.is_empty() {
+        return Err(TransitionError::IllegalStateChange);
+    }
+    Ok(())
+}
+
+/// Canonical unique origins, actor identity and preserved before-runner charge.
+/// None defers only the batter's potentially ambiguous replacement charge.
+pub(crate) fn validate_move_origins(
+    bases: &[Option<Runner>; 3],
+    event: &Event,
+    batter_charge: Option<&str>,
+) -> Result<(), TransitionError> {
+    let is_pa = event.kind.is_pa();
+    let mut occupied_origins = [false; 4];
+    for movement in &event.delta.moves {
+        let origin = match movement.from {
+            Base::Plate => 0,
+            Base::First => 1,
+            Base::Second => 2,
+            Base::Third => 3,
+        };
+        if occupied_origins[origin]
+            || movement.runner.player_id.is_empty()
+            || movement.runner.responsible_pitcher.is_empty()
+        {
+            return Err(TransitionError::DeltaMismatch);
+        }
+        occupied_origins[origin] = true;
+        if origin == 0 {
+            if !is_pa
+                || event.participants.batter.as_deref() != Some(&movement.runner.player_id)
+                || batter_charge.is_some_and(|charge| movement.runner.responsible_pitcher != charge)
+            {
+                return Err(TransitionError::DeltaMismatch);
+            }
+        } else if bases[origin - 1].as_ref() != Some(&movement.runner) {
+            return Err(TransitionError::DeltaMismatch);
+        }
+    }
+    if occupied_origins[0] != is_pa {
+        return Err(TransitionError::DeltaMismatch);
+    }
+    Ok(())
+}
+
+/// Represented retirement conservation; does not infer a retirement's cause/order.
+pub(crate) fn validate_outs(before: &GameState, event: &Event) -> Result<u8, TransitionError> {
+    let outs_made = u8::try_from(
+        event
+            .delta
+            .moves
+            .iter()
+            .filter(|m| m.to == Destination::Out)
+            .count(),
+    )
+    .map_err(|_| TransitionError::DeltaMismatch)?;
+    let total_outs = before
+        .outs
+        .checked_add(event.delta.outs)
+        .ok_or(TransitionError::DeltaMismatch)?;
+    if outs_made != event.delta.outs || total_outs > 3 {
+        return Err(TransitionError::DeltaMismatch);
+    }
+    Ok(total_outs)
+}
+
+/// Shared named legal-run conservation; unknown third-out history stays unknown.
+pub(crate) fn validate_run_credits(
+    before: &GameState,
+    event: &Event,
+    total_outs: u8,
+) -> Result<(), TransitionError> {
+    let mut scored = scored_runners(before, event, total_outs)?;
+    if scored.len() != usize::from(event.delta.runs) {
+        return Err(TransitionError::DeltaMismatch);
+    }
+    let mut run_credits: Vec<_> = event
+        .delta
+        .credits
+        .iter()
+        .filter(|credit| credit.kind == CreditKind::Run)
+        .map(|credit| credit.player_id.as_str())
+        .collect();
+    scored.sort_unstable();
+    run_credits.sort_unstable();
+    if scored.iter().map(String::as_str).collect::<Vec<_>>() != run_credits {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(())
 }
 
 /// Credit-only prerequisites, safe before any movement/charge inference.
