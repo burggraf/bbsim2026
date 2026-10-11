@@ -250,6 +250,15 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                                 .count(),
                             1
                         );
+                        assert_eq!(
+                            t.event()
+                                .delta
+                                .credits
+                                .iter()
+                                .filter(|c| c.kind == bbsim_engine::CreditKind::NoHit)
+                                .count(),
+                            usize::from(matches!(outcome, Outcome::Roe | Outcome::ContactOut))
+                        );
                         if t.after().over
                             && half == Half::Bottom
                             && t.event().delta.runs > 0
@@ -318,7 +327,15 @@ fn two_thousand_games_are_repeatable_legal_and_conserve_available_statistics() {
                     .map(|f| f.credited_putouts)
                     .sum::<u32>()
             );
+            for p in a.pitchers[1 - side].values() {
+                assert_eq!(
+                    p.classified_hits_allowed,
+                    Some(p.credited_hits_allowed),
+                    "seed {seed}"
+                );
+            }
             for b in a.batters[side].values() {
+                assert_eq!(b.classified_hits, Some(b.credited_hits), "seed {seed}");
                 assert_eq!(
                     b.credited_hits,
                     b.credited_hit_breakdown.as_ref().unwrap().hits()

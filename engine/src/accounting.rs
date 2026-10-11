@@ -30,6 +30,9 @@ impl HitBreakdown {
 pub struct BatterLine {
     pub plate_appearances: u32,
     pub credited_hits: u32,
+    /// H across this actor's observed PAs; None if any lacks hit/no-hit classification.
+    /// Not a complete official game/fielding coverage certificate.
+    pub classified_hits: Option<u32>,
     /// None if any supplied Hit in this player's segment lacks scored value.
     pub credited_hit_breakdown: Option<HitBreakdown>,
     pub credited_walks: u32,
@@ -53,6 +56,7 @@ impl Default for BatterLine {
         Self {
             plate_appearances: 0,
             credited_hits: 0,
+            classified_hits: Some(0),
             credited_hit_breakdown: Some(HitBreakdown::default()),
             credited_walks: 0,
             credited_intentional_walks: Some(0),
@@ -77,6 +81,8 @@ pub struct PitcherLine {
     pub at_bats_against: Option<u32>,
     pub runs_allowed: u32,
     pub credited_hits_allowed: u32,
+    /// Observed PA hit/no-hit coverage for the actual pitcher, not carried R charges.
+    pub classified_hits_allowed: Option<u32>,
     /// Actual PA pitcher's supplied Hit breakdown; not carried run charges.
     pub credited_hit_breakdown_allowed: Option<HitBreakdown>,
     pub credited_walks_allowed: u32,
@@ -101,6 +107,7 @@ impl Default for PitcherLine {
             at_bats_against: Some(0),
             runs_allowed: 0,
             credited_hits_allowed: 0,
+            classified_hits_allowed: Some(0),
             credited_hit_breakdown_allowed: Some(HitBreakdown::default()),
             credited_walks_allowed: 0,
             credited_intentional_walks_allowed: Some(0),
@@ -370,12 +377,33 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             } else {
                 None
             };
+            // A missing Hit is not a no-hit scorer decision. Bare AB/GIDP,
+            // endpoints and whole-chance review do not fill this coverage gap.
+            let classified_hit = if has(CreditKind::Hit) {
+                Some(1)
+            } else if excluded
+                || event.kind == EventKind::FieldersChoice
+                || has(CreditKind::Strikeout)
+                || has(CreditKind::NoHit)
+            {
+                Some(0)
+            } else {
+                None
+            };
             let batter = event.participants.batter.as_deref().expect("validated PA");
             let batting_line = result.batters[offense].entry(batter.into()).or_default();
             let pitching_line = result.pitchers[defense]
                 .entry(current_pitcher.into())
                 .or_default();
             pitching_line.batters_faced += 1;
+            batting_line.classified_hits = batting_line
+                .classified_hits
+                .zip(classified_hit)
+                .map(|(total, hit)| total + hit);
+            pitching_line.classified_hits_allowed = pitching_line
+                .classified_hits_allowed
+                .zip(classified_hit)
+                .map(|(total, hit)| total + hit);
             match at_bat {
                 Some(true) => {
                     if let Some(n) = &mut batting_line.at_bats {
@@ -506,6 +534,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 CreditKind::StolenBase => batter.credited_steals += 1,
                 CreditKind::CaughtStealing => batter.credited_caught_stealing += 1,
                 CreditKind::AtBat
+                | CreditKind::NoHit
                 | CreditKind::Single
                 | CreditKind::Double
                 | CreditKind::Triple

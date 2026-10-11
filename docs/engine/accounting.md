@@ -30,6 +30,26 @@ Thirteen additional accounting regressions/properties cover reviewed vs unreview
 
 **CS multiplicity boundary (in progress):** primary 9.02(a)(18) counts times caught stealing; 9.07(h) includes attempts saved by errors. Pre-implementation Sol-high dialogue `0f770ab8-b8be-44df-8f4d-cfc435610d89`, workflow `09c28bc1-fa13-4cd9-9d59-5326a9af7ea6`, challenged a universal physical-out cap. Parent chose conservative supported boundary B: otherwise eligible same-actor CS repeats are `IllegalCredit` only with explicit `NoMisplay`; `Unknown` is `UnsupportedRule`, not proof of illegality, whether Error is supplied or absent. PA fielding review can cover earlier chances; current schema has no attempt identities/chronology and does not represent safe-by-error CS without an actual Out. This slice does not silently expand that vocabulary, assume missing Error means none, or certify complete CS boxes. Parent reproduced **5 behavioral failures / 3 positive passes** before production (`/tmp/bbsim-e03-cs-multiplicity-boundary-red.log`); earlier seven-test red is `/tmp/bbsim-e03-cs-multiplicity-red.log`. Root: each credit independently passed retirement eligibility and the fold counted every unit without same-actor occurrence validation. A narrow canonical check after ordinary eligibility now rejects the qualified multiplicity; fold/wire stay unchanged. [Eight tests](../../engine/tests/cs_2019.rs), focused **8/8** (`/tmp/bbsim-e03-cs-multiplicity-green.log`), enumerate **864 cases each** for reducer/constructor across all occupied bases/masks, outs, halfs, reviews, duplicate counts and credit ordering, plus caller immutability; **24** actor-only semantic byte forgeries retain valid two-actor parsing controls. Positive singleton/multi-runner, K+CS/third-out attribution, contiguous repeated occurrences after reaching again and repeated same-fielder PO/two-run-HR RBI controls pass. No blanket credit dedupe or cross-event cap. Fresh full `proc_4c9d` passed **125 Rust / 59 Python**, fmt/Clippy/diff, native **1,350** and existing **27/27 ER / 54/54** boxes. Initial `proc_7fd8` stopped at test-only Clippy unnecessary clone; `std::slice::from_ref` fixed it without weakened assertions or warning suppression. Fresh Sol-high implementation reviewer `c0fc1956-8f36-4289-877b-72575a6765fc`, workflow `3ace3e71-41ca-4bf8-9079-b3593729e303`, returned **OK with notes; no issues found** for this patch. Parent accepts it; final unchanged-code `proc_3a3e` reran those exact checks with **125 Rust / 59 Python / 1,350 native / 27 ER / 54 boxes**, exit 0. Commit/publication pending; supplied logs inspected, not independent execution/recount/exit-metadata/hashes. No E-03/G1 approval.
 
+## Observed-PA H classification (`BBE19`, bounded local checkpoint; acceptance in PROGRESS)
+
+[Preregistered PA H coverage](pa-hit-coverage.md) adds actual-batter `NoHit`
+credit tag25 as a zero-unit scorer modifier. Duplicate, foreign/non-PA and
+Hit+NoHit declarations are illegal; credit-only checks precede unrelated
+inherited replacement uncertainty. It does not establish AB, FC charge,
+retirement/throw history, fielding, RBI or ER. Missing NoHit stays usable/unknown.
+`BatterLine.classified_hits` / `PitcherLine.classified_hits_allowed` count H
+only across that actor's **observed PAs** while each declares Hit, NoHit or an
+existing explicit no-hit PA class (K/BB/HBP/SH/SF/interference/validated FC).
+Bare AB/GIDP/endpoints/NoMisplay never substitute for this declaration. One
+unclassified PA irreversibly makes only its batter/current PA pitcher's value
+None. Generic Hit establishes H1 but can leave hit value/TB unknown. Empty
+observed PA sets start at Some(0), not inferred official zero/unobserved history.
+Carried R charges do not create a hit allowed or BF for the prior pitcher.
+Existing credited lower bounds, AB and conservative ER proofs are unchanged.
+Physical completeness plus this one-field segment coverage is **not** a complete
+agreed-box certificate. The preview now declares NoHit for its chosen coarse
+contact-out/ROE outcomes, not historical omitted facts or extra sampling.
+
 ## Credited hit-value slice (accepted/pushed `be97d6b`)
 
 The [approved completion matrix](g1-accounting-scope.md) and [per-field coverage requirements](scoring-coverage.md) now govern E-03. `BBE12` appends `CreditKind::{Single, Double, Triple}` as mutually exclusive scorer modifiers requiring exactly one current-batter Hit. The existing out-of-park HR marker supplies HR classification. Modifiers add no second H, PA, AB or BF. `BatterLine.credited_hit_breakdown` and `PitcherLine.credited_hit_breakdown_allowed` contain optional `HitBreakdown { singles, doubles, triples, home_runs }`; H and TB are derived from these components. These counts belong to the actual batter/current PA pitcher, not a carried run charge.

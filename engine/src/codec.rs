@@ -1,4 +1,4 @@
-//! Version 1 canonical binary event record. Little-endian integers, length-prefixed UTF-8;
+//! Version 19 canonical binary event record. Little-endian integers, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
 
@@ -142,7 +142,7 @@ binary_enum!(Half { Top = 0, Bottom = 1 });
 binary_enum!(Base { Plate = 0, First = 1, Second = 2, Third = 3 });
 binary_enum!(Destination { First = 0, Second = 1, Third = 2, Home = 3, Out = 4 });
 binary_enum!(RunnerEvent { WildPitch = 0, PassedBall = 1, StealAttempt = 2, Pickoff = 3, Balk = 4 });
-binary_enum!(CreditKind { PlateAppearance = 0, Strikeout = 1, Walk = 2, Hit = 3, Run = 4, Rbi = 5, StolenBase = 6, CaughtStealing = 7, Putout = 8, Assist = 9, Error = 10, PassedBall = 11, AtBat = 12, HitByPitch = 13, SacrificeBunt = 14, SacrificeFly = 15, InterferenceAward = 16, Single = 17, Double = 18, Triple = 19, OrdinaryWalk = 20, IntentionalWalk = 21, GroundedIntoDoublePlay = 22, WildPitch = 23, Balk = 24 });
+binary_enum!(CreditKind { PlateAppearance = 0, Strikeout = 1, Walk = 2, Hit = 3, Run = 4, Rbi = 5, StolenBase = 6, CaughtStealing = 7, Putout = 8, Assist = 9, Error = 10, PassedBall = 11, AtBat = 12, HitByPitch = 13, SacrificeBunt = 14, SacrificeFly = 15, InterferenceAward = 16, Single = 17, Double = 18, Triple = 19, OrdinaryWalk = 20, IntentionalWalk = 21, GroundedIntoDoublePlay = 22, WildPitch = 23, Balk = 24, NoHit = 25 });
 binary_enum!(ThirdOutKind { BatterBeforeFirst = 0, Force = 1, Timing = 2, PrecedingRunnerAppeal = 3, BatterAfterFirstTiming = 4 });
 binary_enum!(FieldingReview { Unknown = 0, NoMisplay = 1 });
 binary_enum!(ContactClass { Grounded = 0, NotGrounded = 1 });
@@ -441,7 +441,7 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE18".to_vec();
+        let mut out = b"BBE19".to_vec();
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
@@ -449,7 +449,7 @@ impl EventTransition {
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
         let payload = bytes
-            .strip_prefix(b"BBE18")
+            .strip_prefix(b"BBE19")
             .ok_or(TransitionError::InvalidEncoding)?;
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;

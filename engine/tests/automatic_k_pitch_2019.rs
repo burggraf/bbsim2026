@@ -157,7 +157,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
     );
     let reduced = reduced.unwrap();
     assert_eq!(direct.unwrap(), reduced);
-    assert_eq!(&reduced.to_bytes()[..5], b"BBE18");
+    assert_eq!(&reduced.to_bytes()[..5], b"BBE19");
     assert_eq!(
         EventTransition::from_bytes(&reduced.to_bytes()).unwrap(),
         reduced
@@ -751,7 +751,7 @@ fn complete_wire_accepts_explicit_first_touch_then_catcher_throw_to_second() {
     changed.push(wire_destination(Destination::Second));
     changed.push(0); // no balk
     bytes.splice(offset..offset + old.len(), changed);
-    bytes[..5].copy_from_slice(b"BBE18");
+    bytes[..5].copy_from_slice(b"BBE19");
     assert_eq!(
         EventTransition::from_bytes(&bytes).map(|t| t.event().delta.outs),
         Ok(1)

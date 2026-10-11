@@ -99,6 +99,453 @@ fn batter_move(before: &GameState, to: Destination) -> RunnerMove {
 }
 
 #[test]
+fn explicit_no_hit_covers_observed_pa_without_inventing_ab_or_fielding() {
+    for half in [Half::Top, Half::Bottom] {
+        for supplied_ab in [false, true] {
+            let mut before = state();
+            before.half = half;
+            before.bases = [None, None, None];
+            let offense = half.offense();
+            let batter = before.teams[offense].batting_order[0].clone();
+            let pitcher = before.teams[1 - offense].pitcher.clone();
+            let mut credits = vec![credit(&batter, CreditKind::NoHit)];
+            if supplied_ab {
+                credits.push(credit(&batter, CreditKind::AtBat));
+            }
+            let action = event(
+                &before,
+                EventKind::PlateAppearance,
+                vec![batter_move(&before, Destination::Out)],
+                1,
+                0,
+                credits,
+                vec![],
+            );
+            let t = apply(&before, action).unwrap();
+            assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
+            let a = derive_accounting(&[t]).unwrap();
+            let b = &a.batters[offense][&batter];
+            let p = &a.pitchers[1 - offense][&pitcher];
+            assert_eq!(b.classified_hits, Some(0));
+            assert_eq!(p.classified_hits_allowed, Some(0));
+            assert_eq!(
+                (b.plate_appearances, p.batters_faced, p.outs_recorded),
+                (1, 1, 1)
+            );
+            assert_eq!((b.credited_hits, p.credited_hits_allowed), (0, 0));
+            assert_eq!(b.at_bats, if supplied_ab { Some(1) } else { None });
+            assert_eq!(p.at_bats_against, b.at_bats);
+            assert!(a.fielders.iter().all(|f| f.is_empty()));
+            assert!(!a.complete_game);
+        }
+    }
+}
+
+#[test]
+fn hit_classification_does_not_infer_value_and_bare_ab_is_unknown() {
+    for half in [Half::Top, Half::Bottom] {
+        for kind in [
+            CreditKind::Hit,
+            CreditKind::AtBat,
+            CreditKind::Strikeout,
+            CreditKind::Walk,
+            CreditKind::HitByPitch,
+            CreditKind::InterferenceAward,
+        ] {
+            let mut before = state();
+            before.half = half;
+            before.bases = [None, None, None];
+            let offense = half.offense();
+            let b = before.teams[offense].batting_order[0].clone();
+            let p = before.teams[1 - offense].pitcher.clone();
+            let retired = matches!(kind, CreditKind::AtBat | CreditKind::Strikeout);
+            let t = apply(
+                &before,
+                event(
+                    &before,
+                    EventKind::PlateAppearance,
+                    vec![batter_move(
+                        &before,
+                        if retired {
+                            Destination::Out
+                        } else {
+                            Destination::First
+                        },
+                    )],
+                    u8::from(retired),
+                    0,
+                    vec![credit(&b, kind)],
+                    vec![],
+                ),
+            )
+            .unwrap();
+            let a = derive_accounting(&[t]).unwrap();
+            let expected = match kind {
+                CreditKind::Hit => Some(1),
+                CreditKind::AtBat => None,
+                _ => Some(0),
+            };
+            assert_eq!(
+                a.batters[offense][&b].classified_hits, expected,
+                "{half:?} {kind:?}"
+            );
+            assert_eq!(
+                a.pitchers[1 - offense][&p].classified_hits_allowed,
+                expected
+            );
+            if kind == CreditKind::Hit {
+                assert_eq!(a.batters[offense][&b].credited_hit_breakdown, None);
+            }
+        }
+    }
+}
+
+#[test]
+fn complete_physical_log_preserves_actor_local_missing_hit_coverage() {
+    let mut before = state();
+    before.inning = 1;
+    before.outs = 0;
+    before.bases = [None, None, None];
+    let mut log = vec![];
+    for frame in 0..17 {
+        // Home scores twice in the eighth; Top9 has only three K-outs.
+        // An away lead after Top9 would NOT end a regulation game.
+        if frame == 15 {
+            let b = before.teams[1].batting_order[before.teams[1].next_batter as usize].clone();
+            let homer = event(
+                &before,
+                EventKind::OutOfParkHomeRun,
+                vec![batter_move(&before, Destination::Home)],
+                0,
+                1,
+                vec![
+                    credit(&b, CreditKind::PlateAppearance),
+                    credit(&b, CreditKind::Hit),
+                    credit(&b, CreditKind::Run),
+                ],
+                vec![],
+            );
+            before = record_clean(&mut log, &before, homer);
+        }
+        for play in 0..4 {
+            if frame == 16 && play == 0 {
+                continue;
+            }
+            let b = before.teams[before.half.offense()].batting_order
+                [before.teams[before.half.offense()].next_batter as usize]
+                .clone();
+            let action = if play == 0 {
+                event(
+                    &before,
+                    EventKind::OutOfParkHomeRun,
+                    vec![batter_move(&before, Destination::Home)],
+                    0,
+                    1,
+                    vec![
+                        credit(&b, CreditKind::PlateAppearance),
+                        credit(&b, CreditKind::Hit),
+                        credit(&b, CreditKind::Run),
+                    ],
+                    vec![],
+                )
+            } else {
+                event(
+                    &before,
+                    EventKind::PlateAppearance,
+                    vec![batter_move(&before, Destination::Out)],
+                    1,
+                    0,
+                    vec![credit(&b, CreditKind::Strikeout)],
+                    vec![],
+                )
+            };
+            before = record_clean(&mut log, &before, action);
+        }
+    }
+    assert!(before.over);
+    // Replace only the first K classification, retaining identical physical
+    // history. NoHit+AB says nothing about its missing retirement/fielding facts.
+    let classified = log
+        .iter()
+        .enumerate()
+        .map(|(index, t)| {
+            let mut e = t.event().clone();
+            if index == 1 {
+                e.delta.credits.retain(|c| c.kind != CreditKind::Strikeout);
+                e.delta.credits.extend([
+                    credit("away1", CreditKind::NoHit),
+                    credit("away1", CreditKind::AtBat),
+                ]);
+            }
+            apply(t.before(), e).unwrap()
+        })
+        .collect::<Vec<_>>();
+    let a = derive_accounting(&classified).unwrap();
+    assert!(a.complete_game);
+    assert_eq!(a.runs, [8, 9]);
+    assert_eq!(
+        a.pitchers[1]["home_starter"].classified_hits_allowed,
+        Some(8)
+    );
+    assert_eq!(
+        a.pitchers[0]["away_pitcher"].classified_hits_allowed,
+        Some(9)
+    );
+    assert!(a.batters[0]
+        .iter()
+        .all(|(id, b)| b.classified_hits == Some(u32::from(id != "away5"))));
+    assert_eq!(a.pitchers[1]["home_starter"].earned_runs, None);
+    assert!(a.fielders.iter().all(|f| f.is_empty()));
+    let incomplete = classified
+        .iter()
+        .enumerate()
+        .map(|(index, t)| {
+            let mut e = t.event().clone();
+            if index == 1 {
+                e.delta.credits.retain(|c| c.kind != CreditKind::NoHit);
+            }
+            apply(t.before(), e).unwrap()
+        })
+        .collect::<Vec<_>>();
+    let partial = derive_accounting(&incomplete).unwrap();
+    assert!(partial.complete_game);
+    assert_eq!(partial.batters[0]["away1"].classified_hits, None);
+    assert_eq!(
+        partial.pitchers[1]["home_starter"].classified_hits_allowed,
+        None
+    );
+    assert_eq!(
+        partial.pitchers[0]["away_pitcher"].classified_hits_allowed,
+        Some(9)
+    );
+    assert!(partial.batters[0]
+        .iter()
+        .filter(|(id, _)| id.as_str() != "away1")
+        .all(|(id, b)| b.classified_hits == Some(u32::from(id != "away5"))));
+    assert_eq!(partial.pitchers[1]["home_starter"].credited_hits_allowed, 8);
+}
+
+#[test]
+fn no_hit_contradictions_precede_inherited_charge_ambiguity() {
+    let mut before = state();
+    before.bases[0].as_mut().unwrap().responsible_pitcher = "prior".into();
+    let moves = vec![
+        batter_move(&before, Destination::First),
+        RunnerMove {
+            runner: before.bases[0].clone().unwrap(),
+            from: Base::First,
+            to: Destination::Out,
+        },
+    ];
+    let control = apply(
+        &before,
+        event(
+            &before,
+            EventKind::PlateAppearance,
+            moves.clone(),
+            1,
+            0,
+            vec![credit("away0", CreditKind::Hit)],
+            vec![],
+        ),
+    )
+    .unwrap();
+    for credits in [
+        vec![credit("runner", CreditKind::NoHit)],
+        vec![
+            credit("away0", CreditKind::NoHit),
+            credit("away0", CreditKind::NoHit),
+        ],
+        vec![
+            credit("away0", CreditKind::Hit),
+            credit("away0", CreditKind::NoHit),
+        ],
+    ] {
+        let action = event(
+            &before,
+            EventKind::PlateAppearance,
+            moves.clone(),
+            1,
+            0,
+            credits,
+            vec![],
+        );
+        assert_eq!(
+            apply(&before, action.clone()),
+            Err(TransitionError::IllegalCredit)
+        );
+        assert_eq!(
+            EventTransition::try_new(before.clone(), action, control.after().clone()),
+            Err(TransitionError::IllegalCredit)
+        );
+    }
+    let still_ambiguous = event(
+        &before,
+        EventKind::PlateAppearance,
+        moves,
+        1,
+        0,
+        vec![credit("away0", CreditKind::NoHit)],
+        vec![],
+    );
+    assert_eq!(
+        apply(&before, still_ambiguous),
+        Err(TransitionError::UnsupportedRule)
+    );
+}
+
+#[test]
+fn runner_only_opportunities_do_not_become_no_hit_plate_appearances() {
+    let before = state();
+    let action = event(
+        &before,
+        EventKind::RunnerOnly(RunnerEvent::StealAttempt),
+        vec![RunnerMove {
+            runner: before.bases[0].clone().unwrap(),
+            from: Base::First,
+            to: Destination::Second,
+        }],
+        0,
+        0,
+        vec![],
+        vec![],
+    );
+    let control = apply(&before, action.clone()).unwrap();
+    let a = derive_accounting(std::slice::from_ref(&control)).unwrap();
+    assert!(a.batters[0].is_empty());
+    assert_eq!(a.pitchers[1]["home_starter"].batters_faced, 0);
+    assert_eq!(
+        a.pitchers[1]["home_starter"].classified_hits_allowed,
+        Some(0)
+    );
+    assert_eq!(
+        control.before().teams[0].next_batter,
+        control.after().teams[0].next_batter
+    );
+    let mut illegal = action;
+    illegal
+        .delta
+        .credits
+        .push(credit("away0", CreditKind::NoHit));
+    assert_eq!(
+        apply(&before, illegal.clone()),
+        Err(TransitionError::IllegalCredit)
+    );
+    assert_eq!(
+        EventTransition::try_new(before, illegal, control.after().clone()),
+        Err(TransitionError::IllegalCredit)
+    );
+    let bytes = control.to_bytes();
+    assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), control);
+    // Locate the entire valid one-movement Delta, not a guessed byte offset.
+    let mut delta = (1u64).to_le_bytes().to_vec();
+    let runner = &control.event().delta.moves[0].runner;
+    for id in [&runner.player_id, &runner.responsible_pitcher] {
+        delta.extend_from_slice(&(id.len() as u64).to_le_bytes());
+        delta.extend_from_slice(id.as_bytes());
+    }
+    delta.extend_from_slice(&[1, 1, 0, 0]); // First -> Second, u8 outs/u8 runs.
+    let credit_offset = delta.len();
+    delta.extend_from_slice(&[0; 16]); // empty credits and personnel changes.
+    delta.push(0); // no third-out record.
+    let positions = bytes
+        .windows(delta.len())
+        .enumerate()
+        .filter_map(|(i, v)| (v == delta).then_some(i))
+        .collect::<Vec<_>>();
+    assert_eq!(positions.len(), 1);
+    let mut extra = (1u64).to_le_bytes().to_vec();
+    extra.extend_from_slice(&(5u64).to_le_bytes());
+    extra.extend_from_slice(b"away0");
+    extra.push(25);
+    let start = positions[0] + credit_offset;
+    let mut permitted = (1u64).to_le_bytes().to_vec();
+    permitted.extend_from_slice(&(runner.player_id.len() as u64).to_le_bytes());
+    permitted.extend_from_slice(runner.player_id.as_bytes());
+    permitted.push(6); // actual runner's completed stolen base is valid.
+    let mut positive = bytes.clone();
+    positive.splice(start..start + 8, permitted);
+    let decoded = EventTransition::from_bytes(&positive).unwrap();
+    assert_eq!(decoded.after(), control.after());
+    assert_eq!(
+        decoded.event().delta.credits,
+        [credit(&runner.player_id, CreditKind::StolenBase)]
+    );
+    let mut forged = bytes;
+    forged.splice(start..start + 8, extra);
+    assert_eq!(
+        EventTransition::from_bytes(&forged),
+        Err(TransitionError::IllegalCredit)
+    );
+}
+
+#[test]
+fn no_hit_semantic_wire_contradiction_has_valid_hit_control() {
+    let mut before = state();
+    before.bases = [None, None, None];
+    let original = apply(
+        &before,
+        event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::First)],
+            0,
+            0,
+            vec![
+                credit("away0", CreditKind::Hit),
+                credit("away0", CreditKind::AtBat),
+            ],
+            vec![],
+        ),
+    )
+    .unwrap();
+    let bytes = original.to_bytes();
+    assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), original);
+    assert!(bytes.starts_with(b"BBE19"));
+    let mut needle = (3u64).to_le_bytes().to_vec();
+    for tag in [3u8, 12, 0] {
+        needle.extend_from_slice(&(5u64).to_le_bytes());
+        needle.extend_from_slice(b"away0");
+        needle.push(tag);
+    }
+    let positions = bytes
+        .windows(needle.len())
+        .enumerate()
+        .filter_map(|(i, v)| (v == needle).then_some(i))
+        .collect::<Vec<_>>();
+    assert_eq!(positions.len(), 1);
+    let mut changed = bytes.clone();
+    changed[positions[0] + 8 + 2 * (8 + 5 + 1) - 1] = 25; // only AB -> NoHit, full valid layout.
+    assert_eq!(
+        EventTransition::from_bytes(&changed),
+        Err(TransitionError::IllegalCredit)
+    );
+    // Same valid physical record with explicit NoHit instead of Hit. It is
+    // partial about why the batter reached, not a fielding-completeness claim.
+    let mut no_hit = bytes.clone();
+    no_hit[positions[0] + 8 + (8 + 5 + 1) - 1] = 25;
+    assert!(EventTransition::from_bytes(&no_hit).is_ok());
+    let mut duplicate = no_hit.clone();
+    duplicate[positions[0] + 8 + 2 * (8 + 5 + 1) - 1] = 25;
+    assert_eq!(
+        EventTransition::from_bytes(&duplicate),
+        Err(TransitionError::IllegalCredit)
+    );
+    let mut foreign = no_hit;
+    foreign[positions[0] + 8 + 8 + 4] = b'1'; // NoHit actor only: away0 -> away1.
+    assert_eq!(
+        EventTransition::from_bytes(&foreign),
+        Err(TransitionError::IllegalCredit)
+    );
+    let mut prior = bytes;
+    prior[..5].copy_from_slice(b"BBE18");
+    assert_eq!(
+        EventTransition::from_bytes(&prior),
+        Err(TransitionError::InvalidEncoding)
+    );
+}
+
+#[test]
 fn golden_partial_log_derives_lines_and_charges_inherited_run_to_prior_pitcher() {
     let before = state();
     let relief = event(
@@ -177,6 +624,18 @@ fn golden_partial_log_derives_lines_and_charges_inherited_run_to_prior_pitcher()
     assert!(!box_score.complete_game);
     assert_eq!(box_score.batters[0]["away0"].plate_appearances, 1);
     assert_eq!(box_score.batters[0]["away0"].credited_hits, 1);
+    assert_eq!(box_score.batters[0]["away0"].classified_hits, Some(1));
+    assert_eq!(box_score.batters[0]["away1"].classified_hits, None);
+    assert_eq!(
+        box_score.pitchers[1]["home_reliever"].classified_hits_allowed,
+        None
+    );
+    // Carried run responsibility is not an observed hit allowed/PA opportunity.
+    assert_eq!(
+        box_score.pitchers[1]["home_starter"].classified_hits_allowed,
+        Some(0)
+    );
+    assert_eq!(box_score.pitchers[1]["home_starter"].batters_faced, 0);
     assert_eq!(box_score.batters[0]["runner"].credited_runs, 1);
     assert_eq!(box_score.batters[0]["away0"].at_bats, Some(1));
     assert_eq!(box_score.batters[0]["away1"].at_bats, None);

@@ -234,6 +234,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         } else {
             credits.extend([
                 credit(&batter, CreditKind::AtBat),
+                credit(&batter, CreditKind::NoHit),
                 credit(&defense.batting_order[3], CreditKind::Assist),
                 credit(&defense.batting_order[1], CreditKind::Putout),
             ]);
@@ -247,6 +248,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
             Outcome::Hbp => credits.push(credit(&batter, CreditKind::HitByPitch)),
             Outcome::Roe => credits.extend([
                 credit(&batter, CreditKind::AtBat),
+                credit(&batter, CreditKind::NoHit),
                 credit(&defense.batting_order[3], CreditKind::Error),
             ]),
             _ => {

@@ -163,6 +163,8 @@ pub enum CreditKind {
     WildPitch,
     /// One imposed scorer-qualified balk occurrence, charged to the actual pitcher.
     Balk,
+    /// Explicit actual-batter no-hit scorer decision; not an AB or fielding fact.
+    NoHit,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credit {

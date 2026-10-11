@@ -165,6 +165,7 @@ pub(crate) fn credit_role_eligible(
         | CreditKind::Strikeout
         | CreditKind::Rbi
         | CreditKind::AtBat
+        | CreditKind::NoHit
         | CreditKind::HitByPitch
         | CreditKind::SacrificeBunt
         | CreditKind::SacrificeFly
@@ -301,6 +302,29 @@ pub(crate) fn finalize_personnel(
     Ok(())
 }
 
+fn validate_no_hit(event: &Event) -> Result<(), TransitionError> {
+    let mut decisions = event
+        .delta
+        .credits
+        .iter()
+        .filter(|c| c.kind == CreditKind::NoHit);
+    let Some(decision) = decisions.next() else {
+        return Ok(());
+    };
+    if !event.kind.is_pa()
+        || decisions.next().is_some()
+        || Some(decision.player_id.as_str()) != event.participants.batter.as_deref()
+        || event
+            .delta
+            .credits
+            .iter()
+            .any(|c| c.kind == CreditKind::Hit)
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(())
+}
+
 /// Determine the batter-runner's carried charge, not who faced this PA.
 /// Rule 9.16(g): a lone runner retired by a fielder's choice is replaced by
 /// the batter with that runner's responsibility. More complex chains need
@@ -312,6 +336,7 @@ pub(crate) fn batter_charge<'a>(
     // Credit-only contradictions must not be masked by unknown FC lineage.
     super::balk::preflight(before, event)?;
     super::pitch::preflight(before, event)?;
+    validate_no_hit(event)?;
     let _ = hit_value_credit(event)?;
     let _ = walk_classification(before, event)?;
     super::contact::validate(before, event)?;
