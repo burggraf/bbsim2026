@@ -523,6 +523,23 @@ impl EventTransition {
             if !eligible {
                 return Err(TransitionError::IllegalCredit);
             }
+            // Rules 9.02(a)(18), 9.07(h): CS counts occurrences, including
+            // error-saved attempts. One reviewed-clean retirement cannot
+            // charge this actor twice; Unknown lacks attempt chronology.
+            if credit.kind == CreditKind::CaughtStealing
+                && event
+                    .delta
+                    .credits
+                    .iter()
+                    .filter(|c| c.kind == credit.kind && c.player_id == credit.player_id)
+                    .count()
+                    > 1
+            {
+                return Err(match event.fielding_review {
+                    FieldingReview::NoMisplay => TransitionError::IllegalCredit,
+                    FieldingReview::Unknown => TransitionError::UnsupportedRule,
+                });
+            }
         }
         let count = |kind| {
             event
