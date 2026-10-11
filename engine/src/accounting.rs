@@ -9,10 +9,29 @@ use crate::{
     Half, RunnerEvent,
 };
 
+/// Breakdown of supplied Hit credits, not proof of complete official H/TB.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HitBreakdown {
+    pub singles: u32,
+    pub doubles: u32,
+    pub triples: u32,
+    pub home_runs: u32,
+}
+impl HitBreakdown {
+    pub fn hits(&self) -> u32 {
+        self.singles + self.doubles + self.triples + self.home_runs
+    }
+    pub fn total_bases(&self) -> u32 {
+        self.singles + 2 * self.doubles + 3 * self.triples + 4 * self.home_runs
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BatterLine {
     pub plate_appearances: u32,
     pub credited_hits: u32,
+    /// None if any supplied Hit in this player's segment lacks scored value.
+    pub credited_hit_breakdown: Option<HitBreakdown>,
     pub credited_walks: u32,
     pub credited_strikeouts: u32,
     pub credited_runs: u32,
@@ -31,6 +50,7 @@ impl Default for BatterLine {
         Self {
             plate_appearances: 0,
             credited_hits: 0,
+            credited_hit_breakdown: Some(HitBreakdown::default()),
             credited_walks: 0,
             credited_strikeouts: 0,
             credited_runs: 0,
@@ -52,6 +72,8 @@ pub struct PitcherLine {
     pub at_bats_against: Option<u32>,
     pub runs_allowed: u32,
     pub credited_hits_allowed: u32,
+    /// Actual PA pitcher's supplied Hit breakdown; not carried run charges.
+    pub credited_hit_breakdown_allowed: Option<HitBreakdown>,
     pub credited_walks_allowed: u32,
     pub credited_strikeouts: u32,
     pub credited_hit_batters: u32,
@@ -70,6 +92,7 @@ impl Default for PitcherLine {
             at_bats_against: Some(0),
             runs_allowed: 0,
             credited_hits_allowed: 0,
+            credited_hit_breakdown_allowed: Some(HitBreakdown::default()),
             credited_walks_allowed: 0,
             credited_strikeouts: 0,
             credited_hit_batters: 0,
@@ -105,6 +128,27 @@ pub enum AccountingError {
     EmptyLog,
     Discontinuous,
     ScoreMismatch,
+}
+
+fn add_hit(breakdown: &mut Option<HitBreakdown>, event: &Event) {
+    let value = if event.kind == EventKind::OutOfParkHomeRun {
+        Some(4)
+    } else {
+        event.delta.credits.iter().find_map(|c| match c.kind {
+            CreditKind::Single => Some(1),
+            CreditKind::Double => Some(2),
+            CreditKind::Triple => Some(3),
+            _ => None,
+        })
+    };
+    match (breakdown.as_mut(), value) {
+        (_, None) => *breakdown = None,
+        (Some(line), Some(1)) => line.singles += 1,
+        (Some(line), Some(2)) => line.doubles += 1,
+        (Some(line), Some(3)) => line.triples += 1,
+        (Some(line), Some(4)) => line.home_runs += 1,
+        _ => {} // An earlier unclassified Hit cannot be restored by later facts.
+    }
 }
 
 fn starts_game(state: &GameState) -> bool {
@@ -308,10 +352,12 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 CreditKind::PlateAppearance => batter.plate_appearances += 1,
                 CreditKind::Hit => {
                     batter.credited_hits += 1;
-                    result.pitchers[defense]
+                    add_hit(&mut batter.credited_hit_breakdown, event);
+                    let pitcher = result.pitchers[defense]
                         .entry(current_pitcher.into())
-                        .or_default()
-                        .credited_hits_allowed += 1;
+                        .or_default();
+                    pitcher.credited_hits_allowed += 1;
+                    add_hit(&mut pitcher.credited_hit_breakdown_allowed, event);
                 }
                 CreditKind::Walk => {
                     batter.credited_walks += 1;
@@ -348,7 +394,10 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 CreditKind::Rbi => batter.credited_rbi += 1,
                 CreditKind::StolenBase => batter.credited_steals += 1,
                 CreditKind::CaughtStealing => batter.credited_caught_stealing += 1,
-                CreditKind::AtBat => {} // already included in the PA classification
+                CreditKind::AtBat
+                | CreditKind::Single
+                | CreditKind::Double
+                | CreditKind::Triple => {} // classification, not another credit unit
                 CreditKind::HitByPitch => {
                     batter.credited_hit_by_pitch += 1;
                     result.pitchers[defense]

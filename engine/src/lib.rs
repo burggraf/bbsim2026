@@ -147,6 +147,10 @@ pub enum CreditKind {
     SacrificeBunt,
     SacrificeFly,
     InterferenceAward,
+    /// Scorer hit-value modifiers; each requires one Hit, not another hit unit.
+    Single,
+    Double,
+    Triple,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credit {
@@ -494,7 +498,10 @@ impl EventTransition {
                 | CreditKind::HitByPitch
                 | CreditKind::SacrificeBunt
                 | CreditKind::SacrificeFly
-                | CreditKind::InterferenceAward => {
+                | CreditKind::InterferenceAward
+                | CreditKind::Single
+                | CreditKind::Double
+                | CreditKind::Triple => {
                     is_pa && event.participants.batter.as_deref() == Some(credit.player_id.as_str())
                 }
                 CreditKind::StolenBase => event.delta.moves.iter().any(|m| {
@@ -579,6 +586,7 @@ impl EventTransition {
         {
             return Err(TransitionError::IllegalCredit);
         }
+        rules::validate_hit_value(&before, &event)?;
         // Rules 5.05(a)(2), 5.09(a)(3): with first occupied before
         // two outs, the third strike retires the batter automatically. A
         // same-play runner advance cannot make him eligible after the fact.

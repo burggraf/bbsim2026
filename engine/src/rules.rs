@@ -121,6 +121,8 @@ pub(crate) fn batter_charge<'a>(
     before: &'a GameState,
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
+    // Credit-only contradictions must not be masked by unknown FC lineage.
+    let _ = hit_value_credit(event)?;
     let current = before.teams[1 - before.half.offense()].pitcher.as_str();
     if event.kind == EventKind::FieldersChoice {
         if before.bases.iter().flatten().count() != 1
@@ -354,6 +356,101 @@ pub(crate) fn scored_runners(
         }
     };
     Ok(scored)
+}
+
+/// Credit-only prerequisites, safe before any movement/charge inference.
+fn hit_value_credit(event: &Event) -> Result<Option<u8>, TransitionError> {
+    let mut values = event
+        .delta
+        .credits
+        .iter()
+        .filter_map(|credit| match credit.kind {
+            CreditKind::Single => Some(1),
+            CreditKind::Double => Some(2),
+            CreditKind::Triple => Some(3),
+            _ => None,
+        });
+    let Some(value) = values.next() else {
+        return Ok(None);
+    };
+    if values.next().is_some()
+        || event.kind != EventKind::PlateAppearance
+        || event
+            .delta
+            .credits
+            .iter()
+            .filter(|c| c.kind == CreditKind::Hit)
+            .count()
+            != 1
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(Some(value))
+}
+
+/// Rule 9.06: supplied scorer value is not inferred from final advancement.
+/// This first subset lacks retirement location/touch and misplay-cause facts.
+pub(crate) fn validate_hit_value(before: &GameState, event: &Event) -> Result<(), TransitionError> {
+    let Some(value) = hit_value_credit(event)? else {
+        return Ok(());
+    };
+    let batter = event
+        .delta
+        .moves
+        .iter()
+        .find(|m| m.from == Base::Plate)
+        .expect("validated PA");
+    let destination = match batter.to {
+        Destination::First => 1,
+        Destination::Second => 2,
+        Destination::Third => 3,
+        Destination::Home => 4,
+        Destination::Out => return Err(TransitionError::UnsupportedRule),
+    };
+    if value > destination {
+        return Err(TransitionError::IllegalCredit);
+    }
+    // Ordinary walk-off value cannot exceed the winning runner's advance.
+    // Without order facts, test every possible winner rather than Vec order.
+    if before.inning >= 9
+        && before.half == Half::Bottom
+        && before.score[1] <= before.score[0]
+        && before.score[1]
+            .checked_add(u16::from(event.delta.runs))
+            .is_some_and(|home| home > before.score[0])
+    {
+        let ceilings: Vec<_> = event
+            .delta
+            .moves
+            .iter()
+            .filter(|m| {
+                m.to == Destination::Home
+                    && event
+                        .delta
+                        .credits
+                        .iter()
+                        .any(|c| c.kind == CreditKind::Run && c.player_id == m.runner.player_id)
+            })
+            .map(|m| match m.from {
+                Base::Plate => 4,
+                Base::First => 3,
+                Base::Second => 2,
+                Base::Third => 1,
+            })
+            .collect();
+        if ceilings.iter().all(|ceiling| value > *ceiling) {
+            return Err(TransitionError::IllegalCredit);
+        }
+        if ceilings.iter().any(|ceiling| value > *ceiling) {
+            return Err(TransitionError::UnsupportedRule);
+        }
+    }
+    if event.delta.outs > 0
+        || (value > 1 && event.fielding_review != super::FieldingReview::NoMisplay)
+    {
+        return Err(TransitionError::UnsupportedRule);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

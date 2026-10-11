@@ -266,7 +266,7 @@ fn versioned_record_roundtrips_and_rejects_corruption() {
     let transition =
         EventTransition::try_new(before.clone(), wild_pitch_event(&before), after).unwrap();
     let bytes = transition.to_bytes();
-    assert!(bytes.starts_with(b"BBE11"));
+    assert!(bytes.starts_with(b"BBE12"));
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     assert!(EventTransition::from_bytes(&bytes[..bytes.len() - 1]).is_err());
     let mut trailing = bytes.clone();
