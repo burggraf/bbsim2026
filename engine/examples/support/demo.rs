@@ -135,6 +135,7 @@ pub fn scripted_game() -> Result<Vec<EventTransition>, TransitionError> {
             two_out_contact: None,
             single_delivery: None,
             balk: None,
+            ordinary_ground_throw: None,
         };
         let transition = apply(&state, event)?;
         state = transition.after().clone();

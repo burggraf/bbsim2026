@@ -54,6 +54,7 @@ fn fixture(half: Half, outs: u8, mask: u8, advancing: u8, passed: bool) -> (Game
         },
         two_out_contact: None,
         balk: None,
+        ordinary_ground_throw: None,
         single_delivery: Some(SingleDeliveryFacts {
             context: DeliveryContext::UncaughtThirdStrike,
             handling: if passed {
@@ -157,7 +158,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
     );
     let reduced = reduced.unwrap();
     assert_eq!(direct.unwrap(), reduced);
-    assert_eq!(&reduced.to_bytes()[..5], b"BBE19");
+    assert_eq!(&reduced.to_bytes()[..5], b"BBE20");
     assert_eq!(
         EventTransition::from_bytes(&reduced.to_bytes()).unwrap(),
         reduced
@@ -744,14 +745,14 @@ fn complete_wire_accepts_explicit_first_touch_then_catcher_throw_to_second() {
     let old = wire_event(&event);
     let offset = unique_offset(&bytes, &old);
     let mut changed = old.clone();
-    assert_eq!(&changed[changed.len() - 2..], &[0, 0]);
-    changed.truncate(changed.len() - 2); // Unknown recovery, then no balk
+    assert_eq!(&changed[changed.len() - 3..], &[0, 0, 0]);
+    changed.truncate(changed.len() - 3); // Unknown recovery, no balk, no ground
     changed.push(5); // new bound after-First catcher throw
     wire_string(&mut changed, &receiver);
     changed.push(wire_destination(Destination::Second));
-    changed.push(0); // no balk
+    changed.extend([0, 0]); // no balk or ground facts
     bytes.splice(offset..offset + old.len(), changed);
-    bytes[..5].copy_from_slice(b"BBE19");
+    bytes[..5].copy_from_slice(b"BBE20");
     assert_eq!(
         EventTransition::from_bytes(&bytes).map(|t| t.event().delta.outs),
         Ok(1)
@@ -2558,7 +2559,8 @@ fn wire_event(event: &Event) -> Vec<u8> {
         Some(facts) => bytes.extend_from_slice(&wire_delivery(facts)),
         None => bytes.push(0),
     }
-    bytes.push(0); // no balk
+    assert!(event.ordinary_ground_throw.is_none());
+    bytes.extend([0, 0]); // no balk or ground facts
     bytes
 }
 fn unique_offset(bytes: &[u8], needle: &[u8]) -> usize {

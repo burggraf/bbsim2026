@@ -49,6 +49,7 @@ fn substitution(before: &GameState, changes: Vec<PersonnelChange>) -> Event {
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        ordinary_ground_throw: None,
     }
 }
 fn batter_out(before: &GameState) -> Event {
@@ -81,6 +82,7 @@ fn batter_out(before: &GameState) -> Event {
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        ordinary_ground_throw: None,
     }
 }
 

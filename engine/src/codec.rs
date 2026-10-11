@@ -1,4 +1,4 @@
-//! Version 19 canonical binary event record. Little-endian integers, length-prefixed UTF-8;
+//! Version 20 canonical binary event record. Little-endian integers, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
 
@@ -428,6 +428,11 @@ binary_struct!(BalkFacts {
     disposition,
     resolution
 });
+binary_struct!(OrdinaryGroundThrowFacts {
+    batter_id,
+    thrower_id,
+    receiver_id
+});
 binary_struct!(Event {
     kind,
     participants,
@@ -435,13 +440,14 @@ binary_struct!(Event {
     delta,
     two_out_contact,
     single_delivery,
-    balk
+    balk,
+    ordinary_ground_throw
 });
 
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE19".to_vec();
+        let mut out = b"BBE20".to_vec();
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
@@ -449,7 +455,7 @@ impl EventTransition {
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
         let payload = bytes
-            .strip_prefix(b"BBE19")
+            .strip_prefix(b"BBE20")
             .ok_or(TransitionError::InvalidEncoding)?;
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;

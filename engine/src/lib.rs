@@ -5,6 +5,7 @@ pub mod accounting;
 mod balk;
 mod codec;
 mod contact;
+mod ground;
 mod pitch;
 mod reducer;
 mod rules;
@@ -383,6 +384,15 @@ pub struct BalkFacts {
     pub disposition: BalkDisposition,
     pub resolution: BalkResolution,
 }
+/// One ordinary non-bunt fair ground ball, controlled and directly thrown to
+/// the named first-covering receiver before the actual batter's first touch.
+/// No other contact touch/throw/retirement; before runners hold throughout.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrdinaryGroundThrowFacts {
+    pub batter_id: String,
+    pub thrower_id: String,
+    pub receiver_id: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -392,6 +402,7 @@ pub struct Event {
     pub two_out_contact: Option<TwoOutContactFacts>,
     pub single_delivery: Option<SingleDeliveryFacts>,
     pub balk: Option<BalkFacts>,
+    pub ordinary_ground_throw: Option<OrdinaryGroundThrowFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -415,6 +426,18 @@ pub struct EventTransition {
 }
 
 impl EventTransition {
+    /// Event-local qualified PO/A only, not a complete-game fielding certificate.
+    pub fn ordinary_ground_fielding(&self) -> Option<accounting::FieldingContribution> {
+        if self.event.fielding_review != FieldingReview::NoMisplay {
+            return None;
+        }
+        let facts = self.event.ordinary_ground_throw.as_ref()?;
+        Some(accounting::FieldingContribution {
+            putouts: [(facts.receiver_id.clone(), 1)].into(),
+            assists: [(facts.thrower_id.clone(), 1)].into(),
+        })
+    }
+
     pub fn try_new(
         before: GameState,
         event: Event,

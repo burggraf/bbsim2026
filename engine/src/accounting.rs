@@ -9,6 +9,14 @@ use crate::{
     Half, RunnerEvent,
 };
 
+/// Complete PO/A within one qualified event's before-defense scope only.
+/// Absent actors have zero in that scope; None at the API means missing proof.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FieldingContribution {
+    pub putouts: BTreeMap<String, u32>,
+    pub assists: BTreeMap<String, u32>,
+}
+
 /// Breakdown of supplied Hit credits, not proof of complete official H/TB.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HitBreakdown {

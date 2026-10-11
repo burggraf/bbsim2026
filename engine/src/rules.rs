@@ -302,7 +302,7 @@ pub(crate) fn finalize_personnel(
     Ok(())
 }
 
-fn validate_no_hit(event: &Event) -> Result<(), TransitionError> {
+pub(crate) fn validate_no_hit(event: &Event) -> Result<(), TransitionError> {
     let mut decisions = event
         .delta
         .credits
@@ -333,6 +333,8 @@ pub(crate) fn batter_charge<'a>(
     before: &'a GameState,
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
+    // Known bound contact facts precede unrelated occurrence/charge uncertainty.
+    super::ground::validate(before, event)?;
     // Credit-only contradictions must not be masked by unknown FC lineage.
     super::balk::preflight(before, event)?;
     super::pitch::preflight(before, event)?;

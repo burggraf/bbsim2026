@@ -313,6 +313,12 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
     } else {
         None
     };
+    let ordinary_ground_throw =
+        (outcome == Outcome::ContactOut).then(|| bbsim_engine::OrdinaryGroundThrowFacts {
+            batter_id: batter.clone(),
+            thrower_id: defense.batting_order[3].clone(),
+            receiver_id: defense.batting_order[1].clone(),
+        });
     Ok(Event {
         kind,
         participants: Participants {
@@ -335,6 +341,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        ordinary_ground_throw,
     })
 }
 

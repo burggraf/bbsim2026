@@ -57,6 +57,7 @@ fn fixture(half: Half, outs: u8, mask: u8) -> (GameState, Event) {
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
         single_delivery: None,
+        ordinary_ground_throw: None,
         balk: Some(BalkFacts {
             cause: BalkCause::PitcherAction602a,
             disposition: BalkDisposition::PenaltyApplied,
@@ -94,7 +95,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
         transition
     );
     let bytes = transition.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE19");
+    assert_eq!(&bytes[..5], b"BBE20");
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     transition
 }

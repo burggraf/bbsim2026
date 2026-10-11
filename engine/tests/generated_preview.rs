@@ -149,6 +149,42 @@ fn splitmix_vectors_and_sampler_frequencies_are_fixed() {
 }
 
 #[test]
+fn only_chosen_contact_out_supplies_bound_ground_throw_evidence() {
+    for outcome in ALL {
+        let before = initial();
+        let event = preview::event_for(&before, outcome).unwrap();
+        let t = apply(&before, event.clone()).unwrap();
+        if outcome == Outcome::ContactOut {
+            let facts = event
+                .ordinary_ground_throw
+                .as_ref()
+                .expect("chosen direct ground throw");
+            assert_eq!(facts.batter_id, "Away-1");
+            assert_eq!(facts.thrower_id, "Home-4");
+            assert_eq!(facts.receiver_id, "Home-2");
+            let contribution = t
+                .ordinary_ground_fielding()
+                .expect("qualified contact evidence");
+            assert_eq!(contribution.putouts, [("Home-2".into(), 1)].into());
+            assert_eq!(contribution.assists, [("Home-4".into(), 1)].into());
+            let mut generic = event;
+            generic.ordinary_ground_throw = None;
+            let old = apply(&before, generic).unwrap();
+            assert_eq!(old.before(), t.before());
+            assert_eq!(old.after(), t.after());
+            assert_eq!(old.event().delta, t.event().delta);
+            assert_eq!(
+                derive_accounting(&[old]).unwrap(),
+                derive_accounting(&[t]).unwrap()
+            );
+        } else {
+            assert!(event.ordinary_ground_throw.is_none());
+            assert_eq!(t.ordinary_ground_fielding(), None);
+        }
+    }
+}
+
+#[test]
 fn every_category_has_a_legal_engine_event() {
     for outcome in ALL {
         let before = initial();
@@ -192,6 +228,14 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                         let event = preview::event_for(&before, outcome).unwrap();
                         let t=apply(&before,event).unwrap_or_else(|e|panic!("context{context} {half:?} outs{outs} mask{mask} {outcome:?}: {e:?}"));
                         assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
+                        assert_eq!(
+                            t.event().ordinary_ground_throw.is_some(),
+                            outcome == Outcome::ContactOut
+                        );
+                        assert_eq!(
+                            t.ordinary_ground_fielding().is_some(),
+                            outcome == Outcome::ContactOut
+                        );
                         // Literal controls for the reproduced winning-order failure and
                         // the loaded walk-off; legality alone does not freeze v1 policy.
                         if half == Half::Bottom && outs == 0 && outcome == Outcome::Triple {

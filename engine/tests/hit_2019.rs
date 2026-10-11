@@ -94,6 +94,7 @@ fn force_event(before: &GameState, out_base: usize, reverse: bool) -> Event {
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        ordinary_ground_throw: None,
     }
 }
 
@@ -296,6 +297,7 @@ fn supplied_hits_with_other_retirements_are_not_inferred_as_force_outs() {
                 two_out_contact: None,
                 single_delivery: None,
                 balk: None,
+                ordinary_ground_throw: None,
             };
             let valid = apply(&before, event).unwrap();
             assert_line(&valid, 1);

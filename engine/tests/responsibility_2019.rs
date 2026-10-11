@@ -56,6 +56,7 @@ fn action(
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        ordinary_ground_throw: None,
         delta: Delta {
             moves,
             outs,
