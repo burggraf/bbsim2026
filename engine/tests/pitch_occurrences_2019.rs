@@ -1000,7 +1000,7 @@ fn a_qualified_pb_uses_the_asserted_catcher_without_a_pitcher_wp() {
 }
 
 #[test]
-fn automatic_k_positive_qualification_stays_unsupported_but_legacy_pb_is_partial() {
+fn automatic_k_positive_qualification_is_supported_and_legacy_pb_remains_partial() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..2 {
             let (before, mut event) = pa_delivery(half, outs, 1, false);
@@ -1008,12 +1008,7 @@ fn automatic_k_positive_qualification_stays_unsupported_but_legacy_pb_is_partial
             event.delta.outs = 1;
             event.single_delivery.as_mut().unwrap().advances.remove(0);
             let after = legacy_after(&before, &event);
-            rejected(
-                &before,
-                event.clone(),
-                &after,
-                TransitionError::UnsupportedRule,
-            );
+            assert_eq!(accepted(&before, event.clone()).after(), &after);
             let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
             event.single_delivery = None;
             event.fielding_review = FieldingReview::Unknown;

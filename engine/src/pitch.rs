@@ -118,16 +118,36 @@ fn stolen_base_history(
     Ok(unresolved)
 }
 
+/// This one automatic batter out is not a defensive recovery retirement.
+/// Other retirement/touch histories remain unbound; never subtract all K outs.
+fn automatic_out_only(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> bool {
+    facts.context == DeliveryContext::UncaughtThirdStrike
+        && crate::rules::strikeout_first_ineligible(before, event)
+        && event.delta.outs == 1
+        && event.delta.third_out.is_none()
+        && event
+            .delta
+            .moves
+            .iter()
+            .any(|m| m.from == Base::Plate && m.to == Destination::Out)
+        && event
+            .delta
+            .moves
+            .iter()
+            .all(|m| m.from == Base::Plate || m.to != Destination::Out)
+}
+
 /// Supported final reaches, awards, steal starts and bounded recovery order.
 fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts) -> Option<bool> {
     if event.kind == EventKind::RunnerOnly(RunnerEvent::Balk) {
         return None;
     }
+    let automatic = automatic_out_only(before, event, facts);
     match &facts.recovery {
         RecoveryReview::BeforeAnyAdvance { .. }
         | RecoveryReview::RecoveredThirdStrikeBatterBeforeFirst => return Some(false),
         RecoveryReview::Unknown => return None,
-        RecoveryReview::NoRecoveryPutout if event.delta.outs != 0 => return None,
+        RecoveryReview::NoRecoveryPutout if event.delta.outs != 0 && !automatic => return None,
         RecoveryReview::AfterAdvance { .. } if event.delta.outs != 1 => return None,
         _ => {}
     }
@@ -138,6 +158,7 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
             .iter()
             .any(|m| m.runner.player_id == a.runner_id && m.to == a.reached)
     }) || (facts.context == DeliveryContext::UncaughtThirdStrike
+        && !automatic
         && !event
             .delta
             .moves
@@ -146,7 +167,19 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
     {
         return None;
     }
-    let mut unresolved = false;
+    // Supplied causality is not exhaustive review. In the automatic family,
+    // an empty vector (even with no final advance), or an unbound final advance,
+    // cannot certify suppression. An independent known qualifier may still win.
+    let mut unresolved = automatic
+        && (facts.advances.is_empty()
+            || event.delta.moves.iter().any(|m| {
+                m.from != Base::Plate
+                    && destination_rank(m.to).is_some_and(|rank| rank > base_rank(m.from))
+                    && !facts
+                        .advances
+                        .iter()
+                        .any(|a| a.runner_id == m.runner.player_id && a.reached == m.to)
+            }));
     for advance in &facts.advances {
         if let RecoveryReview::AfterAdvance { advancer_id, .. } = &facts.recovery {
             if &advance.runner_id != advancer_id {
@@ -280,6 +313,17 @@ fn recovery_facts(
 }
 
 pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), TransitionError> {
+    if event
+        .single_delivery
+        .as_ref()
+        .is_some_and(|facts| facts.context == DeliveryContext::UncaughtThirdStrike)
+    {
+        crate::rules::validate_snapshot(before)?;
+        if before.over {
+            return Err(TransitionError::InvalidState);
+        }
+        crate::rules::validate_participants(before, event)?;
+    }
     let defense = &before.teams[1 - before.half.offense()];
     if event
         .delta
@@ -346,15 +390,70 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
     if !context_matches {
         return Err(TransitionError::IllegalCredit);
     }
+    if facts.context == DeliveryContext::UncaughtThirdStrike {
+        crate::rules::validate_event_shape(event)?;
+        // A retired batter cannot be an ambiguous safe FC replacement. Its
+        // canonical current-pitcher charge is known without recursive inference.
+        let retired_batter = event
+            .delta
+            .moves
+            .iter()
+            .any(|m| m.from == Base::Plate && m.to == Destination::Out);
+        crate::rules::validate_move_origins(
+            &before.bases,
+            event,
+            retired_batter.then_some(defense.pitcher.as_str()),
+        )?;
+        let _ = crate::rules::move_destinations(before.bases.clone(), event)?;
+        let total_outs = crate::rules::validate_outs(before, event)?;
+        if total_outs < 3 {
+            crate::rules::validate_run_credits(before, event, total_outs)?;
+        }
+    }
     for advance in &facts.advances {
         let movement = event
             .delta
             .moves
             .iter()
-            .find(|m| m.runner.player_id == advance.runner_id)
-            .ok_or(TransitionError::IllegalCredit)?;
+            .find(|m| m.runner.player_id == advance.runner_id);
+        if advance.reached == Destination::Home
+            && automatic_out_only(before, event, facts)
+            && before
+                .bases
+                .iter()
+                .flatten()
+                .any(|runner| runner.player_id == advance.runner_id)
+            && movement.is_none_or(|m| m.to != Destination::Home)
+        {
+            // A legal Home acquisition scores in this non-third-out frame;
+            // returning cannot nullify it (5.08(a) Comment). Missing pitch
+            // review cannot turn that known final-state conflict into unknown.
+            return Err(TransitionError::DeltaMismatch);
+        }
+        let Some(movement) = movement else {
+            let origin = before
+                .bases
+                .iter()
+                .position(|runner| {
+                    runner
+                        .as_ref()
+                        .is_some_and(|r| r.player_id == advance.runner_id)
+                })
+                .filter(|_| automatic_out_only(before, event, facts))
+                .ok_or(TransitionError::IllegalCredit)?;
+            if destination_rank(advance.reached).is_none_or(|rank| rank <= origin as u8 + 1) {
+                return Err(TransitionError::IllegalCredit);
+            }
+            // A known held before runner may have reached Second/Third and
+            // returned with no net move. Qualification defers that chronology; it is
+            // not the foreign-actor contradiction, nor a new positive qualifier.
+            continue;
+        };
         if destination_rank(advance.reached).is_none_or(|rank| rank <= base_rank(movement.from))
             || (movement.from == Base::Plate && facts.context == DeliveryContext::RunnerOnly)
+            || (movement.from == Base::Plate
+                && facts.context == DeliveryContext::UncaughtThirdStrike
+                && crate::rules::strikeout_first_ineligible(before, event))
         {
             return Err(TransitionError::IllegalCredit);
         }

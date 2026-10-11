@@ -610,6 +610,40 @@ pub(crate) fn validate_move_origins(
     Ok(())
 }
 
+/// Canonical simultaneous destination reconstruction after origin validation.
+/// Remove every origin before inserting destinations; held/duplicate bases conflict.
+pub(crate) fn move_destinations(
+    mut bases: [Option<Runner>; 3],
+    event: &Event,
+) -> Result<[Option<Runner>; 3], TransitionError> {
+    let mut destinations = Vec::new();
+    for movement in &event.delta.moves {
+        match movement.from {
+            Base::Plate => {}
+            Base::First => bases[0] = None,
+            Base::Second => bases[1] = None,
+            Base::Third => bases[2] = None,
+        }
+        match movement.to {
+            Destination::Out | Destination::Home => {}
+            destination => destinations.push((destination, movement.runner.clone())),
+        }
+    }
+    for (destination, runner) in destinations {
+        let index = match destination {
+            Destination::First => 0,
+            Destination::Second => 1,
+            Destination::Third => 2,
+            _ => unreachable!(),
+        };
+        if bases[index].is_some() {
+            return Err(TransitionError::DeltaMismatch);
+        }
+        bases[index] = Some(runner);
+    }
+    Ok(bases)
+}
+
 /// Represented retirement conservation; does not infer a retirement's cause/order.
 pub(crate) fn validate_outs(before: &GameState, event: &Event) -> Result<u8, TransitionError> {
     let outs_made = u8::try_from(

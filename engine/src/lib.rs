@@ -499,19 +499,6 @@ impl EventTransition {
             return Err(TransitionError::IllegalStateChange);
         }
         rules::validate_move_origins(&expected_bases, &event, Some(batter_charge))?;
-        let mut destinations = Vec::new();
-        for movement in &event.delta.moves {
-            match movement.from {
-                Base::Plate => {}
-                Base::First => expected_bases[0] = None,
-                Base::Second => expected_bases[1] = None,
-                Base::Third => expected_bases[2] = None,
-            }
-            match movement.to {
-                Destination::Out | Destination::Home => {}
-                destination => destinations.push((destination, movement.runner.clone())),
-            }
-        }
         let total_outs = rules::validate_outs(&before, &event)?;
         rules::validate_home_run(&before, &event)?;
         rules::validate_run_credits(&before, &event, total_outs)?;
@@ -593,18 +580,7 @@ impl EventTransition {
             // metadata; Plate -> Out alone cannot establish the award.
             return Err(TransitionError::UnsupportedRule);
         }
-        for (destination, runner) in destinations {
-            let index = match destination {
-                Destination::First => 0,
-                Destination::Second => 1,
-                Destination::Third => 2,
-                _ => unreachable!(),
-            };
-            if expected_bases[index].is_some() {
-                return Err(TransitionError::DeltaMismatch);
-            }
-            expected_bases[index] = Some(runner);
-        }
+        expected_bases = rules::move_destinations(expected_bases, &event)?;
         if before.score[1 - offense] != after.score[1 - offense]
             || before.score[offense].checked_add(u16::from(event.delta.runs))
                 != Some(after.score[offense])

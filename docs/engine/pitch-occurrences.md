@@ -2,6 +2,8 @@
 
 **Accepted/pushed bounded checkpoint `3059fbc`.** Schema/counter and bounded K/BB/steal/recovery qualification have test-first verified implementations and substantive retained review. Unchanged final parent checks passed; publication status belongs to PROGRESS. However, automatic-K/ambiguous retired-batter and richer occurrence contexts remain unfinished prerequisites. Builds on accepted `3ca87eb` and the [approved G1 matrix](g1-accounting-scope.md). [PROGRESS](../PROGRESS.md) owns live status. This is an occurrence/credit seam, not complete scoring coverage, a pitch-count engine, ER reconstruction or G1 signoff.
 
+The [accepted automatic-K follow-on](automatic-k-pitches.md) reuses these facts/`BBE17` without changing this checkpoint's historical verification. It distinguishes automatic retirement from defensive recovery, adds before-runner positive qualification and preserves non-exhaustive causal uncertainty/known guards. Fresh/retained review and unchanged final checks support this bounded seam; publication/live evidence remain in PROGRESS; ambiguous/richer histories and complete coverage still require work.
+
 ## Primary boundary and remaining work
 
 Cached 2019 Official Baseball Rules: 9.13(a),(b) and Comment (printed128–129; cached text5095–5140); 9.12(f)(1),(2) (127;5072–5089); 9.07(a) (116;4654–4665); 9.15(a)(2),(3) (130;5169–5173). Primary artifact/provenance is retained in the existing [2019 rules](2019-rules.md) evidence. Scorer assessments may be supplied, but causal/temporal/actor facts must reconcile with the canonical transition.
