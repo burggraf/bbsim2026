@@ -142,8 +142,8 @@ pub enum AccountingError {
     ScoreMismatch,
 }
 
-fn add_hit(breakdown: &mut Option<HitBreakdown>, event: &Event) {
-    let value = if event.kind == EventKind::OutOfParkHomeRun {
+fn hit_value(event: &Event) -> Option<usize> {
+    if event.kind == EventKind::OutOfParkHomeRun {
         Some(4)
     } else {
         event.delta.credits.iter().find_map(|c| match c.kind {
@@ -152,8 +152,11 @@ fn add_hit(breakdown: &mut Option<HitBreakdown>, event: &Event) {
             CreditKind::Triple => Some(3),
             _ => None,
         })
-    };
-    match (breakdown.as_mut(), value) {
+    }
+}
+
+fn add_hit(breakdown: &mut Option<HitBreakdown>, event: &Event) {
+    match (breakdown.as_mut(), hit_value(event)) {
         (_, None) => *breakdown = None,
         (Some(line), Some(1)) => line.singles += 1,
         (Some(line), Some(2)) => line.doubles += 1,
@@ -171,9 +174,55 @@ fn starts_game(state: &GameState) -> bool {
         && state.bases.iter().all(Option::is_none)
 }
 
+// These new safe-PA shapes do not certify extra episodes or fielding chances.
+fn simple_safe_pa_episode(event: &Event) -> bool {
+    event.delta.outs == 0
+        && event.delta.changes.is_empty()
+        && event.two_out_contact.is_none()
+        && event.single_delivery.is_none()
+        && event.balk.is_none()
+        && !event.delta.credits.iter().any(|c| {
+            matches!(
+                c.kind,
+                CreditKind::StolenBase
+                    | CreditKind::CaughtStealing
+                    | CreditKind::WildPitch
+                    | CreditKind::Balk
+                    | CreditKind::Putout
+                    | CreditKind::Assist
+            )
+        })
+}
+
+// Canonical transitions already validate actors, origins, charges, scorer
+// value, runs and collisions. Require the complete station advancement shape;
+// a safe final snapshot alone does not supply the omitted play history.
+fn clean_station_hit(before: &GameState, event: &Event) -> bool {
+    let Some(value @ 1..=3) = hit_value(event) else {
+        return false;
+    };
+    let destinations = [
+        Destination::First,
+        Destination::Second,
+        Destination::Third,
+        Destination::Home,
+    ];
+    simple_safe_pa_episode(event)
+        && event.delta.moves.len() == before.bases.iter().filter(|b| b.is_some()).count() + 1
+        && event.delta.moves.iter().all(|m| {
+            let from = match m.from {
+                Base::Plate => 0,
+                Base::First => 1,
+                Base::Second => 2,
+                Base::Third => 3,
+            };
+            m.to == destinations[(from + value - 1).min(3)]
+        })
+}
+
 /// A deliberately narrow errorless-play proof. Absence of an Error credit
 /// alone is not proof: generic contact/advancement may conceal a misplay.
-fn clean_play(event: &Event) -> bool {
+fn clean_play(before: &GameState, event: &Event) -> bool {
     if event.fielding_review != FieldingReview::NoMisplay {
         return false;
     }
@@ -192,23 +241,24 @@ fn clean_play(event: &Event) -> bool {
         EventKind::FieldersChoice => true,
         EventKind::PlateAppearance => {
             let m = &event.delta.moves;
-            m.len() == 1
-                && m[0].from == Base::Plate
-                && event.delta.runs == 0
-                && ((m[0].to == Destination::Out
-                    && event.delta.outs == 1
-                    && event
-                        .delta
-                        .credits
-                        .iter()
-                        .any(|c| c.kind == CreditKind::Strikeout))
-                    || (m[0].to == Destination::First
-                        && event.delta.outs == 0
+            clean_station_hit(before, event)
+                || (m.len() == 1
+                    && m[0].from == Base::Plate
+                    && event.delta.runs == 0
+                    && ((m[0].to == Destination::Out
+                        && event.delta.outs == 1
                         && event
                             .delta
                             .credits
                             .iter()
-                            .any(|c| c.kind == CreditKind::Walk)))
+                            .any(|c| c.kind == CreditKind::Strikeout))
+                        || (m[0].to == Destination::First
+                            && event.delta.outs == 0
+                            && event.delta.credits.iter().any(|c| {
+                                c.kind == CreditKind::Walk
+                                    || (c.kind == CreditKind::HitByPitch
+                                        && simple_safe_pa_episode(event))
+                            }))))
         }
         EventKind::RunnerOnly(RunnerEvent::WildPitch) => {
             let m = &event.delta.moves;
@@ -272,7 +322,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             clean_half = before.outs == 0 && before.bases.iter().all(Option::is_none);
             half_runs.clear();
         }
-        clean_half &= clean_play(event);
+        clean_half &= clean_play(before, event);
         let offense = before.half.offense();
         let defense = 1 - offense;
         let credited_runs = event

@@ -10,7 +10,7 @@ The fold builds player batting credits (PA, classified AB where possible, hit, w
 
 **Conservative ER checkpoint (2019 Rule 9.16, `BBE10`):** `Event.fielding_review` is required. `Unknown` preserves absent source evidence; `NoMisplay` is an explicit scorer/source assertion that **all** fielding chances, including muffed foul flies, were reviewed and no error, passed ball, interference or obstruction occurred. An absence of Error credits is not such a review. Contradictory Error/PassedBall/InterferenceAward credits or a passed-ball event kind are rejected with `NoMisplay`. Existing F-02 fixtures remain `Unknown`.
 
-The fold certifies positive earned runs only for a **completed, fully observed clean half**: the log starts at the empty 1st/top 0–0 state or contains its preceding half boundary, and every event has `NoMisplay` plus one of the narrow proven shapes (out-of-park HR, lone batter K-out, lone walk-to-first, one-base wild-pitch advance, validated lone-runner FC, or substitution). A later zero-out/empty-base segment start is not proof of an observed boundary; it could follow an unobserved solo HR or earlier missed chances. A reviewed HR walk-off can complete a half. Any uncertain charged run makes that pitcher's segment ER `None`, and a later clean half cannot restore a known total. Runs stay charged to carried responsible pitchers, including inherited runners. A pitcher with **zero charged runs in the segment** has ER `Some(0)` even when other players' ER is unknown; this says nothing about an unobserved portion of the game. Generic contact, errors, passed balls and interference still require full scorer reconstruction; even `NoMisplay` does not yet certify generic plays.
+The fold certifies positive earned runs only for a **completed, fully observed clean half**: the log starts at the empty 1st/top 0–0 state or contains its preceding half boundary, and every event has `NoMisplay` plus one of the narrow proven shapes (out-of-park HR, lone batter K-out, lone walk-to-first, [bounded station hits and simple HBP](clean-safe-pa-er.md), one-base wild-pitch advance, validated lone-runner FC, or substitution). A later zero-out/empty-base segment start is not proof of an observed boundary; it could follow an unobserved solo HR or earlier missed chances. A reviewed HR walk-off can complete a half. Any uncertain charged run makes that pitcher's segment ER `None`, and a later clean half cannot restore a known total. Runs stay charged to carried responsible pitchers, including inherited runners. A pitcher with **zero charged runs in the segment** has ER `Some(0)` even when other players' ER is unknown; this says nothing about an unobserved portion of the game. Generic contact, errors, passed balls and interference still require full scorer reconstruction; even `NoMisplay` does not yet certify generic plays.
 
 Thirteen additional accounting regressions/properties cover reviewed vs unreviewed plays, each missing-review position, WP vs PB, error-before-HR uncertainty, inherited runs, unfinished/partial halves, observed boundaries, cumulative uncertainty, generic contact, clean walk-offs, contradictory review facts and codec review roundtrip. Raw red/green logs remain outside Git at `/tmp/bbsim-e03-{unreviewed-red,fielding-review-red,segment-red,accounting-green}.log`; fresh full-suite/review evidence is tracked in [PROGRESS.md](../PROGRESS.md).
 
@@ -81,6 +81,30 @@ Test-first schema/counter/qualification evidence and the incomplete Luna-low fix
 ## Ordinary balk play-proceeds checkpoint (accepted bounded seam)
 
 [The selected progress contract](balk-progress.md) adds named actual batter-first/before-runner-next touches under `BBE17`, preserving the prior imposed-occurrence accounting. Ordinary602a/disregarded/all-safe/nonterminal PA keeps actual PA/BF/AB/classification/cursor and carried R distinct; it supplies no Balk unit, never another PA or phantom pitcher batter row. Unclassified safe reaches retain AB unknown, eligible uncaught K has K/AB but no physical out, and existing HR classification is unchanged. Actual touches are not inferred from awards/destinations/NoMisplay. Minimum progress alone cannot bind supplied pitch/error/SB histories, including omitted Balk. Known schema/role/review/state/participant/count/conservation contradictions precede missing evidence through reused canonical helpers; unrepresented histories remain unsupported. No fold/clean-ER vocabulary/complete-box change. The [29 synthetic progress tests](../../engine/tests/balk_progress_2019.rs) and retained **OK with notes; no issues found** review precede unchanged final `proc_8c24`: **280 Rust/59 Python/native 1,350/27 ER/54 boxes/fmt/strict Clippy/188 links/diff/all 25 before-after source/test hashes**. Parent accepts only this bounded seam; publication/reproduction status remains solely in PROGRESS; historical comparator lineage remains unchanged and is not progress reconstruction.
+
+## Bounded clean safe-PA ER extension (parent-accepted local checkpoint)
+
+[The preregistered contract](clean-safe-pa-er.md) extends the errorless-play
+vocabulary only to reviewed classified station-to-station 1B/2B/3B without
+retirements/extra episodes, plus simple one-movement HBP. The fold uses the
+validated before bases, not an inferred scorer value or missing Error credits.
+No model/RNG/DTO/codec/source-rating change is made. Credited fielding/WP/RBI
+cells still do not certify official boxes; generic contact, forced multi-runner
+awards, non-station histories and error/PB reconstruction retain uncertainty.
+
+Five new accounting methods include literal triple→WP→three-K Rule9.16(a)(2)
+evidence, both halves and 144 fully observed mask/out/half/hit-value cases with
+score/PA/BF/outs/AB/H/TB/codec checks. Legal non-station histories remain usable
+but unknown. Missing value, review, observed origin or ending stays unknown;
+canonical missing-review Double/Triple rejection is explicitly retained.
+Original generic-contact and error/PB/charge-lineage controls are unchanged.
+`proc_2a40` passed all35 focused accounting methods. Parent inspected the
+complete owned diff and consumed full fresh `proc_d7dd` exit0:365 Rust/62 Python,
+fmt/strictClippy/native1,350/27 shared-upstream ER/54 boxes,2,000 actual-baseline
+games/100,000 draws, aggregate/CLI controls and frozen source/test hashes.
+Parent acceptance only, not an independent review; local checkpoint/publication
+status and raw failures/results remain in PROGRESS. No official-box completeness
+certificate or E-03/G1 completion.
 
 **Missing for E-03/G1:** full Rule 9.16 errorless-inning reconstruction, including catcher-interference, missed chances, reliever-specific treatment and official responsibility-transfer/count nuances; AB stays unknown for any unclassified PA. Credited hits/walks/fielding totals may be **incomplete** because the event contract does not yet certify credit coverage; their fields are named `credited_*`, not official totals. Defensive positions, official appeal/fourth-out scoring nuances, unsupported lineup substitutions, and full source-backed golden games remain open. `BBE9` adds an explicit after-first batter-tag timing category; ambiguous Plate→Out with generic timing remains unsupported. Called, suspended, tied and forfeit game exclusions must be specified before a replay. Do not mark E-03 done or G1 GO from this checkpoint.
 

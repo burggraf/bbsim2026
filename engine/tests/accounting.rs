@@ -1270,6 +1270,456 @@ fn half_boundaries_accumulate_known_runs_and_never_restore_unknown_totals() {
     }
 }
 
+// Complete observed half: one safe PA, clean one-base WP steps, then three K.
+// These are partial-credit fixtures, not complete official fielding/WP boxes.
+fn clean_safe_pa_half(kind: CreditKind, half: Half) -> (Vec<EventTransition>, usize) {
+    let mut before = state();
+    before.inning = 1;
+    before.outs = 0;
+    before.bases = [None, None, None];
+    let mut log = vec![];
+    if half == Half::Bottom {
+        finish_with_three_strikeouts(before.clone(), &mut log, FieldingReview::NoMisplay);
+        before = log.last().unwrap().after().clone();
+    }
+    let value = match kind {
+        CreditKind::Single | CreditKind::HitByPitch => 1,
+        CreditKind::Double => 2,
+        CreditKind::Triple => 3,
+        _ => panic!("fixture requires a safe classified hit or HBP"),
+    };
+    let to = match value {
+        1 => Destination::First,
+        2 => Destination::Second,
+        _ => Destination::Third,
+    };
+    let batter = before.teams[half.offense()].batting_order[0].clone();
+    let mut credits = vec![credit(&batter, kind)];
+    if kind != CreditKind::HitByPitch {
+        credits.push(credit(&batter, CreditKind::Hit));
+    }
+    let hit_index = log.len();
+    let first = apply(
+        &before,
+        reviewed(event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, to)],
+            0,
+            0,
+            credits,
+            vec![],
+        )),
+    )
+    .unwrap();
+    log.push(first);
+    for position in value..=3 {
+        let s = log.last().unwrap().after();
+        let from = match position {
+            1 => Base::First,
+            2 => Base::Second,
+            _ => Base::Third,
+        };
+        let to = match position {
+            1 => Destination::Second,
+            2 => Destination::Third,
+            _ => Destination::Home,
+        };
+        let action = reviewed(event(
+            s,
+            EventKind::RunnerOnly(RunnerEvent::WildPitch),
+            vec![RunnerMove {
+                runner: s.bases[position - 1].clone().unwrap(),
+                from,
+                to,
+            }],
+            0,
+            u8::from(position == 3),
+            if position == 3 {
+                vec![credit(&batter, CreditKind::Run)]
+            } else {
+                vec![]
+            },
+            vec![],
+        ));
+        log.push(apply(s, action).unwrap());
+    }
+    finish_with_three_strikeouts(
+        log.last().unwrap().after().clone(),
+        &mut log,
+        FieldingReview::NoMisplay,
+    );
+    (log, hit_index)
+}
+
+#[test]
+fn reviewed_classified_safe_hits_certify_literal_earned_run() {
+    for kind in [CreditKind::Triple, CreditKind::Single, CreditKind::Double] {
+        for half in [Half::Top, Half::Bottom] {
+            let (log, hit_index) = clean_safe_pa_half(kind, half);
+            for pair in log.windows(2) {
+                pair[1].follows(&pair[0]).unwrap();
+            }
+            for t in &log {
+                assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+            }
+            let a = derive_accounting(&log).unwrap();
+            let offense = half.offense();
+            let pitcher = if half == Half::Top {
+                "home_starter"
+            } else {
+                "away_pitcher"
+            };
+            let p = &a.pitchers[1 - offense][pitcher];
+            assert_eq!(a.runs[offense], 1);
+            assert_eq!(a.innings[&1][offense], Some(1));
+            assert_eq!(p.earned_runs, Some(1), "{half:?} {kind:?}");
+            assert_eq!(
+                (p.runs_allowed, p.batters_faced, p.outs_recorded),
+                (1, 4, 3)
+            );
+            assert_eq!(p.at_bats_against, Some(4));
+            let batter = log[hit_index].event().participants.batter.as_ref().unwrap();
+            let b = &a.batters[offense][batter];
+            assert_eq!(
+                (b.plate_appearances, b.credited_hits, b.credited_runs),
+                (1, 1, 1)
+            );
+            assert_eq!(
+                b.credited_hit_breakdown.as_ref().unwrap().total_bases(),
+                match kind {
+                    CreditKind::Single => 1,
+                    CreditKind::Double => 2,
+                    _ => 3,
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn reviewed_simple_hbp_certifies_literal_earned_run() {
+    for half in [Half::Top, Half::Bottom] {
+        let (log, _) = clean_safe_pa_half(CreditKind::HitByPitch, half);
+        let a = derive_accounting(&log).unwrap();
+        let pitcher = if half == Half::Top {
+            "home_starter"
+        } else {
+            "away_pitcher"
+        };
+        let p = &a.pitchers[1 - half.offense()][pitcher];
+        assert_eq!(p.earned_runs, Some(1), "{half:?}");
+        assert_eq!(
+            (p.runs_allowed, p.batters_faced, p.outs_recorded),
+            (1, 4, 3)
+        );
+        assert_eq!(p.at_bats_against, Some(3));
+        assert_eq!((p.credited_hit_batters, p.credited_hits_allowed), (1, 0));
+    }
+}
+
+#[test]
+fn safe_hit_er_keeps_missing_value_review_origin_and_end_unknown() {
+    for half in [Half::Top, Half::Bottom] {
+        // Existing canonical value>1 guard rejects missing whole-play review;
+        // use a legal Single for the fold-level uncertainty controls.
+        for kind in [CreditKind::Double, CreditKind::Triple] {
+            let (classified, index) = clean_safe_pa_half(kind, half);
+            let mut e = classified[index].event().clone();
+            e.fielding_review = FieldingReview::Unknown;
+            assert_eq!(
+                apply(classified[index].before(), e),
+                Err(TransitionError::UnsupportedRule)
+            );
+        }
+        let (log, hit_index) = clean_safe_pa_half(CreditKind::Single, half);
+        let pitcher = if half == Half::Top {
+            "home_starter"
+        } else {
+            "away_pitcher"
+        };
+        for missing in [hit_index, log.len() - 1] {
+            let changed = log
+                .iter()
+                .enumerate()
+                .map(|(index, t)| {
+                    let mut e = t.event().clone();
+                    if index == missing {
+                        e.fielding_review = FieldingReview::Unknown;
+                    }
+                    apply(t.before(), e).unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                derive_accounting(&changed).unwrap().pitchers[1 - half.offense()][pitcher]
+                    .earned_runs,
+                None
+            );
+        }
+        let unclassified = log
+            .iter()
+            .enumerate()
+            .map(|(index, t)| {
+                let mut e = t.event().clone();
+                if index == hit_index {
+                    e.delta.credits.retain(|c| c.kind != CreditKind::Single);
+                }
+                apply(t.before(), e).unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            derive_accounting(&unclassified).unwrap().pitchers[1 - half.offense()][pitcher]
+                .earned_runs,
+            None
+        );
+        assert_eq!(
+            derive_accounting(&log[hit_index + 1..]).unwrap().pitchers[1 - half.offense()][pitcher]
+                .earned_runs,
+            None
+        );
+        assert_eq!(
+            derive_accounting(&log[..log.len() - 1]).unwrap().pitchers[1 - half.offense()][pitcher]
+                .earned_runs,
+            None
+        );
+    }
+}
+
+fn record_clean(log: &mut Vec<EventTransition>, before: &GameState, action: Event) -> GameState {
+    let next = apply(before, reviewed(action)).unwrap();
+    let after = next.after().clone();
+    log.push(next);
+    after
+}
+
+// Establish every base mask through observed simple BB/WP episodes, not an
+// invented occupied initial snapshot. Then a hit, HR and remaining K-outs.
+fn station_hit_half(
+    mask: u8,
+    outs: u8,
+    half: Half,
+    value: usize,
+    extra_base: bool,
+) -> Vec<EventTransition> {
+    let mut before = state();
+    before.inning = 1;
+    before.outs = 0;
+    before.bases = [None, None, None];
+    let mut log = vec![];
+    if half == Half::Bottom {
+        finish_with_three_strikeouts(before.clone(), &mut log, FieldingReview::NoMisplay);
+        before = log.last().unwrap().after().clone();
+    }
+    for base in (0..3).rev() {
+        if mask & (1 << base) == 0 {
+            continue;
+        }
+        let batter = before.teams[half.offense()].batting_order
+            [before.teams[half.offense()].next_batter as usize]
+            .clone();
+        let walk = event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::First)],
+            0,
+            0,
+            vec![credit(&batter, CreditKind::Walk)],
+            vec![],
+        );
+        before = record_clean(&mut log, &before, walk);
+        for step in 0..base {
+            let from = if step == 0 { Base::First } else { Base::Second };
+            let to = if step == 0 {
+                Destination::Second
+            } else {
+                Destination::Third
+            };
+            let advance = event(
+                &before,
+                EventKind::RunnerOnly(RunnerEvent::WildPitch),
+                vec![RunnerMove {
+                    runner: before.bases[step].clone().unwrap(),
+                    from,
+                    to,
+                }],
+                0,
+                0,
+                vec![],
+                vec![],
+            );
+            before = record_clean(&mut log, &before, advance);
+        }
+    }
+    for _ in 0..outs {
+        let batter = before.teams[half.offense()].batting_order
+            [before.teams[half.offense()].next_batter as usize]
+            .clone();
+        let out = event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![credit(&batter, CreditKind::Strikeout)],
+            vec![],
+        );
+        before = record_clean(&mut log, &before, out);
+    }
+    let destinations = [
+        Destination::First,
+        Destination::Second,
+        Destination::Third,
+        Destination::Home,
+    ];
+    let kinds = [CreditKind::Single, CreditKind::Double, CreditKind::Triple];
+    let batter = before.teams[half.offense()].batting_order
+        [before.teams[half.offense()].next_batter as usize]
+        .clone();
+    let mut credits = vec![
+        credit(&batter, CreditKind::Hit),
+        credit(&batter, kinds[value - 1]),
+    ];
+    let mut moves = vec![batter_move(&before, destinations[value - 1])];
+    let mut runs = 0;
+    for (index, from) in [Base::First, Base::Second, Base::Third]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(runner) = &before.bases[index] {
+            let target = if extra_base && index == 0 {
+                2
+            } else {
+                (index + value).min(3)
+            };
+            let to = destinations[target];
+            if to == Destination::Home {
+                runs += 1;
+                credits.push(credit(&runner.player_id, CreditKind::Run));
+            }
+            moves.push(RunnerMove {
+                runner: runner.clone(),
+                from,
+                to,
+            });
+        }
+    }
+    let hit = event(
+        &before,
+        EventKind::PlateAppearance,
+        moves,
+        0,
+        runs,
+        credits,
+        vec![],
+    );
+    before = record_clean(&mut log, &before, hit);
+    let batter = before.teams[half.offense()].batting_order
+        [before.teams[half.offense()].next_batter as usize]
+        .clone();
+    let mut credits = vec![
+        credit(&batter, CreditKind::PlateAppearance),
+        credit(&batter, CreditKind::Hit),
+        credit(&batter, CreditKind::Run),
+    ];
+    let mut moves = vec![batter_move(&before, Destination::Home)];
+    for (index, from) in [Base::First, Base::Second, Base::Third]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(runner) = &before.bases[index] {
+            credits.push(credit(&runner.player_id, CreditKind::Run));
+            moves.push(RunnerMove {
+                runner: runner.clone(),
+                from,
+                to: Destination::Home,
+            });
+        }
+    }
+    let homer = event(
+        &before,
+        EventKind::OutOfParkHomeRun,
+        moves.clone(),
+        0,
+        moves.len() as u8,
+        credits,
+        vec![],
+    );
+    before = record_clean(&mut log, &before, homer);
+    for _ in outs..3 {
+        let batter = before.teams[half.offense()].batting_order
+            [before.teams[half.offense()].next_batter as usize]
+            .clone();
+        let out = event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![credit(&batter, CreditKind::Strikeout)],
+            vec![],
+        );
+        before = record_clean(&mut log, &before, out);
+    }
+    log
+}
+
+#[test]
+fn station_hits_certify_all_observed_masks_outs_and_halves() {
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 0u8..8 {
+                for value in 1..=3 {
+                    let log = station_hit_half(mask, outs, half, value, false);
+                    for t in &log {
+                        assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+                    }
+                    let a = derive_accounting(&log).unwrap();
+                    let pitcher = if half == Half::Top {
+                        "home_starter"
+                    } else {
+                        "away_pitcher"
+                    };
+                    let p = &a.pitchers[1 - half.offense()][pitcher];
+                    let runs = mask.count_ones() + 2;
+                    assert_eq!(
+                        p.earned_runs,
+                        Some(runs),
+                        "{half:?} outs{outs} mask{mask} value{value}"
+                    );
+                    assert_eq!(
+                        (p.runs_allowed, p.outs_recorded, p.batters_faced),
+                        (runs, 3, mask.count_ones() + 5)
+                    );
+                    assert_eq!(p.at_bats_against, Some(5));
+                    assert_eq!(
+                        p.credited_hit_breakdown_allowed
+                            .as_ref()
+                            .unwrap()
+                            .total_bases(),
+                        value as u32 + 4
+                    );
+                    assert_eq!(a.runs[half.offense()], runs);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn legal_nonstation_hit_keeps_earned_runs_unknown() {
+    for half in [Half::Top, Half::Bottom] {
+        let log = station_hit_half(1, 0, half, 1, true);
+        let a = derive_accounting(&log).unwrap();
+        let pitcher = if half == Half::Top {
+            "home_starter"
+        } else {
+            "away_pitcher"
+        };
+        assert_eq!(a.pitchers[1 - half.offense()][pitcher].runs_allowed, 3);
+        assert_eq!(a.pitchers[1 - half.offense()][pitcher].earned_runs, None);
+    }
+}
+
 #[test]
 fn reviewed_generic_contact_is_not_yet_an_errorless_play_proof() {
     let clean = reviewed_homer_half(1);
