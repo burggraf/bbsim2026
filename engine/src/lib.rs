@@ -2,6 +2,7 @@
 //! The reducer, statistical accounting and era rules are later work packages.
 
 pub mod accounting;
+mod balk;
 mod codec;
 mod contact;
 mod pitch;
@@ -160,6 +161,8 @@ pub enum CreditKind {
     GroundedIntoDoublePlay,
     /// One scorer-qualified legal-delivery occurrence, charged to the actual pitcher.
     WildPitch,
+    /// One imposed scorer-qualified balk occurrence, charged to the actual pitcher.
+    Balk,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credit {
@@ -331,6 +334,32 @@ pub struct SingleDeliveryFacts {
     pub pre_delivery_steals: Option<Vec<PreDeliverySteal>>,
     pub recovery: RecoveryReview,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BalkCause {
+    Unknown,
+    PitcherAction602a,
+    SqueezeOrStealHomeInterference601g,
+    PitchingProhibition602d,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BalkDisposition {
+    Unknown,
+    PenaltyApplied,
+    PlayProceedsWithoutReference,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BalkResolution {
+    Unknown,
+    /// Ordinary imposed awards originate at before bases with no extra action sequence.
+    ExactProtectedAwards,
+}
+/// One cause-bound balk occurrence; not complete PA/game or fielding-review coverage.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BalkFacts {
+    pub cause: BalkCause,
+    pub disposition: BalkDisposition,
+    pub resolution: BalkResolution,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -339,6 +368,7 @@ pub struct Event {
     pub delta: Delta,
     pub two_out_contact: Option<TwoOutContactFacts>,
     pub single_delivery: Option<SingleDeliveryFacts>,
+    pub balk: Option<BalkFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -367,50 +397,13 @@ impl EventTransition {
         event: Event,
         after: GameState,
     ) -> Result<Self, TransitionError> {
-        if before.inning == 0
-            || after.inning == 0
-            || before.outs > 2
-            || after.outs > 2
-            || before
-                .teams
-                .iter()
-                .chain(after.teams.iter())
-                .any(|team| !rules::valid_team(team))
-            || before.over
-        {
+        rules::validate_snapshot(&before)?;
+        rules::validate_snapshot(&after)?;
+        if before.over {
             return Err(TransitionError::InvalidState);
         }
-        for snapshot in [&before, &after] {
-            for (index, runner) in snapshot.bases.iter().enumerate() {
-                if let Some(runner) = runner {
-                    if runner.player_id.is_empty()
-                        || runner.responsible_pitcher.is_empty()
-                        || !snapshot.teams[snapshot.half.offense()]
-                            .batting_order
-                            .contains(&runner.player_id)
-                        || snapshot.teams[snapshot.half.offense()].batting_order
-                            [snapshot.teams[snapshot.half.offense()].next_batter as usize]
-                            == runner.player_id
-                        || snapshot.bases[index + 1..]
-                            .iter()
-                            .flatten()
-                            .any(|other| other.player_id == runner.player_id)
-                    {
-                        return Err(TransitionError::InvalidState);
-                    }
-                }
-            }
-        }
         let offense = before.half.offense();
-        if event.participants.pitcher != before.teams[1 - offense].pitcher
-            || event.participants.batter.as_deref()
-                != Some(
-                    before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
-                        .as_str(),
-                )
-        {
-            return Err(TransitionError::InvalidParticipants);
-        }
+        rules::validate_participants(&before, &event)?;
         let is_pa = event.kind.is_pa();
         let batter_charge = rules::batter_charge(&before, &event)?;
         rules::validate_fielding_review(&event)?;

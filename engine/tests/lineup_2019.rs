@@ -48,6 +48,7 @@ fn substitution(before: &GameState, changes: Vec<PersonnelChange>) -> Event {
         fielding_review: bbsim_engine::FieldingReview::Unknown,
         two_out_contact: None,
         single_delivery: None,
+        balk: None,
     }
 }
 fn batter_out(before: &GameState) -> Event {
@@ -79,6 +80,7 @@ fn batter_out(before: &GameState) -> Event {
         fielding_review: bbsim_engine::FieldingReview::Unknown,
         two_out_contact: None,
         single_delivery: None,
+        balk: None,
     }
 }
 

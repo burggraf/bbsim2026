@@ -48,6 +48,7 @@ fn fixture(half: Half, outs: u8) -> (GameState, Event) {
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
+        balk: None,
         single_delivery: Some(SingleDeliveryFacts {
             context: DeliveryContext::RunnerOnly,
             handling: HandlingAssessment::PitcherWild,
@@ -84,7 +85,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
         transition
     );
     let bytes = transition.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE15");
+    assert_eq!(&bytes[..5], b"BBE16");
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
     transition
 }

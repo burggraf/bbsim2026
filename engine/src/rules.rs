@@ -39,6 +39,53 @@ pub(crate) fn valid_team(team: &TeamState) -> bool {
         .all(|(i, id)| !ids[i + 1..].contains(id))
 }
 
+/// Existing canonical state predicates, shared before deferred balk history.
+pub(crate) fn validate_snapshot(snapshot: &GameState) -> Result<(), TransitionError> {
+    if snapshot.inning == 0
+        || snapshot.outs > 2
+        || snapshot.teams.iter().any(|team| !valid_team(team))
+    {
+        return Err(TransitionError::InvalidState);
+    }
+    for (index, runner) in snapshot.bases.iter().enumerate() {
+        if let Some(runner) = runner {
+            if runner.player_id.is_empty()
+                || runner.responsible_pitcher.is_empty()
+                || !snapshot.teams[snapshot.half.offense()]
+                    .batting_order
+                    .contains(&runner.player_id)
+                || snapshot.teams[snapshot.half.offense()].batting_order
+                    [snapshot.teams[snapshot.half.offense()].next_batter as usize]
+                    == runner.player_id
+                || snapshot.bases[index + 1..]
+                    .iter()
+                    .flatten()
+                    .any(|other| other.player_id == runner.player_id)
+            {
+                return Err(TransitionError::InvalidState);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_participants(
+    before: &GameState,
+    event: &Event,
+) -> Result<(), TransitionError> {
+    let offense = before.half.offense();
+    if event.participants.pitcher != before.teams[1 - offense].pitcher
+        || event.participants.batter.as_deref()
+            != Some(
+                before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
+                    .as_str(),
+            )
+    {
+        return Err(TransitionError::InvalidParticipants);
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_pa_credits(event: &Event) -> Result<(), TransitionError> {
     let pa = event
         .delta
@@ -137,7 +184,7 @@ pub(crate) fn credit_role_eligible(
         CreditKind::PassedBall => {
             credit.player_id != defense.pitcher && fielding_eligible(defense, &credit.player_id)
         }
-        CreditKind::WildPitch => credit.player_id == defense.pitcher,
+        CreditKind::WildPitch | CreditKind::Balk => credit.player_id == defense.pitcher,
     }
 }
 
@@ -259,10 +306,12 @@ pub(crate) fn batter_charge<'a>(
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
     // Credit-only contradictions must not be masked by unknown FC lineage.
+    super::balk::preflight(before, event)?;
     super::pitch::preflight(before, event)?;
     let _ = hit_value_credit(event)?;
     let _ = walk_classification(before, event)?;
     super::contact::validate(before, event)?;
+    super::balk::validate(event)?;
     super::pitch::validate(before, event)?;
     let current = before.teams[1 - before.half.offense()].pitcher.as_str();
     if event.kind == EventKind::FieldersChoice {

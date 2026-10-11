@@ -55,6 +55,7 @@ fn action(
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
         single_delivery: None,
+        balk: None,
         delta: Delta {
             moves,
             outs,

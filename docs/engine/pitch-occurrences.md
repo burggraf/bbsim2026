@@ -1,6 +1,6 @@
 # E-03 first pitch-occurrence slice: WP/PB
 
-**Accepted bounded checkpoint; publication pending.** Schema/counter and bounded K/BB/steal/recovery qualification have test-first verified implementations and substantive retained review. Unchanged final parent checks passed; publication status belongs to PROGRESS. However, automatic-K/ambiguous retired-batter and richer occurrence contexts remain unfinished prerequisites. Builds on accepted `3ca87eb` and the [approved G1 matrix](g1-accounting-scope.md). [PROGRESS](../PROGRESS.md) owns live status. This is an occurrence/credit seam, not complete scoring coverage, a pitch-count engine, ER reconstruction or G1 signoff.
+**Accepted/pushed bounded checkpoint `3059fbc`.** Schema/counter and bounded K/BB/steal/recovery qualification have test-first verified implementations and substantive retained review. Unchanged final parent checks passed; publication status belongs to PROGRESS. However, automatic-K/ambiguous retired-batter and richer occurrence contexts remain unfinished prerequisites. Builds on accepted `3ca87eb` and the [approved G1 matrix](g1-accounting-scope.md). [PROGRESS](../PROGRESS.md) owns live status. This is an occurrence/credit seam, not complete scoring coverage, a pitch-count engine, ER reconstruction or G1 signoff.
 
 ## Primary boundary and remaining work
 

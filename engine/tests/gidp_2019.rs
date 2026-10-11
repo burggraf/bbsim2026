@@ -116,6 +116,7 @@ fn fixture(half: Half, outs: u8, reverse_force: bool, crossing: bool) -> (GameSt
         },
         fielding_review: FieldingReview::Unknown,
         single_delivery: None,
+        balk: None,
         two_out_contact: Some(TwoOutContactFacts {
             contact: ContactClass::Grounded,
             first_out,
@@ -343,7 +344,7 @@ fn well_formed_gidp_and_contact_forgeries_are_semantically_rejected() {
     let (before, event) = fixture(Half::Top, 0, false, false);
     let valid = apply(&before, event).unwrap();
     let original = valid.to_bytes();
-    assert!(original.starts_with(b"BBE15"));
+    assert!(original.starts_with(b"BBE16"));
     assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
     let mut credit_forgery = original.clone();
     let kind = unique_tag(&credit_forgery, "away0", 22);
@@ -382,7 +383,7 @@ fn well_formed_gidp_and_contact_forgeries_are_semantically_rejected() {
         EventTransition::from_bytes(&wrong_base),
         Err(TransitionError::DeltaMismatch)
     );
-    for prefix in [b"BBE14", b"BBE13", b"BBE12", b"BBE11"] {
+    for prefix in [b"BBE15", b"BBE14", b"BBE13", b"BBE12", b"BBE11"] {
         let mut old = original.clone();
         old[..5].copy_from_slice(prefix);
         assert_eq!(

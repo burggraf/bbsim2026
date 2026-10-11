@@ -75,6 +75,7 @@ fn event(
         fielding_review: bbsim_engine::FieldingReview::Unknown,
         two_out_contact: None,
         single_delivery: None,
+        balk: None,
     }
 }
 fn credit(id: &str, kind: CreditKind) -> Credit {

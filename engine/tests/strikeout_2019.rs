@@ -90,6 +90,7 @@ fn safe_reach(before: &GameState, destination: Destination) -> (Event, GameState
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
         single_delivery: None,
+        balk: None,
         delta: Delta {
             moves,
             outs: 0,
