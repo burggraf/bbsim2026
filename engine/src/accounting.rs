@@ -235,6 +235,39 @@ fn clean_station_hit(before: &GameState, event: &Event) -> bool {
         })
 }
 
+// Classifications supply the protected first-base award; only its exact force
+// chain is reconstructed here. Unforced runners may be omitted or held, never
+// advanced by this proof. Canonical transitions already preserve actor/charges.
+fn clean_forced_award(before: &GameState, event: &Event) -> bool {
+    if !simple_safe_pa_episode(event)
+        || !event
+            .delta
+            .credits
+            .iter()
+            .any(|c| matches!(c.kind, CreditKind::Walk | CreditKind::HitByPitch))
+    {
+        return false;
+    }
+    let forced = before.bases.iter().take_while(|b| b.is_some()).count();
+    let destinations = [
+        Destination::First,
+        Destination::Second,
+        Destination::Third,
+        Destination::Home,
+    ];
+    event.delta.moves.iter().all(|m| {
+        let index = match m.from {
+            Base::Plate => return m.to == Destination::First,
+            Base::First => 0,
+            Base::Second => 1,
+            Base::Third => 2,
+        };
+        m.to == destinations[index + usize::from(index < forced)]
+    }) && [Base::First, Base::Second, Base::Third][..forced]
+        .iter()
+        .all(|base| event.delta.moves.iter().any(|m| m.from == *base))
+}
+
 /// A deliberately narrow errorless-play proof. Absence of an Error credit
 /// alone is not proof: generic contact/advancement may conceal a misplay.
 fn clean_play(before: &GameState, event: &Event) -> bool {
@@ -261,6 +294,7 @@ fn clean_play(before: &GameState, event: &Event) -> bool {
             // misplays. Credits/endpoints alone never supply this method.
             event.ordinary_ground_throw.is_some()
                 || clean_station_hit(before, event)
+                || clean_forced_award(before, event)
                 || (m.len() == 1
                     && m[0].from == Base::Plate
                     && event.delta.runs == 0

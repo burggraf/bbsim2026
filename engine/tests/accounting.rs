@@ -2462,6 +2462,252 @@ fn bound_ground_er_does_not_repair_missing_evidence_history_or_completion() {
     }
 }
 
+// Reuse the observed origin/mask/outs prefix, but replace the ground event
+// with an exact protected award. Nonexact controls remain physically legal.
+fn forced_award_half(
+    mask: u8,
+    outs: u8,
+    half: Half,
+    kind: CreditKind,
+    explicit_holds: bool,
+    reverse: bool,
+    nonexact: bool,
+) -> (Vec<EventTransition>, usize) {
+    let (template, index) = clean_ground_half(mask, outs, half, false, false);
+    let mut log = template[..index].to_vec();
+    let mut before = log.last().unwrap().after().clone();
+    let batter = before.teams[half.offense()].batting_order
+        [before.teams[half.offense()].next_batter as usize]
+        .clone();
+    let forced = before.bases.iter().take_while(|b| b.is_some()).count();
+    let destinations = [
+        Destination::First,
+        Destination::Second,
+        Destination::Third,
+        Destination::Home,
+    ];
+    let mut moves = vec![batter_move(&before, Destination::First)];
+    let mut credits = vec![credit(&batter, kind)];
+    let mut runs = 0;
+    for (i, from) in [Base::First, Base::Second, Base::Third]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(runner) = &before.bases[i] {
+            let excess = nonexact && ((mask == 1 && i == 0) || (mask == 2 && i == 1));
+            if i < forced || explicit_holds || excess {
+                let to = if excess {
+                    Destination::Third
+                } else {
+                    destinations[i + usize::from(i < forced)]
+                };
+                if to == Destination::Home {
+                    runs += 1;
+                    credits.push(credit(&runner.player_id, CreditKind::Run));
+                }
+                moves.push(RunnerMove {
+                    runner: runner.clone(),
+                    from,
+                    to,
+                });
+            }
+        }
+    }
+    if reverse {
+        moves.reverse();
+    }
+    let award = event(
+        &before,
+        EventKind::PlateAppearance,
+        moves,
+        0,
+        runs,
+        credits,
+        vec![],
+    );
+    before = record_clean(&mut log, &before, award);
+    let batter = before.teams[half.offense()].batting_order
+        [before.teams[half.offense()].next_batter as usize]
+        .clone();
+    let mut moves = vec![batter_move(&before, Destination::Home)];
+    let mut credits = vec![
+        credit(&batter, CreditKind::PlateAppearance),
+        credit(&batter, CreditKind::Hit),
+        credit(&batter, CreditKind::Run),
+    ];
+    for (i, from) in [Base::First, Base::Second, Base::Third]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(runner) = &before.bases[i] {
+            credits.push(credit(&runner.player_id, CreditKind::Run));
+            moves.push(RunnerMove {
+                runner: runner.clone(),
+                from,
+                to: Destination::Home,
+            });
+        }
+    }
+    let runs = moves.len() as u8;
+    let homer = event(
+        &before,
+        EventKind::OutOfParkHomeRun,
+        moves,
+        0,
+        runs,
+        credits,
+        vec![],
+    );
+    before = record_clean(&mut log, &before, homer);
+    while before.half == half {
+        let batter = before.teams[half.offense()].batting_order
+            [before.teams[half.offense()].next_batter as usize]
+            .clone();
+        let out = event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![credit(&batter, CreditKind::Strikeout)],
+            vec![],
+        );
+        before = record_clean(&mut log, &before, out);
+    }
+    (log, index)
+}
+
+#[test]
+fn exact_forced_award_er_has_literal_observed_mask_out_half_and_award_lines() {
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 0u8..8 {
+                for kind in [CreditKind::Walk, CreditKind::HitByPitch] {
+                    for holds in [false, true] {
+                        for reverse in [false, true] {
+                            let (log, index) =
+                                forced_award_half(mask, outs, half, kind, holds, reverse, false);
+                            for t in &log {
+                                assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+                            }
+                            let a = derive_accounting(&log).unwrap();
+                            let p = &a.pitchers[1 - half.offense()]
+                                [&log[index].event().participants.pitcher];
+                            let runners = mask.count_ones();
+                            assert_eq!(p.earned_runs, Some(runners+3), "{half:?} outs{outs} mask{mask} {kind:?} holds{holds} reverse{reverse}");
+                            assert_eq!(
+                                (
+                                    p.runs_allowed,
+                                    p.outs_recorded,
+                                    p.batters_faced,
+                                    p.at_bats_against,
+                                    p.classified_hits_allowed
+                                ),
+                                (runners + 3, 3, runners + 6, Some(5), Some(2))
+                            );
+                            assert_eq!(p.credited_hits_allowed, 2);
+                            assert_eq!(
+                                p.credited_walks_allowed,
+                                runners + u32::from(kind == CreditKind::Walk)
+                            );
+                            assert_eq!(
+                                p.credited_hit_batters,
+                                u32::from(kind == CreditKind::HitByPitch)
+                            );
+                            let batters = &a.batters[half.offense()];
+                            assert_eq!(
+                                batters.values().map(|b| b.plate_appearances).sum::<u32>(),
+                                runners + 6
+                            );
+                            assert_eq!(
+                                batters.values().map(|b| b.at_bats.unwrap()).sum::<u32>(),
+                                5
+                            );
+                            assert_eq!(batters.values().map(|b| b.credited_hits).sum::<u32>(), 2);
+                            assert_eq!(
+                                batters.values().map(|b| b.credited_walks).sum::<u32>(),
+                                runners + u32::from(kind == CreditKind::Walk)
+                            );
+                            assert_eq!(
+                                batters
+                                    .values()
+                                    .map(|b| b.credited_hit_by_pitch)
+                                    .sum::<u32>(),
+                                u32::from(kind == CreditKind::HitByPitch)
+                            );
+                            assert_eq!(log[index].event().delta.runs, u8::from(mask == 7));
+                            assert_eq!(a.runs[half.offense()], runners + 3);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn forced_award_er_keeps_nonexact_and_missing_evidence_unknown() {
+    for half in [Half::Top, Half::Bottom] {
+        for kind in [CreditKind::Walk, CreditKind::HitByPitch] {
+            for mask in [1, 2] {
+                let (log, _) = forced_award_half(mask, 1, half, kind, true, true, true);
+                let p = &derive_accounting(&log).unwrap().pitchers[1 - half.offense()]
+                    [&log[0].before().teams[1 - half.offense()].pitcher];
+                assert_eq!(p.runs_allowed, mask.count_ones() + 3);
+                assert_eq!(p.earned_runs, None);
+            }
+            let (clean, index) = forced_award_half(7, 1, half, kind, true, true, false);
+            let pitcher = clean[index].event().participants.pitcher.clone();
+            let side = 1 - half.offense();
+            for missing in 0..3 {
+                let log: Vec<_> = clean
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| {
+                        let mut action = t.event().clone();
+                        if i == index {
+                            if missing == 0 {
+                                action.fielding_review = FieldingReview::Unknown;
+                            }
+                            if missing == 1 {
+                                action.delta.credits.retain(|c| c.kind != kind);
+                            }
+                        }
+                        if missing == 2 && i == usize::from(half == Half::Bottom) * 3 {
+                            action.fielding_review = FieldingReview::Unknown;
+                        }
+                        apply(t.before(), action).unwrap()
+                    })
+                    .collect();
+                assert_eq!(
+                    derive_accounting(&log).unwrap().pitchers[side][&pitcher].earned_runs,
+                    None
+                );
+            }
+            let start = usize::from(half == Half::Bottom) * 3;
+            let partial: Vec<_> = clean[start..]
+                .iter()
+                .map(|t| {
+                    let mut before = t.before().clone();
+                    before.inning += 1;
+                    apply(&before, t.event().clone()).unwrap()
+                })
+                .collect();
+            assert_eq!(
+                derive_accounting(&partial).unwrap().pitchers[side][&pitcher].earned_runs,
+                None
+            );
+            assert_eq!(
+                derive_accounting(&clean[..clean.len() - 1])
+                    .unwrap()
+                    .pitchers[side][&pitcher]
+                    .earned_runs,
+                None
+            );
+        }
+    }
+}
+
 #[test]
 fn reviewed_generic_contact_is_not_yet_an_errorless_play_proof() {
     let clean = reviewed_homer_half(1);
