@@ -99,6 +99,7 @@ fn walk(before: &GameState, classification: Option<CreditKind>, reverse: bool) -
             FieldingReview::Unknown
         },
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             moves,
             outs: 0,
@@ -272,6 +273,7 @@ fn review_never_infers_walk_classification_and_known_zero_is_qualified() {
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             moves: vec![RunnerMove {
                 runner: Runner {
@@ -351,6 +353,7 @@ fn out_pa(before: &GameState) -> Event {
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             moves: vec![RunnerMove {
                 runner: Runner {
@@ -391,6 +394,7 @@ fn unknown_intentionality_is_irreversible_per_batter_and_pitcher_segment() {
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             moves: vec![],
             outs: 0,
@@ -540,7 +544,7 @@ fn codec_revalidates_walk_classification_forgeries_and_roundtrips_controls() {
         EventTransition::from_bytes(&intentional.to_bytes()).unwrap(),
         intentional
     );
-    assert!(ordinary.to_bytes().starts_with(b"BBE14"));
+    assert!(ordinary.to_bytes().starts_with(b"BBE15"));
     let batter = ordinary.event().participants.batter.as_ref().unwrap();
 
     // Replace the sole Walk on a generic record with an IntentionalWalk:
@@ -606,6 +610,7 @@ fn missing_walk_modifier_precedes_inherited_runner_charge_ambiguity() {
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             moves: vec![
                 RunnerMove {

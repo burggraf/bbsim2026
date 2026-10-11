@@ -39,6 +39,143 @@ pub(crate) fn valid_team(team: &TeamState) -> bool {
         .all(|(i, id)| !ids[i + 1..].contains(id))
 }
 
+pub(crate) fn validate_pa_credits(event: &Event) -> Result<(), TransitionError> {
+    let pa = event
+        .delta
+        .credits
+        .iter()
+        .filter(|c| c.kind == CreditKind::PlateAppearance)
+        .count();
+    if pa != usize::from(event.kind.is_pa())
+        || event.delta.credits.iter().any(|c| {
+            c.player_id.is_empty()
+                || (c.kind == CreditKind::PlateAppearance
+                    && event.participants.batter.as_deref() != Some(c.player_id.as_str()))
+        })
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_fielding_review(event: &Event) -> Result<(), TransitionError> {
+    if event.fielding_review == super::FieldingReview::NoMisplay
+        && (event.kind == EventKind::RunnerOnly(super::RunnerEvent::PassedBall)
+            || event.delta.credits.iter().any(|c| {
+                matches!(
+                    c.kind,
+                    CreditKind::Error | CreditKind::PassedBall | CreditKind::InterferenceAward
+                )
+            }))
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_credit_counts(event: &Event) -> Result<(), TransitionError> {
+    let count = |kind| {
+        event
+            .delta
+            .credits
+            .iter()
+            .filter(|c| c.kind == kind)
+            .count()
+    };
+    let outcomes = count(CreditKind::Hit) + count(CreditKind::Walk) + count(CreditKind::Strikeout);
+    let exclusions = count(CreditKind::Walk)
+        + count(CreditKind::HitByPitch)
+        + count(CreditKind::SacrificeBunt)
+        + count(CreditKind::SacrificeFly)
+        + count(CreditKind::InterferenceAward);
+    if outcomes > 1
+        || exclusions > 1
+        || count(CreditKind::AtBat) > 1
+        || (exclusions > 0
+            && count(CreditKind::AtBat) + count(CreditKind::Hit) + count(CreditKind::Strikeout) > 0)
+        || count(CreditKind::Rbi) > usize::from(event.delta.runs)
+        || count(CreditKind::Putout) > usize::from(event.delta.outs)
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(())
+}
+
+/// Actor roles only; runner timing/retirement eligibility remains canonical below.
+pub(crate) fn credit_role_eligible(
+    before: &GameState,
+    event: &Event,
+    credit: &super::Credit,
+) -> bool {
+    let defense = &before.teams[1 - before.half.offense()];
+    match credit.kind {
+        CreditKind::PlateAppearance
+        | CreditKind::Run
+        | CreditKind::StolenBase
+        | CreditKind::CaughtStealing => true,
+        CreditKind::Hit
+        | CreditKind::Walk
+        | CreditKind::Strikeout
+        | CreditKind::Rbi
+        | CreditKind::AtBat
+        | CreditKind::HitByPitch
+        | CreditKind::SacrificeBunt
+        | CreditKind::SacrificeFly
+        | CreditKind::InterferenceAward
+        | CreditKind::Single
+        | CreditKind::Double
+        | CreditKind::Triple
+        | CreditKind::OrdinaryWalk
+        | CreditKind::IntentionalWalk
+        | CreditKind::GroundedIntoDoublePlay => {
+            event.kind.is_pa()
+                && event.participants.batter.as_deref() == Some(credit.player_id.as_str())
+        }
+        CreditKind::Putout | CreditKind::Assist | CreditKind::Error => {
+            fielding_eligible(defense, &credit.player_id)
+        }
+        CreditKind::PassedBall => {
+            credit.player_id != defense.pitcher && fielding_eligible(defense, &credit.player_id)
+        }
+        CreditKind::WildPitch => credit.player_id == defense.pitcher,
+    }
+}
+
+pub(crate) fn validate_strikeout_eligibility(
+    before: &GameState,
+    event: &Event,
+) -> Result<(), TransitionError> {
+    // Rules 5.05(a)(2), 5.09(a)(3): before occupancy, not same-play vacating.
+    if event
+        .delta
+        .credits
+        .iter()
+        .any(|c| c.kind == CreditKind::Strikeout)
+        && before.outs < 2
+        && before.bases[0].is_some()
+        && (event
+            .delta
+            .moves
+            .iter()
+            .any(|m| m.from == Base::Plate && m.to != Destination::Out)
+            || event
+                .delta
+                .third_out
+                .as_ref()
+                .is_some_and(|out| out.kind == ThirdOutKind::BatterAfterFirstTiming))
+    {
+        return Err(TransitionError::IllegalStateChange);
+    }
+    Ok(())
+}
+
+pub(crate) fn fielding_eligible(team: &TeamState, id: &str) -> bool {
+    id == team.pitcher
+        || team.batting_order.iter().enumerate().any(|(slot, player)| {
+            Some(slot) != team.dh_slot.map(usize::from) && player.as_str() == id
+        })
+}
+
 /// Derive one-way bench/removed transfers from active roles.
 pub(crate) fn finalize_personnel(
     before: &[TeamState; 2],
@@ -122,9 +259,11 @@ pub(crate) fn batter_charge<'a>(
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
     // Credit-only contradictions must not be masked by unknown FC lineage.
+    super::pitch::preflight(before, event)?;
     let _ = hit_value_credit(event)?;
     let _ = walk_classification(before, event)?;
     super::contact::validate(before, event)?;
+    super::pitch::validate(before, event)?;
     let current = before.teams[1 - before.half.offense()].pitcher.as_str();
     if event.kind == EventKind::FieldersChoice {
         if before.bases.iter().flatten().count() != 1

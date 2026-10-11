@@ -82,6 +82,7 @@ fn hit(before: &GameState, to: Destination, class: Option<CreditKind>) -> Event 
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             runs: credits.iter().filter(|c| c.kind == CreditKind::Run).count() as u8,
             moves,
@@ -264,6 +265,7 @@ fn strikeout(before: &GameState) -> Event {
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             moves: vec![RunnerMove {
                 runner: Runner {
@@ -664,7 +666,7 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
             event.fielding_review = review;
             let valid = apply(&before, event).unwrap();
             let original = valid.to_bytes();
-            assert!(original.starts_with(b"BBE14"));
+            assert!(original.starts_with(b"BBE15"));
             assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
             let batter = valid.event().participants.batter.as_ref().unwrap();
             let mut marker = (batter.len() as u64).to_le_bytes().to_vec();
@@ -682,7 +684,7 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
                 EventTransition::from_bytes(&bytes),
                 Err(TransitionError::InvalidEncoding)
             );
-            for earlier_prefix in [b"BBE13", b"BBE12", b"BBE11"] {
+            for earlier_prefix in [b"BBE14", b"BBE13", b"BBE12", b"BBE11"] {
                 let mut old_version = original.clone();
                 old_version[..5].copy_from_slice(earlier_prefix);
                 assert_eq!(
@@ -808,6 +810,7 @@ fn unclassified_hit_unknown_is_irreversible_and_local_to_actor_and_actual_pitche
             },
             fielding_review: FieldingReview::NoMisplay,
             two_out_contact: None,
+            single_delivery: None,
             delta: Delta {
                 moves: vec![],
                 outs: 0,

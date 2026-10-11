@@ -4,6 +4,7 @@
 pub mod accounting;
 mod codec;
 mod contact;
+mod pitch;
 mod reducer;
 mod rules;
 pub use reducer::apply;
@@ -157,6 +158,8 @@ pub enum CreditKind {
     IntentionalWalk,
     /// Scorer-qualified ground force/reverse-force double play, one batter unit.
     GroundedIntoDoublePlay,
+    /// One scorer-qualified legal-delivery occurrence, charged to the actual pitcher.
+    WildPitch,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credit {
@@ -282,6 +285,52 @@ pub struct TwoOutContactFacts {
     pub continuity: ContactContinuity,
     pub error_placement: Option<ReviewedErrorPlacement>,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeliveryContext {
+    RunnerOnly,
+    UncaughtThirdStrike,
+    DeliveredFourthBall,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HandlingAssessment {
+    PitcherWild,
+    CatcherPassed,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HandlingAdvance {
+    pub runner_id: String,
+    pub reached: Destination,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreDeliverySteal {
+    pub runner_id: String,
+    pub target: Destination,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecoveryReview {
+    Unknown,
+    NoRecoveryPutout,
+    BeforeAnyAdvance {
+        runner_id: String,
+    },
+    AfterAdvance {
+        runner_id: String,
+        advancer_id: String,
+    },
+    RecoveredThirdStrikeBatterBeforeFirst,
+}
+/// One legal-delivery episode and its supplied WP/PB units; not complete PA/game coverage.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SingleDeliveryFacts {
+    pub context: DeliveryContext,
+    pub handling: HandlingAssessment,
+    /// Supplied event-local catcher role, not inferred from lineup order.
+    pub catcher_id: String,
+    pub advances: Vec<HandlingAdvance>,
+    /// None means missing review; Some(empty) asserts reviewed absence.
+    pub pre_delivery_steals: Option<Vec<PreDeliverySteal>>,
+    pub recovery: RecoveryReview,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -289,6 +338,7 @@ pub struct Event {
     pub fielding_review: FieldingReview,
     pub delta: Delta,
     pub two_out_contact: Option<TwoOutContactFacts>,
+    pub single_delivery: Option<SingleDeliveryFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -363,17 +413,7 @@ impl EventTransition {
         }
         let is_pa = event.kind.is_pa();
         let batter_charge = rules::batter_charge(&before, &event)?;
-        if event.fielding_review == FieldingReview::NoMisplay
-            && (event.kind == EventKind::RunnerOnly(RunnerEvent::PassedBall)
-                || event.delta.credits.iter().any(|c| {
-                    matches!(
-                        c.kind,
-                        CreditKind::Error | CreditKind::PassedBall | CreditKind::InterferenceAward
-                    )
-                }))
-        {
-            return Err(TransitionError::IllegalCredit);
-        }
+        rules::validate_fielding_review(&event)?;
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
         let is_substitution = event.kind == EventKind::Substitution;
         if is_substitution {
@@ -390,21 +430,7 @@ impl EventTransition {
         }
         let mut expected_teams = before.teams.clone();
         expected_teams[offense].next_batter = expected_slot;
-        let pa_credits = event
-            .delta
-            .credits
-            .iter()
-            .filter(|c| c.kind == CreditKind::PlateAppearance)
-            .count();
-        if pa_credits != usize::from(is_pa)
-            || event.delta.credits.iter().any(|c| {
-                c.player_id.is_empty()
-                    || (c.kind == CreditKind::PlateAppearance
-                        && event.participants.batter.as_deref() != Some(&c.player_id))
-            })
-        {
-            return Err(TransitionError::IllegalCredit);
-        }
+        rules::validate_pa_credits(&event)?;
         let mut expected_bases = before.bases.clone();
         for change in &event.delta.changes {
             match change {
@@ -543,37 +569,8 @@ impl EventTransition {
         if scored.iter().map(String::as_str).collect::<Vec<_>>() != run_credits {
             return Err(TransitionError::IllegalCredit);
         }
-        let defense_team = &before.teams[1 - offense];
-        let fielding_eligible = |id: &str| {
-            id == defense_team.pitcher
-                || defense_team
-                    .batting_order
-                    .iter()
-                    .enumerate()
-                    .any(|(slot, player)| {
-                        Some(slot) != defense_team.dh_slot.map(usize::from) && player.as_str() == id
-                    })
-        };
         for credit in &event.delta.credits {
             let eligible = match credit.kind {
-                CreditKind::PlateAppearance | CreditKind::Run => true, // checked above
-                CreditKind::Hit
-                | CreditKind::Walk
-                | CreditKind::Strikeout
-                | CreditKind::Rbi
-                | CreditKind::AtBat
-                | CreditKind::HitByPitch
-                | CreditKind::SacrificeBunt
-                | CreditKind::SacrificeFly
-                | CreditKind::InterferenceAward
-                | CreditKind::Single
-                | CreditKind::Double
-                | CreditKind::Triple
-                | CreditKind::OrdinaryWalk
-                | CreditKind::IntentionalWalk
-                | CreditKind::GroundedIntoDoublePlay => {
-                    is_pa && event.participants.batter.as_deref() == Some(credit.player_id.as_str())
-                }
                 CreditKind::StolenBase => event.delta.moves.iter().any(|m| {
                     m.runner.player_id == credit.player_id
                         && matches!(
@@ -590,12 +587,7 @@ impl EventTransition {
                         && m.runner.player_id == credit.player_id
                         && m.to == Destination::Out
                 }),
-                CreditKind::Putout | CreditKind::Assist | CreditKind::Error => {
-                    fielding_eligible(&credit.player_id)
-                }
-                CreditKind::PassedBall => {
-                    credit.player_id != defense_team.pitcher && fielding_eligible(&credit.player_id)
-                }
+                _ => rules::credit_role_eligible(&before, &event, credit),
             };
             if !eligible {
                 return Err(TransitionError::IllegalCredit);
@@ -618,6 +610,7 @@ impl EventTransition {
                 });
             }
         }
+        rules::validate_credit_counts(&event)?;
         let count = |kind| {
             event
                 .delta
@@ -626,24 +619,6 @@ impl EventTransition {
                 .filter(|c| c.kind == kind)
                 .count()
         };
-        let outcomes =
-            count(CreditKind::Hit) + count(CreditKind::Walk) + count(CreditKind::Strikeout);
-        let exclusions = count(CreditKind::Walk)
-            + count(CreditKind::HitByPitch)
-            + count(CreditKind::SacrificeBunt)
-            + count(CreditKind::SacrificeFly)
-            + count(CreditKind::InterferenceAward);
-        if outcomes > 1
-            || exclusions > 1
-            || count(CreditKind::AtBat) > 1
-            || (exclusions > 0
-                && count(CreditKind::AtBat) + count(CreditKind::Hit) + count(CreditKind::Strikeout)
-                    > 0)
-            || count(CreditKind::Rbi) > usize::from(event.delta.runs)
-            || count(CreditKind::Putout) > usize::from(event.delta.outs)
-        {
-            return Err(TransitionError::IllegalCredit);
-        }
         // Rule 9.05(b)(1)-(2): a forced retirement on an asserted base
         // hit (including appeal at the first forced base) cannot credit Hit.
         // Other out labels do not establish that scorer condition.
@@ -657,25 +632,7 @@ impl EventTransition {
             return Err(TransitionError::IllegalCredit);
         }
         rules::validate_hit_value(&before, &event)?;
-        // Rules 5.05(a)(2), 5.09(a)(3): with first occupied before
-        // two outs, the third strike retires the batter automatically. A
-        // same-play runner advance cannot make him eligible after the fact.
-        if count(CreditKind::Strikeout) > 0
-            && before.outs < 2
-            && before.bases[0].is_some()
-            && (event
-                .delta
-                .moves
-                .iter()
-                .any(|m| m.from == Base::Plate && m.to != Destination::Out)
-                || event
-                    .delta
-                    .third_out
-                    .as_ref()
-                    .is_some_and(|out| out.kind == ThirdOutKind::BatterAfterFirstTiming))
-        {
-            return Err(TransitionError::IllegalStateChange);
-        }
+        rules::validate_strikeout_eligibility(&before, &event)?;
         if count(CreditKind::Walk)
             + count(CreditKind::HitByPitch)
             + count(CreditKind::InterferenceAward)

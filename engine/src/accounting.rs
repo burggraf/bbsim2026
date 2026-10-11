@@ -83,6 +83,7 @@ pub struct PitcherLine {
     /// None if a faced Walk in this pitcher segment lacks intent classification.
     pub credited_intentional_walks_allowed: Option<u32>,
     pub credited_strikeouts: u32,
+    pub credited_wild_pitches: u32,
     pub credited_hit_batters: u32,
     pub credited_sacrifice_bunts: u32,
     pub credited_sacrifice_flies: u32,
@@ -103,6 +104,7 @@ impl Default for PitcherLine {
             credited_walks_allowed: 0,
             credited_intentional_walks_allowed: Some(0),
             credited_strikeouts: 0,
+            credited_wild_pitches: 0,
             credited_hit_batters: 0,
             credited_sacrifice_bunts: 0,
             credited_sacrifice_flies: 0,
@@ -339,6 +341,13 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             }
         }
         for credit in &event.delta.credits {
+            if credit.kind == CreditKind::WildPitch {
+                result.pitchers[defense]
+                    .entry(current_pitcher.into())
+                    .or_default()
+                    .credited_wild_pitches += 1;
+                continue;
+            }
             if matches!(
                 credit.kind,
                 CreditKind::Putout
@@ -468,7 +477,8 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                         .credited_sacrifice_flies += 1;
                 }
                 CreditKind::InterferenceAward => batter.credited_interference_awards += 1,
-                CreditKind::Putout
+                CreditKind::WildPitch
+                | CreditKind::Putout
                 | CreditKind::Assist
                 | CreditKind::Error
                 | CreditKind::PassedBall => unreachable!(),

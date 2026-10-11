@@ -50,6 +50,7 @@ fn event(before: &GameState, kind: EventKind, review: FieldingReview) -> Event {
         },
         fielding_review: review,
         two_out_contact: None,
+        single_delivery: None,
         delta: Delta {
             moves: vec![],
             outs: 0,
