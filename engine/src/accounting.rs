@@ -256,7 +256,11 @@ fn clean_play(before: &GameState, event: &Event) -> bool {
         EventKind::FieldersChoice => true,
         EventKind::PlateAppearance => {
             let m = &event.delta.moves;
-            clean_station_hit(before, event)
+            // Validated bound facts prove one before-first ordinary retirement
+            // with held runners; the whole-chance review above excludes erased
+            // misplays. Credits/endpoints alone never supply this method.
+            event.ordinary_ground_throw.is_some()
+                || clean_station_hit(before, event)
                 || (m.len() == 1
                     && m[0].from == Base::Plate
                     && event.delta.runs == 0
