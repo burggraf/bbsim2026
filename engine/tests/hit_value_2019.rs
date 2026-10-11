@@ -662,7 +662,7 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
             event.fielding_review = review;
             let valid = apply(&before, event).unwrap();
             let original = valid.to_bytes();
-            assert!(original.starts_with(b"BBE12"));
+            assert!(original.starts_with(b"BBE13"));
             assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
             let batter = valid.event().participants.batter.as_ref().unwrap();
             let mut marker = (batter.len() as u64).to_le_bytes().to_vec();
@@ -680,12 +680,14 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
                 EventTransition::from_bytes(&bytes),
                 Err(TransitionError::InvalidEncoding)
             );
-            let mut old_version = original;
-            old_version[..5].copy_from_slice(b"BBE11");
-            assert_eq!(
-                EventTransition::from_bytes(&old_version),
-                Err(TransitionError::InvalidEncoding)
-            );
+            for earlier_prefix in [b"BBE12", b"BBE11"] {
+                let mut old_version = original.clone();
+                old_version[..5].copy_from_slice(earlier_prefix);
+                assert_eq!(
+                    EventTransition::from_bytes(&old_version),
+                    Err(TransitionError::InvalidEncoding)
+                );
+            }
         }
         // Same-length parsed positive control: a scorer-classified Double
         // can legitimately share a Single's final second-base destination.

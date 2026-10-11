@@ -123,6 +123,7 @@ pub(crate) fn batter_charge<'a>(
 ) -> Result<&'a str, TransitionError> {
     // Credit-only contradictions must not be masked by unknown FC lineage.
     let _ = hit_value_credit(event)?;
+    let _ = walk_classification(before, event)?;
     let current = before.teams[1 - before.half.offense()].pitcher.as_str();
     if event.kind == EventKind::FieldersChoice {
         if before.bases.iter().flatten().count() != 1
@@ -386,6 +387,58 @@ fn hit_value_credit(event: &Event) -> Result<Option<u8>, TransitionError> {
         return Err(TransitionError::IllegalCredit);
     }
     Ok(Some(value))
+}
+
+/// Validate explicit walk classification before charge ambiguity can mask a
+/// missing or conflicting Walk credit. No classification is inferred from play shape.
+pub(crate) fn walk_classification(
+    before: &GameState,
+    event: &Event,
+) -> Result<Option<CreditKind>, TransitionError> {
+    let modifiers: Vec<_> = event
+        .delta
+        .credits
+        .iter()
+        .filter(|credit| {
+            matches!(
+                credit.kind,
+                CreditKind::OrdinaryWalk | CreditKind::IntentionalWalk
+            )
+        })
+        .collect();
+    if modifiers.is_empty() {
+        return Ok(None);
+    }
+    let offense = before.half.offense();
+    let batter =
+        before.teams[offense].batting_order[before.teams[offense].next_batter as usize].as_str();
+    if modifiers.len() != 1
+        || event.kind != EventKind::PlateAppearance
+        || event
+            .delta
+            .credits
+            .iter()
+            .filter(|credit| credit.kind == CreditKind::Walk)
+            .count()
+            != 1
+        || event.participants.batter.as_deref() != Some(batter)
+        || modifiers[0].player_id != batter
+        || event.delta.credits.iter().any(|credit| {
+            matches!(
+                credit.kind,
+                CreditKind::Hit
+                    | CreditKind::Strikeout
+                    | CreditKind::AtBat
+                    | CreditKind::HitByPitch
+                    | CreditKind::SacrificeBunt
+                    | CreditKind::SacrificeFly
+                    | CreditKind::InterferenceAward
+            )
+        })
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    Ok(Some(modifiers[0].kind))
 }
 
 /// Rule 9.06: supplied scorer value is not inferred from final advancement.

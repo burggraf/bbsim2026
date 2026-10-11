@@ -1,6 +1,7 @@
 use bbsim_engine::{
     Base, Credit, CreditKind, Delta, Destination, Event, EventKind, EventTransition, GameState,
     Half, Participants, PersonnelChange, Runner, RunnerEvent, RunnerMove, TeamSide, TeamState,
+    TransitionError,
 };
 
 fn team(prefix: &str, pitcher: &str) -> TeamState {
@@ -266,8 +267,16 @@ fn versioned_record_roundtrips_and_rejects_corruption() {
     let transition =
         EventTransition::try_new(before.clone(), wild_pitch_event(&before), after).unwrap();
     let bytes = transition.to_bytes();
-    assert!(bytes.starts_with(b"BBE12"));
+    assert!(bytes.starts_with(b"BBE13"));
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), transition);
+    for earlier_prefix in [b"BBE12", b"BBE11"] {
+        let mut earlier = bytes.clone();
+        earlier[..5].copy_from_slice(earlier_prefix);
+        assert_eq!(
+            EventTransition::from_bytes(&earlier),
+            Err(TransitionError::InvalidEncoding)
+        );
+    }
     assert!(EventTransition::from_bytes(&bytes[..bytes.len() - 1]).is_err());
     let mut trailing = bytes.clone();
     trailing.push(0);

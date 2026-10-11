@@ -33,6 +33,8 @@ pub struct BatterLine {
     /// None if any supplied Hit in this player's segment lacks scored value.
     pub credited_hit_breakdown: Option<HitBreakdown>,
     pub credited_walks: u32,
+    /// None if a supplied Walk in this batter segment lacks intent classification.
+    pub credited_intentional_walks: Option<u32>,
     pub credited_strikeouts: u32,
     pub credited_runs: u32,
     pub credited_rbi: u32,
@@ -52,6 +54,7 @@ impl Default for BatterLine {
             credited_hits: 0,
             credited_hit_breakdown: Some(HitBreakdown::default()),
             credited_walks: 0,
+            credited_intentional_walks: Some(0),
             credited_strikeouts: 0,
             credited_runs: 0,
             credited_rbi: 0,
@@ -75,6 +78,8 @@ pub struct PitcherLine {
     /// Actual PA pitcher's supplied Hit breakdown; not carried run charges.
     pub credited_hit_breakdown_allowed: Option<HitBreakdown>,
     pub credited_walks_allowed: u32,
+    /// None if a faced Walk in this pitcher segment lacks intent classification.
+    pub credited_intentional_walks_allowed: Option<u32>,
     pub credited_strikeouts: u32,
     pub credited_hit_batters: u32,
     pub credited_sacrifice_bunts: u32,
@@ -94,6 +99,7 @@ impl Default for PitcherLine {
             credited_hits_allowed: 0,
             credited_hit_breakdown_allowed: Some(HitBreakdown::default()),
             credited_walks_allowed: 0,
+            credited_intentional_walks_allowed: Some(0),
             credited_strikeouts: 0,
             credited_hit_batters: 0,
             credited_sacrifice_bunts: 0,
@@ -361,10 +367,40 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 }
                 CreditKind::Walk => {
                     batter.credited_walks += 1;
-                    result.pitchers[defense]
+                    let classification = event.delta.credits.iter().find_map(|credit| {
+                        matches!(
+                            credit.kind,
+                            CreditKind::OrdinaryWalk | CreditKind::IntentionalWalk
+                        )
+                        .then_some(credit.kind)
+                    });
+                    match classification {
+                        Some(CreditKind::OrdinaryWalk) => {}
+                        Some(CreditKind::IntentionalWalk) => {
+                            if let Some(intentional_walks) = &mut batter.credited_intentional_walks
+                            {
+                                *intentional_walks += 1;
+                            }
+                        }
+                        None => batter.credited_intentional_walks = None,
+                        _ => unreachable!("walk classification is validated"),
+                    }
+                    let pitcher = result.pitchers[defense]
                         .entry(current_pitcher.into())
-                        .or_default()
-                        .credited_walks_allowed += 1;
+                        .or_default();
+                    pitcher.credited_walks_allowed += 1;
+                    match classification {
+                        Some(CreditKind::OrdinaryWalk) => {}
+                        Some(CreditKind::IntentionalWalk) => {
+                            if let Some(intentional_walks) =
+                                &mut pitcher.credited_intentional_walks_allowed
+                            {
+                                *intentional_walks += 1;
+                            }
+                        }
+                        None => pitcher.credited_intentional_walks_allowed = None,
+                        _ => unreachable!("walk classification is validated"),
+                    }
                 }
                 CreditKind::Strikeout => {
                     batter.credited_strikeouts += 1;
@@ -397,7 +433,9 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 CreditKind::AtBat
                 | CreditKind::Single
                 | CreditKind::Double
-                | CreditKind::Triple => {} // classification, not another credit unit
+                | CreditKind::Triple
+                | CreditKind::OrdinaryWalk
+                | CreditKind::IntentionalWalk => {} // classification, not another credit unit
                 CreditKind::HitByPitch => {
                     batter.credited_hit_by_pitch += 1;
                     result.pitchers[defense]

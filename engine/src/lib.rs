@@ -151,6 +151,9 @@ pub enum CreditKind {
     Single,
     Double,
     Triple,
+    /// Walk classifications are modifiers, not additional base-on-balls units.
+    OrdinaryWalk,
+    IntentionalWalk,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credit {
@@ -501,7 +504,9 @@ impl EventTransition {
                 | CreditKind::InterferenceAward
                 | CreditKind::Single
                 | CreditKind::Double
-                | CreditKind::Triple => {
+                | CreditKind::Triple
+                | CreditKind::OrdinaryWalk
+                | CreditKind::IntentionalWalk => {
                     is_pa && event.participants.batter.as_deref() == Some(credit.player_id.as_str())
                 }
                 CreditKind::StolenBase => event.delta.moves.iter().any(|m| {
