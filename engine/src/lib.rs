@@ -550,6 +550,18 @@ impl EventTransition {
         {
             return Err(TransitionError::IllegalCredit);
         }
+        // Rule 9.05(b)(1)-(2): a forced retirement on an asserted base
+        // hit (including appeal at the first forced base) cannot credit Hit.
+        // Other out labels do not establish that scorer condition.
+        if count(CreditKind::Hit) > 0
+            && event
+                .delta
+                .third_out
+                .as_ref()
+                .is_some_and(|out| out.kind == ThirdOutKind::Force)
+        {
+            return Err(TransitionError::IllegalCredit);
+        }
         // Rules 5.05(a)(2), 5.09(a)(3): with first occupied before
         // two outs, the third strike retires the batter automatically. A
         // same-play runner advance cannot make him eligible after the fact.
