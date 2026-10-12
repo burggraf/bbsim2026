@@ -338,6 +338,9 @@ fn clean_play(before: &GameState, event: &Event) -> bool {
                                         && simple_safe_pa_episode(event))
                             }))))
         }
+        EventKind::RunnerOnly(RunnerEvent::Balk) => {
+            event.balk.as_ref().is_some_and(crate::balk::exact_awards)
+        }
         EventKind::RunnerOnly(RunnerEvent::WildPitch) => {
             let m = &event.delta.moves;
             m.len() == 1

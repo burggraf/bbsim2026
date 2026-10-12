@@ -3362,3 +3362,287 @@ fn generic_single_movement_strikeout_retains_legacy_clean_er_proof() {
         }
     }
 }
+
+fn clean_imposed_balk_half(
+    mask: u8,
+    outs: u8,
+    half: Half,
+    reverse_moves: bool,
+    reverse_credits: bool,
+    relief: bool,
+    occurrences: u8,
+) -> (Vec<EventTransition>, usize) {
+    let (mut log, index) = clean_ground_half(mask, outs, half, false, false);
+    log.truncate(index);
+    let mut before = log.last().unwrap().after().clone();
+    if relief {
+        let defense = 1 - half.offense();
+        let change = event(
+            &before,
+            EventKind::Substitution,
+            vec![],
+            0,
+            0,
+            vec![],
+            vec![PersonnelChange::Pitcher {
+                team: if defense == 0 {
+                    TeamSide::Away
+                } else {
+                    TeamSide::Home
+                },
+                outgoing: before.teams[defense].pitcher.clone(),
+                incoming: before.teams[defense].bench[0].clone(),
+            }],
+        );
+        before = record_clean(&mut log, &before, change);
+    }
+    let award_index = log.len();
+    for _ in 0..occurrences {
+        let mut moves = vec![];
+        let mut credits = vec![credit(
+            &before.teams[1 - half.offense()].pitcher,
+            CreditKind::Balk,
+        )];
+        for (i, runner) in before.bases.iter().enumerate() {
+            if let Some(runner) = runner {
+                moves.push(RunnerMove {
+                    runner: runner.clone(),
+                    from: [Base::First, Base::Second, Base::Third][i],
+                    to: [Destination::Second, Destination::Third, Destination::Home][i],
+                });
+                if i == 2 {
+                    credits.push(credit(&runner.player_id, CreditKind::Run));
+                }
+            }
+        }
+        if reverse_moves {
+            moves.reverse();
+        }
+        if reverse_credits {
+            credits.reverse();
+        }
+        let mut award = event(
+            &before,
+            EventKind::RunnerOnly(RunnerEvent::Balk),
+            moves,
+            0,
+            u8::from(before.bases[2].is_some()),
+            credits,
+            vec![],
+        );
+        award.balk = Some(bbsim_engine::BalkFacts {
+            cause: bbsim_engine::BalkCause::PitcherAction602a,
+            disposition: bbsim_engine::BalkDisposition::PenaltyApplied,
+            resolution: bbsim_engine::BalkResolution::ExactProtectedAwards,
+        });
+        let saved = before.clone();
+        let next = record_clean(&mut log, &before, award);
+        assert_eq!(before, saved);
+        assert_eq!(next.teams, before.teams);
+        assert_eq!(next.outs, before.outs);
+        before = next;
+    }
+    let batter = before.teams[half.offense()].batting_order
+        [before.teams[half.offense()].next_batter as usize]
+        .clone();
+    let mut moves = vec![batter_move(&before, Destination::Home)];
+    let mut credits = vec![
+        credit(&batter, CreditKind::PlateAppearance),
+        credit(&batter, CreditKind::Hit),
+        credit(&batter, CreditKind::Run),
+    ];
+    for (i, runner) in before.bases.iter().enumerate() {
+        if let Some(runner) = runner {
+            moves.push(RunnerMove {
+                runner: runner.clone(),
+                from: [Base::First, Base::Second, Base::Third][i],
+                to: Destination::Home,
+            });
+            credits.push(credit(&runner.player_id, CreditKind::Run));
+        }
+    }
+    let homer = event(
+        &before,
+        EventKind::OutOfParkHomeRun,
+        moves,
+        0,
+        (before.bases.iter().flatten().count() + 1) as u8,
+        credits,
+        vec![],
+    );
+    before = record_clean(&mut log, &before, homer);
+    while before.half == half {
+        let batter = before.teams[half.offense()].batting_order
+            [before.teams[half.offense()].next_batter as usize]
+            .clone();
+        let out = event(
+            &before,
+            EventKind::PlateAppearance,
+            vec![batter_move(&before, Destination::Out)],
+            1,
+            0,
+            vec![credit(&batter, CreditKind::Strikeout)],
+            vec![],
+        );
+        before = record_clean(&mut log, &before, out);
+    }
+    (log, award_index)
+}
+
+#[test]
+fn exact_imposed_balk_er_has_literal_observed_lines_in_168_order_frames() {
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 1u8..8 {
+                for reverse_moves in [false, true] {
+                    for reverse_credits in [false, true] {
+                        let (log, index) = clean_imposed_balk_half(
+                            mask,
+                            outs,
+                            half,
+                            reverse_moves,
+                            reverse_credits,
+                            false,
+                            1,
+                        );
+                        for t in &log {
+                            assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+                        }
+                        let a = derive_accounting(&log).unwrap();
+                        let pitcher = &log[index].event().participants.pitcher;
+                        let p = &a.pitchers[1 - half.offense()][pitcher];
+                        let runs = mask.count_ones() + 2;
+                        assert_eq!(p.earned_runs, Some(runs), "{half:?} outs{outs} mask{mask} moves{reverse_moves} credits{reverse_credits}");
+                        assert_eq!(
+                            (
+                                p.runs_allowed,
+                                p.outs_recorded,
+                                p.batters_faced,
+                                p.credited_balks
+                            ),
+                            (runs, 3, mask.count_ones() + 5, 1)
+                        );
+                        assert_eq!(p.at_bats_against, Some(5));
+                        assert_eq!(p.classified_hits_allowed, Some(2));
+                        assert_eq!(p.credited_strikeouts, 3);
+                        assert_eq!(a.runs[half.offense()], runs);
+                        assert_eq!(
+                            a.batters[half.offense()]
+                                .values()
+                                .map(|b| b.plate_appearances)
+                                .sum::<u32>(),
+                            mask.count_ones() + 5
+                        );
+                        frames += 1;
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 168);
+}
+
+#[test]
+fn exact_imposed_balk_er_keeps_partial_review_origin_and_completion_unknown() {
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            let (clean, index) = clean_imposed_balk_half(7, outs, half, true, true, false, 1);
+            let pitcher = &clean[index].event().participants.pitcher;
+            let side = 1 - half.offense();
+            let start = usize::from(half == Half::Bottom) * 3;
+            for missing in 0..6 {
+                let mut log = clean.clone();
+                let position = if missing == 2 { start } else { index };
+                let mut e = log[position].event().clone();
+                match missing {
+                    0 => e.balk = None,
+                    1 | 2 => e.fielding_review = FieldingReview::Unknown,
+                    3 => e.balk.as_mut().unwrap().cause = bbsim_engine::BalkCause::Unknown,
+                    4 => {
+                        e.balk.as_mut().unwrap().disposition =
+                            bbsim_engine::BalkDisposition::Unknown
+                    }
+                    5 => {
+                        e.balk.as_mut().unwrap().resolution = bbsim_engine::BalkResolution::Unknown
+                    }
+                    _ => unreachable!(),
+                }
+                if missing == 0 || missing >= 3 {
+                    e.delta.credits.retain(|c| c.kind != CreditKind::Balk);
+                }
+                let t = apply(log[position].before(), e).unwrap();
+                assert_eq!(t.after(), log[position].after());
+                log[position] = t;
+                let a = derive_accounting(&log).unwrap();
+                assert_eq!(a.pitchers[side][pitcher].runs_allowed, 5);
+                assert_eq!(a.pitchers[side][pitcher].earned_runs, None);
+            }
+            let late: Vec<_> = clean[start..]
+                .iter()
+                .map(|t| {
+                    let mut before = t.before().clone();
+                    before.inning += 1;
+                    apply(&before, t.event().clone()).unwrap()
+                })
+                .collect();
+            assert_eq!(
+                derive_accounting(&late).unwrap().pitchers[side][pitcher].earned_runs,
+                None
+            );
+            assert_eq!(
+                derive_accounting(&clean[..clean.len() - 1])
+                    .unwrap()
+                    .pitchers[side][pitcher]
+                    .earned_runs,
+                None
+            );
+        }
+    }
+}
+
+#[test]
+fn exact_imposed_balk_er_retains_inherited_charges_and_distinct_occurrences() {
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for occurrences in [1, 2] {
+                let (log, index) =
+                    clean_imposed_balk_half(7, outs, half, true, true, true, occurrences);
+                let a = derive_accounting(&log).unwrap();
+                let side = 1 - half.offense();
+                let prior = &log[index - 1].event().participants.pitcher;
+                let current = &log[index].event().participants.pitcher;
+                assert_ne!(prior, current);
+                let old = &a.pitchers[side][prior];
+                let new = &a.pitchers[side][current];
+                assert_eq!(
+                    (
+                        old.runs_allowed,
+                        old.earned_runs,
+                        old.outs_recorded,
+                        old.batters_faced,
+                        old.credited_balks
+                    ),
+                    (4, Some(4), u32::from(outs), 4 + u32::from(outs), 0)
+                );
+                assert_eq!(
+                    (
+                        new.runs_allowed,
+                        new.earned_runs,
+                        new.outs_recorded,
+                        new.batters_faced,
+                        new.credited_balks
+                    ),
+                    (
+                        1,
+                        Some(1),
+                        3 - u32::from(outs),
+                        4 - u32::from(outs),
+                        u32::from(occurrences)
+                    )
+                );
+                assert_eq!(a.runs[half.offense()], 5);
+            }
+        }
+    }
+}

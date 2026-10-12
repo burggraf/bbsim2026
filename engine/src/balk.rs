@@ -13,7 +13,7 @@ fn units(event: &Event) -> usize {
         .filter(|c| c.kind == CreditKind::Balk)
         .count()
 }
-fn exact_awards(facts: &BalkFacts) -> bool {
+pub(crate) fn exact_awards(facts: &BalkFacts) -> bool {
     facts.cause == BalkCause::PitcherAction602a
         && facts.disposition == BalkDisposition::PenaltyApplied
         && matches!(&facts.resolution, BalkResolution::ExactProtectedAwards)
