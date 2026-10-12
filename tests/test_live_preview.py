@@ -59,8 +59,17 @@ class LivePreviewTests(unittest.TestCase):
             expected = {}
             for seed in [1, 2]:
                 expected[seed] = subprocess.check_output(
-                    [str(BINARY), "--baseline", str(baseline), "--seed", str(seed), "--autoplay"],
+                    [str(BINARY), "--baseline", str(baseline), "--seed", str(seed), "--autoplay", "--trace"],
                     encoding="utf-8", timeout=30)
+            plain = subprocess.check_output(
+                [str(BINARY), "--baseline", str(baseline), "--seed", "1", "--autoplay"],
+                encoding="utf-8", timeout=30)
+            traced = expected[1]
+            without_trace = traced[:traced.index('TRACE FORMAT:')] + traced[traced.index('Play 01 |'):]
+            self.assertEqual(without_trace, plain)
+            self.assertEqual(traced.count('TRACE PLAY 1 BEGIN'), 1)
+            self.assertIn('Before state:', traced)
+            self.assertIn('After state:', traced)
             plays = lambda text: text[text.index("Play 01"):]
             self.assertNotEqual(plays(expected[1]), plays(expected[2]))
             with running(BINARY, baseline) as url:

@@ -3,6 +3,7 @@ pub struct Options {
     pub baseline: String,
     pub seed: u64,
     pub autoplay: bool,
+    pub trace: bool,
 }
 pub fn parse(args: &[String]) -> Result<Option<Options>, String> {
     if args == ["--help"] {
@@ -11,6 +12,7 @@ pub fn parse(args: &[String]) -> Result<Option<Options>, String> {
     let mut baseline = None;
     let mut seed = None;
     let mut autoplay = false;
+    let mut trace = false;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -26,6 +28,7 @@ pub fn parse(args: &[String]) -> Result<Option<Options>, String> {
                 )
             }
             "--autoplay" if !autoplay => autoplay = true,
+            "--trace" if !trace => trace = true,
             _ => return Err(format!("unknown or repeated option: {arg}")),
         }
     }
@@ -33,5 +36,6 @@ pub fn parse(args: &[String]) -> Result<Option<Options>, String> {
         baseline: baseline.ok_or("--baseline PATH is required")?,
         seed: seed.unwrap_or(1),
         autoplay,
+        trace,
     }))
 }

@@ -1,5 +1,7 @@
 #[path = "support/preview_cli.rs"]
 mod cli;
+#[path = "support/game_trace.rs"]
+mod game_trace;
 #[path = "support/presentation.rs"]
 mod presentation;
 #[path = "support/preview.rs"]
@@ -10,12 +12,12 @@ fn main() -> io::Result<()> {
     let options = match cli::parse(&args) {
         Ok(Some(options)) => options,
         Ok(None) => {
-            println!("Experimental generated game, not a calibrated MLB matchup.\nUsage: generated_game --baseline COUNTS.csv [--seed N] [--autoplay]\nDefault seed1. Enter advances, q/EOF stops; rerun same counts/seed to restart.");
+            println!("Experimental generated game, not a calibrated MLB matchup.\nUsage: generated_game --baseline COUNTS.csv [--seed N] [--autoplay] [--trace]\nDefault seed1. Enter advances, q/EOF stops; rerun same counts/seed to restart.");
             return Ok(());
         }
         Err(error) => {
             eprintln!(
-                "{error}\nUsage: generated_game --baseline COUNTS.csv [--seed N] [--autoplay]"
+                "{error}\nUsage: generated_game --baseline COUNTS.csv [--seed N] [--autoplay] [--trace]"
             );
             std::process::exit(2);
         }
@@ -44,5 +46,8 @@ fn main() -> io::Result<()> {
         baseline.probabilities()
     )?;
     writeln!(output,"Coarse ground/contact outs and station advancement; no player ratings, fatigue, DP, tactics or runner-only mechanisms yet.\n")?;
+    if options.trace {
+        game_trace::write(&log, &mut output)?;
+    }
     presentation::present(&log, &mut io::stdin().lock(), &mut output, options.autoplay)
 }

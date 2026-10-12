@@ -28,6 +28,14 @@ describes the existing internal data path.
 - **Autoplay / Pause:** display one recorded play per second; no browser outcomes.
 - **Restart:** replay this same game from the beginning, not reroll it.
 - **Final result:** jump to the final score, line score and supplied statistics.
+- **Full game log:** below the field, closed by default. Open it for a scrolling
+  list of every play/result and engine-provided before/after inning, outs, score,
+  runners and pitcher charges. Expand any entry's **Full native state and event
+  facts** for complete immutable snapshots, lineups/cursors, pitcher/DH/bench
+  state, runner moves, outs/runs/credits and all supplied event facts. The entire
+  game is available independently of playback position; no missing states are
+  guessed. After states normalize half-inning boundaries (outs reset to zero);
+  the event still records the out(s) and scoring on the play.
 
 Manual navigation stops autoplay. Playback stops at game end and pauses when
 its tab is hidden. New generation resets playback. Errors are displayed instead
@@ -39,11 +47,13 @@ No new dependencies or engine/model changes.
 
 ## Optional server-free playback
 
-The original static viewer remains available, without JavaScript or a server:
+The original static viewer remains available, without JavaScript or a server.
+`--trace` adds the detailed native log; without it, older records show their full
+summary with an explicit notice that detailed before/after snapshots are absent:
 
 ```sh
 cargo run --manifest-path engine/Cargo.toml --example generated_game -- \
-  --baseline /tmp/bbsim-preview-2019-counts.csv --seed 1 --autoplay \
+  --baseline /tmp/bbsim-preview-2019-counts.csv --seed 1 --autoplay --trace \
   > /tmp/bbsim-game-record.txt
 python3 preview/build_viewer.py /tmp/bbsim-game-record.txt /tmp/bbsim-game-preview.html
 open /tmp/bbsim-game-preview.html
@@ -68,6 +78,10 @@ seed and wrap-to-zero, playback/pause/restart, and automatic terminal stopping.
 
 With the audited baseline, seed 1 has 75 plays/Away 3–Home 12; seed 2 has 89 plays/
 Away 9–Home 3. These are exploratory simulations, not historical matchup evidence.
+The optional `engine-debug-v1` trace is a human-inspection format, not the
+canonical codec or independent validation certificate. Native trace tests compare
+all full snapshots/summary fields to the actual Rust transitions, including
+inning boundaries and the terminal play. Traced/untraced game/stat output agrees.
 Statistics remain supplied-credit totals, not complete official boxes; unknowns
 remain `?`. The viewer recognizes only the current complete terminal format and
 rejects malformed/incomplete records; it does not replace canonical validation.

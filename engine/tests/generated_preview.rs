@@ -1,5 +1,7 @@
 #[path = "../examples/support/diagnostics.rs"]
 mod diagnostics;
+#[path = "../examples/support/game_trace.rs"]
+mod game_trace;
 #[path = "../examples/support/presentation.rs"]
 mod presentation;
 #[path = "../examples/support/preview.rs"]
@@ -35,6 +37,61 @@ fn initial() -> GameState {
 const CSV: &str = "key,value\nformat,preview-counts-v1\ncatalog_sha256,2a3362ba0bc970515048c87c5bf5bcaab1bd093593b7bafc1e50e2ebaa241583\nquery_version,preview-baseline-v1\nselected_pa,103\nexcluded_ibb,2\nexcluded_interference,1\nstrikeout,20\nwalk,8\nhbp,1\nsingle,15\ndouble,4\ntriple,1\nhome_run,4\nroe,2\ncontact_out,45\n";
 
 #[test]
+fn trace_flag_is_opt_in_and_repeated_trace_is_rejected() {
+    let args = |values: &[&str]| values.iter().map(|v| v.to_string()).collect::<Vec<_>>();
+    assert!(preview_cli::parse(&args(&[
+        "--baseline",
+        "counts.csv",
+        "--autoplay",
+        "--trace"
+    ]))
+    .is_ok());
+    assert!(
+        preview_cli::parse(&args(&["--baseline", "counts.csv", "--trace", "--trace"])).is_err()
+    );
+}
+
+#[test]
+fn native_trace_preserves_every_full_before_event_after_including_boundaries() {
+    let baseline = Baseline::read_csv(CSV).unwrap();
+    let log = preview::game(1, &baseline).unwrap();
+    assert!(log
+        .iter()
+        .any(|t| t.before().half != t.after().half && t.after().outs == 0));
+    assert!(log.last().unwrap().after().over);
+    let mut actual = Vec::new();
+    game_trace::write(&log, &mut actual).unwrap();
+    assert!(
+        !actual.is_empty(),
+        "Native trace must contain every transition"
+    );
+    let state_summary = |s: &GameState| {
+        let bases = s.bases.each_ref().map(|r| {
+            r.as_ref().map_or("empty".into(), |r| {
+                format!("{} (charged to {})", r.player_id, r.responsible_pitcher)
+            })
+        });
+        format!(
+            "{:?} {} | Outs: {} | Away {} - Home {} | Bases: 1={} 2={} 3={} | Game over: {}",
+            s.half, s.inning, s.outs, s.score[0], s.score[1], bases[0], bases[1], bases[2], s.over
+        )
+    };
+    let mut expected = String::from("TRACE FORMAT: engine-debug-v1\n");
+    for (i, t) in log.iter().enumerate() {
+        expected.push_str(&format!(
+            "TRACE PLAY {} BEGIN\nBefore state: {}\nAfter state: {}\nBefore:\n{:#?}\nEvent:\n{:#?}\nAfter:\n{:#?}\nTRACE PLAY {} END\n",
+            i + 1, state_summary(t.before()), state_summary(t.after()), t.before(), t.event(), t.after(), i + 1
+        ));
+    }
+    assert_eq!(String::from_utf8(actual).unwrap(), expected);
+    let mut plain = Vec::new();
+    presentation::present(&log, &mut &b""[..], &mut plain, true).unwrap();
+    assert!(String::from_utf8(plain)
+        .unwrap()
+        .contains("FINAL: Away 3 - Home 11"));
+}
+
+#[test]
 fn diagnostic_harness_reports_checks_and_rejects_empty_batch() {
     let baseline = Baseline::read_csv(CSV).unwrap();
     assert!(diagnostics::verify(&baseline, 0).is_err());
@@ -58,7 +115,8 @@ fn cli_requires_a_baseline_and_validates_seed_and_flags() {
         Some(preview_cli::Options {
             baseline: "counts.csv".into(),
             seed: 123,
-            autoplay: true
+            autoplay: true,
+            trace: false
         })
     );
     assert_eq!(preview_cli::parse(&args(&["--help"])).unwrap(), None);

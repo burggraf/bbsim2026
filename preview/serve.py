@@ -126,7 +126,7 @@ def make_server(binary, baseline, port=0):
                 return
             try:
                 result = subprocess.run(
-                    [str(binary), '--baseline', str(baseline), '--seed', str(seed), '--autoplay'],
+                    [str(binary), '--baseline', str(baseline), '--seed', str(seed), '--autoplay', '--trace'],
                     check=True, capture_output=True, encoding='utf-8', timeout=30)
                 page = build_live_viewer(result.stdout, seed)
             except (OSError, subprocess.SubprocessError, ValueError) as error:

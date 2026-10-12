@@ -18,7 +18,43 @@ Supplied-credit statistics — not a complete official box.
 """
 
 
+def traced_record():
+    blocks = ''.join(
+        f'TRACE PLAY {i} BEGIN\nBefore state: supplied before {i}\nAfter state: supplied after {i}\nBefore:\nGameState {{ outs: {i-1}, over: false }}\n'
+        f'Event:\nEvent {{ result: "<inspect & escape>" }}\nAfter:\n'
+        f'GameState {{ outs: {i}, over: {str(i == 3).lower()} }}\nTRACE PLAY {i} END\n'
+        for i in range(1, 4))
+    return 'TRACE FORMAT: engine-debug-v1\n' + blocks + RECORD
+
+
 class VisibleViewerTests(unittest.TestCase):
+    def test_full_log_is_closed_scrollable_and_preserves_every_native_snapshot(self):
+        page = build_viewer(traced_record())
+        self.assertIn('<details class="game-log" id="game-log">', page)
+        self.assertIn('class="game-log-scroll"', page)
+        self.assertIn('overflow-y:auto', page)
+        self.assertEqual(page.count('class="game-log-entry"'), 3)
+        for i in range(1, 4):
+            self.assertIn(f'id="log-play{i}"', page)
+            self.assertIn(f'GameState {{ outs: {i-1}, over: false }}', page)
+        self.assertIn('Before:', page)
+        self.assertIn('After:', page)
+        self.assertIn('&lt;inspect &amp; escape&gt;', page)
+        self.assertNotIn('<inspect & escape>', page)
+        self.assertIn('GameState { outs: 3, over: true }', page)
+
+    def test_partial_or_misnumbered_native_trace_is_not_presented_as_complete(self):
+        for source in [traced_record().replace('TRACE PLAY 2 END', 'TRACE PLAY 4 END'),
+                       traced_record().replace('TRACE FORMAT: engine-debug-v1', 'TRACE FORMAT: unknown'),
+                       traced_record().replace('After:', 'Missing:', 1)]:
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                build_viewer(source)
+
+    def test_legacy_full_summary_discloses_unavailable_native_snapshots(self):
+        page = build_viewer(RECORD)
+        self.assertIn('id="game-log"', page)
+        self.assertIn('Detailed native before/after snapshots are unavailable', page)
+        self.assertIn('Play 01 | Top 1 | Away-1', page)
     def test_supplied_score_runner_and_navigation_are_visible(self):
         page = build_viewer(RECORD)
         self.assertIn('id="frame0"', page)

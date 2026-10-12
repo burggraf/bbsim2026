@@ -15,6 +15,7 @@ h1{font-size:30px;margin:8px 0}.eyebrow{color:#9ab7b1;letter-spacing:3px;font-si
 svg{display:block;width:100%;height:auto;max-height:390px}.play h2{font-size:23px;line-height:1.4}.progress{color:#a6e4bd;font-size:13px;text-transform:uppercase;letter-spacing:2px}
 nav{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}a{display:inline-block;text-decoration:none;color:#e9f0f2;background:#2a414f;border:1px solid #466373;border-radius:8px;padding:12px 16px}a.primary{background:#b6eb91;color:#142719;border-color:#b6eb91;font-weight:700}a:focus-visible{outline:3px solid #ffda77;outline-offset:4px}a:hover{filter:brightness(1.15)}
 footer{font-size:13px;margin-top:26px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px ui-monospace,monospace;line-height:1.6;background:#15242f;border-radius:12px;padding:20px}summary{cursor:pointer;color:#b6eb91;padding:16px 0}
+.game-log{margin-top:24px;border:1px solid #304756;border-radius:12px;padding:0 18px}.game-log-scroll{max-height:520px;overflow-y:auto;overscroll-behavior:contain;padding:0 12px 12px}.game-log-entry{border-top:1px solid #304756;padding:12px 0}.game-log-entry h3{font-size:17px}.game-log-entry pre{margin:8px 0}.game-log-entry summary{font-size:13px}.game-log-scroll:focus-visible{outline:3px solid #ffda77}
 @media(max-width:720px){.layout{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}.runs{font-size:44px}.score{padding:16px}.status{font-size:13px}main{padding:20px 14px}}
 """
 
@@ -50,6 +51,39 @@ def build_viewer(source: str) -> str:
     metadata = next((line for line in source.splitlines() if line.startswith("Seed:")), "Seed not supplied")
     escape = html.escape
     count = len(records)
+    trace = list(re.finditer(r'^TRACE PLAY (\d+) BEGIN\n(.*?)^TRACE PLAY \1 END\n',
+                             source, re.MULTILINE | re.DOTALL))
+    has_trace = bool(re.search(r'^TRACE (FORMAT:|PLAY )', source, re.MULTILINE))
+    entries = []
+    if has_trace:
+        if (re.findall(r'^TRACE FORMAT: (.+)$', source, re.MULTILINE) != ['engine-debug-v1']
+                or len(trace) != count
+                or len(re.findall(r'^TRACE PLAY ', source, re.MULTILINE)) != 2 * count):
+            raise ValueError('Expected one complete supported native trace per play')
+        for i, (item, record) in enumerate(zip(trace, records), 1):
+            if int(item.group(1)) != i:
+                raise ValueError('Native trace numbering must match play numbering')
+            body = item.group(2)
+            parts = re.fullmatch(r'Before state: ([^\n]+)\nAfter state: ([^\n]+)\n'
+                                 r'Before:\n(.+?)\nEvent:\n(.+?)\nAfter:\n(.+)\n', body, re.DOTALL)
+            if not parts:
+                raise ValueError('Native trace must include before, event and after snapshots')
+            heading = f'Play {i:02} · {record.group(2)} · {record.group(3)}'
+            entries.append(f'<article class="game-log-entry" id="log-play{i}"><h3>{escape(heading)}</h3>'
+                           f'<pre>Before: {escape(parts.group(1))}\nAfter:  {escape(parts.group(2))}</pre>'
+                           '<details><summary>Full native state and event facts</summary>'
+                           f'<pre>{escape(body)}</pre></details></article>')
+        log_content = ('<p>Engine-provided before/event/after snapshots. After states normalize inning '
+                       'boundaries; the event retains outs, runs, runner moves and credits. '
+                       'Expand an entry for full lineups, pitchers, runner charges and all supplied facts.</p>'
+                       + ''.join(entries))
+    else:
+        log_content = ('<p>Detailed native before/after snapshots are unavailable in this older record. '
+                       'This is the complete supplied summary; no missing states are inferred.</p>'
+                       f'<pre>{escape(source)}</pre>')
+    game_log = (f'<details class="game-log" id="game-log"><summary>Full game log — {count} plays</summary>'
+                '<div class="game-log-scroll" tabindex="0" role="region" aria-label="Full game history">'
+                + log_content + '</div></details>')
 
     def frame(index):
         description, away, home, status, bases = frames[index]
@@ -93,7 +127,7 @@ def build_viewer(source: str) -> str:
 <body><main><header><div><div class="eyebrow">2019 BASEBALL · ENGINE PREVIEW</div>
 <h1>Baseball Simulator</h1></div><div class="badge">Offline · Rust-engine replay</div></header>
 <p class="intro">Fictional equal teams, using the pooled 2019 league baseline. This is a visual simulation replay, not yet realistic team matchups or managerial gameplay.</p>
-<p class="intro">{escape(metadata)}</p>{body}
+<p class="intro">{escape(metadata)}</p>{body}{game_log}
 <footer>Read-only playback: the browser does not generate outcomes. Statistics are supplied-credit totals, not a complete official box. No accuracy or finished-product claim.</footer>
 </main></body></html>'''
 
