@@ -417,6 +417,8 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
     let mut error_batter = None;
     let mut error_runner = None;
     let mut empty_muff_earned = 0;
+    // Virtual inning clock only, not a limit on actual errors/events/credits.
+    let mut lost_muff_outs = 0;
     let mut half_runs: BTreeMap<(usize, String), u32> = BTreeMap::new();
     for (index, transition) in log.iter().enumerate() {
         let before = transition.before();
@@ -431,15 +433,21 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             error_batter = None;
             error_runner = None;
             empty_muff_earned = 0;
+            lost_muff_outs = 0;
             half_runs.clear();
         }
         let clean = clean_play(before, event);
-        if before.outs < 2
+        if (before.outs < 2 || error_batter.is_some())
             && before.bases.iter().all(Option::is_none)
             && event.fielding_review == FieldingReview::SoleGroundMuff
             && event.muffed_ground_ball.is_some()
         {
-            empty_muff_half &= error_batter.is_none() && half_runs.is_empty();
+            // Later empty-base episodes cannot move any surviving runner:
+            // previously certified reaches have already scored. Only the
+            // first episode requires a zero-run prefix; earned runs established
+            // before later missed retirements must not be erased.
+            empty_muff_half &= error_batter.is_some() || half_runs.is_empty();
+            lost_muff_outs = (lost_muff_outs + 1).min(3);
             error_batter = event
                 .muffed_ground_ball
                 .as_ref()
@@ -698,7 +706,10 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                     // on scoring so that actor's later clean reach can earn.
                     // One lost out ends the virtual inning at two actual outs.
                     let error_reach = error_runner.as_ref() == Some(&credit.player_id);
-                    if empty_muff_half && error_batter.is_some() && !error_reach && before.outs < 2
+                    if empty_muff_half
+                        && error_batter.is_some()
+                        && !error_reach
+                        && before.outs + lost_muff_outs < 3
                     {
                         empty_muff_earned += 1;
                     }
