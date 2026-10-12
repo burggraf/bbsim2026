@@ -363,12 +363,19 @@ fn finish_half(
     runs: &BTreeMap<(usize, String), u32>,
     certified: bool,
     unearned: bool,
+    reconstructed: Option<u32>,
 ) {
     for ((side, id), count) in runs {
         let pitcher = accounting.pitchers[*side].entry(id.clone()).or_default();
         if certified {
             if let Some(earned) = &mut pitcher.earned_runs {
                 *earned += count;
+            }
+        } else if let Some(contribution) = reconstructed {
+            // The empty-base muff certificate has one unchanged pitcher and
+            // no inherited charges; its scalar contribution belongs to him.
+            if let Some(earned) = &mut pitcher.earned_runs {
+                *earned += contribution;
             }
         } else if !unearned {
             pitcher.earned_runs = None;
@@ -406,6 +413,9 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
     let mut unearned_half = clean_half;
     let mut missed_third_out = false;
     let mut half_pitcher = first.event().participants.pitcher.clone();
+    let mut empty_muff_half = clean_half;
+    let mut error_batter = None;
+    let mut empty_muff_earned = 0;
     let mut half_runs: BTreeMap<(usize, String), u32> = BTreeMap::new();
     for (index, transition) in log.iter().enumerate() {
         let before = transition.before();
@@ -416,9 +426,30 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             unearned_half = clean_half;
             missed_third_out = false;
             half_pitcher = event.participants.pitcher.clone();
+            empty_muff_half = clean_half;
+            error_batter = None;
+            empty_muff_earned = 0;
             half_runs.clear();
         }
         let clean = clean_play(before, event);
+        if before.outs < 2
+            && before.bases.iter().all(Option::is_none)
+            && event.fielding_review == FieldingReview::SoleGroundMuff
+            && event.muffed_ground_ball.is_some()
+        {
+            empty_muff_half &= error_batter.is_none() && half_runs.is_empty();
+            error_batter = event
+                .muffed_ground_ball
+                .as_ref()
+                .map(|f| f.batter_id.clone());
+        } else if error_batter.is_some() {
+            // No advancement reconstruction: only held-runner caught outs
+            // and sole homers after the one empty-base lost retirement.
+            empty_muff_half &=
+                clean && (event.caught_strikeout.is_some() || event.sole_home_run.is_some());
+        } else {
+            empty_muff_half &= clean;
+        }
         if before.outs == 2
             && event.muffed_ground_ball.is_some()
             && event.fielding_review == FieldingReview::SoleGroundMuff
@@ -431,9 +462,11 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         clean_half &= clean;
         let offense = before.half.offense();
         let defense = 1 - offense;
-        unearned_half &= event.delta.changes.is_empty()
+        let unchanged_personnel = event.delta.changes.is_empty()
             && event.participants.pitcher == half_pitcher
             && transition.after().teams[defense].pitcher == half_pitcher;
+        unearned_half &= unchanged_personnel;
+        empty_muff_half &= unchanged_personnel;
         if event.kind != EventKind::Substitution {
             let team = &before.teams[defense];
             // A no-DH pitcher is also in the batting order; observe him once.
@@ -653,6 +686,17 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                         .credited_strikeouts += 1;
                 }
                 CreditKind::Run => {
+                    // Only the clean HR batter's current reach can earn a run
+                    // in this suffix. The original error reach is unearned,
+                    // but its actor may later return with a distinct clean PA.
+                    // One lost out ends the virtual inning at two actual outs.
+                    if empty_muff_half
+                        && error_batter.is_some()
+                        && event.participants.batter.as_ref() == Some(&credit.player_id)
+                        && before.outs < 2
+                    {
+                        empty_muff_earned += 1;
+                    }
                     batter.credited_runs += 1;
                     let scorer = event
                         .delta
@@ -721,6 +765,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 &half_runs,
                 clean_half && ended,
                 unearned_half && missed_third_out && ended,
+                (empty_muff_half && error_batter.is_some() && ended).then_some(empty_muff_earned),
             );
         }
     }

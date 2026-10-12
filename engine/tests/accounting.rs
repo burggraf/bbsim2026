@@ -5791,7 +5791,9 @@ fn two_out_muff_er_missing_review_origin_completion_or_bounded_shape_stays_unkno
         let a = derive_accounting(&log).unwrap();
         assert_eq!(a.pitchers[1]["home_starter"].outs_recorded, 3);
         assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 3);
-        assert_eq!(a.pitchers[1]["home_starter"].earned_runs, None);
+        // Separately preregistered empty-base reconstruction: the error runner
+        // is unearned, but both HR batters score before virtual inning end.
+        assert_eq!(a.pitchers[1]["home_starter"].earned_runs, Some(2));
     }
     // Rule9.16(i): a reliever cannot inherit the predecessor's missed out.
     // Two inherited scorers remain charged to the old pitcher; the HR batter
@@ -6060,4 +6062,496 @@ fn two_out_muff_er_terminal_error_walkoff_keeps_actual_runs_but_no_earned_run() 
         ),
         (1, 26, Some(0))
     );
+}
+
+fn empty_muff_er_ordered_half(
+    half: Half,
+    outs: u8,
+    pattern: usize,
+    reverse_moves: bool,
+    reverse_credits: bool,
+) -> Vec<EventTransition> {
+    let (model, index) =
+        two_out_muff_er_half(0, half, reverse_moves, reverse_credits, true, false, outs);
+    let mut log = model[..=index].to_vec();
+    let mut before = log.last().unwrap().after().clone();
+    let orders: [&[bool]; 4] = [
+        &[true, true],
+        &[false, true],
+        &[true, false, true],
+        &[true; 9],
+    ];
+    for homer in orders[pattern].iter().copied().chain([false; 3]) {
+        let offense = half.offense();
+        let defense = 1 - offense;
+        let batter =
+            before.teams[offense].batting_order[before.teams[offense].next_batter as usize].clone();
+        let mut moves = vec![batter_move(
+            &before,
+            if homer {
+                Destination::Home
+            } else {
+                Destination::Out
+            },
+        )];
+        let mut credits = vec![];
+        let mut runs = u8::from(homer);
+        for (i, r) in before.bases.iter().enumerate() {
+            if let Some(r) = r {
+                moves.push(RunnerMove {
+                    runner: r.clone(),
+                    from: [Base::First, Base::Second, Base::Third][i],
+                    to: if homer {
+                        Destination::Home
+                    } else {
+                        [Destination::First, Destination::Second, Destination::Third][i]
+                    },
+                });
+                if homer {
+                    runs += 1;
+                    credits.push(credit(&r.player_id, CreditKind::Run));
+                    credits.push(credit(&batter, CreditKind::Rbi));
+                }
+            }
+        }
+        let mut e = if homer {
+            credits.extend([
+                credit(&batter, CreditKind::PlateAppearance),
+                credit(&batter, CreditKind::Hit),
+                credit(&batter, CreditKind::Run),
+                credit(&batter, CreditKind::Rbi),
+            ]);
+            let mut e = reviewed(event(
+                &before,
+                EventKind::OutOfParkHomeRun,
+                moves,
+                0,
+                runs,
+                credits,
+                vec![],
+            ));
+            e.sole_home_run = Some(bbsim_engine::SoleHomeRunFacts {
+                batter_id: batter.clone(),
+            });
+            e
+        } else {
+            let catcher = before.teams[defense].batting_order[0].clone();
+            credits.extend([
+                credit(&batter, CreditKind::Strikeout),
+                credit(&batter, CreditKind::NoHit),
+                credit(&catcher, CreditKind::Putout),
+            ]);
+            let mut e = reviewed(event(
+                &before,
+                EventKind::PlateAppearance,
+                moves,
+                1,
+                0,
+                credits,
+                vec![],
+            ));
+            e.caught_strikeout = Some(bbsim_engine::CaughtStrikeoutFacts {
+                batter_id: batter.clone(),
+                catcher_id: catcher,
+            });
+            if before.outs == 2 {
+                e.delta.third_out = Some(ThirdOut {
+                    runner_id: batter,
+                    kind: ThirdOutKind::BatterBeforeFirst,
+                    home_before_out: vec![],
+                });
+            }
+            e
+        };
+        if reverse_moves {
+            e.delta.moves.reverse();
+        }
+        if reverse_credits {
+            e.delta.credits.reverse();
+        }
+        let t = apply(&before, e).unwrap();
+        before = t.after().clone();
+        log.push(t);
+        if before.half != half {
+            break;
+        }
+    }
+    assert_ne!(before.half, half);
+    log
+}
+
+#[test]
+fn empty_muff_er_has_literal_earned_and_unearned_runs_in_48_order_frames() {
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..2 {
+            for pattern in 0..3 {
+                for rm in [false, true] {
+                    for rc in [false, true] {
+                        let log = empty_muff_er_ordered_half(half, outs, pattern, rm, rc);
+                        for t in &log {
+                            assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+                            assert_eq!(
+                                EventTransition::try_new(
+                                    t.before().clone(),
+                                    t.event().clone(),
+                                    t.after().clone()
+                                )
+                                .unwrap(),
+                                *t
+                            );
+                        }
+                        let a = derive_accounting(&log).unwrap();
+                        let defense = 1 - half.offense();
+                        let pitcher = &log.last().unwrap().event().participants.pitcher;
+                        let p = &a.pitchers[defense][pitcher];
+                        let homers = if pattern == 1 { 1 } else { 2 };
+                        assert_eq!(
+                            (
+                                p.runs_allowed,
+                                p.outs_recorded,
+                                p.batters_faced,
+                                p.at_bats_against,
+                                p.classified_hits_allowed,
+                                p.credited_strikeouts
+                            ),
+                            (1 + homers, 3, 4 + homers, Some(4 + homers), Some(homers), 3)
+                        );
+                        assert_eq!(
+                            a.classified_fielding[defense]
+                                .values()
+                                .map(|l| l.errors.unwrap())
+                                .sum::<u32>(),
+                            1
+                        );
+                        assert_eq!(
+                            a.classified_fielding[defense]
+                                .values()
+                                .map(|l| l.putouts.unwrap())
+                                .sum::<u32>(),
+                            3
+                        );
+                        for l in a.classified_fielding[defense].values() {
+                            assert_eq!(l.observed_events, 4 + homers);
+                            assert_eq!(l.assists, Some(0));
+                            assert_eq!(l.passed_balls, Some(0));
+                        }
+                        let expected = match pattern {
+                            0 => 2,
+                            1 => u32::from(outs == 0),
+                            _ => 2 - u32::from(outs == 1),
+                        };
+                        assert_eq!(
+                            p.earned_runs,
+                            Some(expected),
+                            "{half:?} outs{outs} pattern{pattern} moves{rm} credits{rc}"
+                        );
+                        frames += 1;
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 48);
+}
+
+#[test]
+fn empty_muff_er_missing_or_outside_history_retains_unknown() {
+    let control = empty_muff_er_ordered_half(Half::Top, 1, 2, false, false);
+    let index = control
+        .iter()
+        .position(|t| t.event().muffed_ground_ball.is_some())
+        .unwrap();
+    for defect in 0..9 {
+        let mut log = control.clone();
+        if defect == 6 {
+            log.remove(0);
+        } else if defect == 7 {
+            log.pop();
+        } else {
+            let target = match defect {
+                0 | 1 => index,
+                2 => 0,
+                4 => index + 2,
+                _ => index + 1,
+            };
+            let mut e = log[target].event().clone();
+            match defect {
+                0 => {
+                    e.muffed_ground_ball = None;
+                    e.fielding_review = FieldingReview::Unknown;
+                }
+                4 => e.caught_strikeout = None,
+                5 => e.sole_home_run = None,
+                8 => {
+                    e.fielding_review = FieldingReview::Unknown;
+                    e.delta.credits.push(credit("home3", CreditKind::Error));
+                }
+                _ => e.fielding_review = FieldingReview::Unknown,
+            }
+            let t = apply(log[target].before(), e).unwrap();
+            assert_eq!(t.after(), log[target].after());
+            log[target] = t;
+        }
+        for t in &log {
+            assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+        }
+        let a = derive_accounting(&log).unwrap();
+        assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 3);
+        assert_eq!(
+            a.pitchers[1]["home_starter"].earned_runs, None,
+            "defect{defect}"
+        );
+    }
+    for outs in 0..2 {
+        let (log, _) = two_out_muff_er_half(1, Half::Top, false, false, true, false, outs);
+        let a = derive_accounting(&log).unwrap();
+        assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 4);
+        assert_eq!(a.pitchers[1]["home_starter"].earned_runs, None);
+    }
+    let (scored, _) = two_out_muff_er_half(0, Half::Top, false, false, true, true, 1);
+    assert_eq!(
+        derive_accounting(&scored).unwrap().pitchers[1]["home_starter"].earned_runs,
+        None
+    );
+    for pitcher_change in [false, true] {
+        let mut log = control[..=index].to_vec();
+        let mut before = log.last().unwrap().after().clone();
+        let change = if pitcher_change {
+            PersonnelChange::Pitcher {
+                team: TeamSide::Home,
+                outgoing: "home_starter".into(),
+                incoming: "home_reliever".into(),
+            }
+        } else {
+            PersonnelChange::BattingSlot {
+                team: TeamSide::Home,
+                slot: 3,
+                outgoing: "home3".into(),
+                incoming: "home_reliever".into(),
+            }
+        };
+        let t = apply(
+            &before,
+            reviewed(event(
+                &before,
+                EventKind::Substitution,
+                vec![],
+                0,
+                0,
+                vec![],
+                vec![change],
+            )),
+        )
+        .unwrap();
+        before = t.after().clone();
+        log.push(t);
+        for t in &control[index + 1..] {
+            let mut e = t.event().clone();
+            if pitcher_change {
+                e.participants.pitcher = "home_reliever".into();
+                for m in &mut e.delta.moves {
+                    if m.from == Base::Plate {
+                        m.runner.responsible_pitcher = "home_reliever".into();
+                    }
+                }
+            }
+            let t = apply(&before, e).unwrap();
+            before = t.after().clone();
+            log.push(t);
+        }
+        let a = derive_accounting(&log).unwrap();
+        assert_eq!(a.pitchers[1]["home_starter"].earned_runs, None);
+        if pitcher_change {
+            assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 1);
+            assert_eq!(a.pitchers[1]["home_reliever"].runs_allowed, 2);
+            assert_eq!(a.pitchers[1]["home_reliever"].earned_runs, None);
+        }
+    }
+    // A reviewed WP is clean in the old vocabulary, but lies outside this
+    // deliberately HR/caught-K-only suffix and cannot silently widen it.
+    let mut log = control[..=index].to_vec();
+    let mut before = log.last().unwrap().after().clone();
+    let wp = event(
+        &before,
+        EventKind::RunnerOnly(RunnerEvent::WildPitch),
+        vec![RunnerMove {
+            runner: before.bases[0].clone().unwrap(),
+            from: Base::First,
+            to: Destination::Second,
+        }],
+        0,
+        0,
+        vec![],
+        vec![],
+    );
+    before = record_clean(&mut log, &before, wp);
+    for (n, t) in control[index + 1..].iter().enumerate() {
+        let mut e = t.event().clone();
+        if n == 0 {
+            for m in &mut e.delta.moves {
+                if m.from == Base::First {
+                    m.from = Base::Second;
+                }
+            }
+        }
+        let t = apply(&before, e).unwrap();
+        before = t.after().clone();
+        log.push(t);
+    }
+    let a = derive_accounting(&log).unwrap();
+    assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 3);
+    assert_eq!(a.pitchers[1]["home_starter"].earned_runs, None);
+}
+
+fn append_rebased_muff_er_half(log: &mut Vec<EventTransition>, model: &[EventTransition]) {
+    let mut before = log.last().unwrap().after().clone();
+    let offense = before.half.offense();
+    let offset = before.teams[offense].next_batter as usize;
+    let ids: std::collections::BTreeMap<_, _> = model
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            (
+                t.event().participants.batter.clone().unwrap(),
+                before.teams[offense].batting_order[(offset + i) % 9].clone(),
+            )
+        })
+        .collect();
+    for t in model {
+        let mut e = t.event().clone();
+        e.participants.batter = Some(ids[e.participants.batter.as_ref().unwrap()].clone());
+        for c in &mut e.delta.credits {
+            if let Some(id) = ids.get(&c.player_id) {
+                c.player_id = id.clone();
+            }
+        }
+        for m in &mut e.delta.moves {
+            if let Some(id) = ids.get(&m.runner.player_id) {
+                m.runner.player_id = id.clone();
+            }
+        }
+        if let Some(f) = &mut e.muffed_ground_ball {
+            f.batter_id = ids[&f.batter_id].clone();
+        }
+        if let Some(f) = &mut e.caught_strikeout {
+            f.batter_id = ids[&f.batter_id].clone();
+        }
+        if let Some(f) = &mut e.sole_home_run {
+            f.batter_id = ids[&f.batter_id].clone();
+        }
+        if let Some(f) = &mut e.delta.third_out {
+            f.runner_id = ids[&f.runner_id].clone();
+        }
+        let t = apply(&before, e).unwrap();
+        assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
+        before = t.after().clone();
+        log.push(t);
+    }
+}
+
+#[test]
+fn empty_muff_er_contributions_accumulate_without_repairing_prior_unknowns() {
+    let model = empty_muff_er_ordered_half(Half::Top, 0, 0, false, false);
+    let mut positive = model.clone();
+    finish_with_three_strikeouts(
+        positive.last().unwrap().after().clone(),
+        &mut positive,
+        FieldingReview::NoMisplay,
+    );
+    positive.extend(reviewed_homer_from(
+        positive.last().unwrap().after().clone(),
+    ));
+    let a = derive_accounting(&positive).unwrap();
+    assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 4);
+    assert_eq!(a.pitchers[1]["home_starter"].earned_runs, Some(3));
+    for unknown_first in [false, true] {
+        let mut log = model.clone();
+        if unknown_first {
+            let mut e = log[0].event().clone();
+            e.muffed_ground_ball = None;
+            e.fielding_review = FieldingReview::Unknown;
+            log[0] = apply(log[0].before(), e).unwrap();
+        }
+        finish_with_three_strikeouts(
+            log.last().unwrap().after().clone(),
+            &mut log,
+            FieldingReview::NoMisplay,
+        );
+        append_rebased_muff_er_half(&mut log, &model);
+        let a = derive_accounting(&log).unwrap();
+        assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 6);
+        assert_eq!(
+            a.pitchers[1]["home_starter"].earned_runs,
+            if unknown_first { None } else { Some(4) }
+        );
+        assert_eq!(a.pitchers[0]["away_pitcher"].earned_runs, Some(0));
+    }
+}
+
+#[test]
+fn empty_muff_er_terminal_homer_has_one_earned_and_one_unearned_run() {
+    for outs in 0..2 {
+        let mut before = state();
+        before.inning = 1;
+        before.outs = 0;
+        before.bases = [None, None, None];
+        let mut log = vec![];
+        for _ in 0..17 {
+            finish_with_three_strikeouts(before, &mut log, FieldingReview::NoMisplay);
+            before = log.last().unwrap().after().clone();
+        }
+        let (model, index) = two_out_muff_er_half(0, Half::Bottom, false, false, true, false, outs);
+        append_rebased_muff_er_half(&mut log, &model[3..=index + 1]);
+        let t = log.last().unwrap();
+        assert_eq!(
+            (
+                t.after().over,
+                t.after().inning,
+                t.after().half,
+                t.after().outs,
+                t.after().score
+            ),
+            (true, 9, Half::Bottom, outs, [0, 2])
+        );
+        let a = derive_accounting(&log).unwrap();
+        assert!(a.complete_game);
+        assert_eq!(a.runs, [0, 2]);
+        assert_eq!(
+            (
+                a.pitchers[0]["away_pitcher"].runs_allowed,
+                a.pitchers[0]["away_pitcher"].outs_recorded,
+                a.pitchers[0]["away_pitcher"].earned_runs
+            ),
+            (2, 24 + u32::from(outs), Some(1))
+        );
+    }
+}
+
+#[test]
+fn empty_muff_er_error_reach_is_not_a_permanent_unearned_actor_label() {
+    let log = empty_muff_er_ordered_half(Half::Top, 0, 3, false, false);
+    let a = derive_accounting(&log).unwrap();
+    let p = &a.pitchers[1]["home_starter"];
+    assert_eq!(log.len(), 13);
+    for t in &log {
+        assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+    }
+    assert_eq!(
+        (
+            p.runs_allowed,
+            p.outs_recorded,
+            p.batters_faced,
+            p.at_bats_against,
+            p.classified_hits_allowed,
+            p.credited_strikeouts
+        ),
+        (10, 3, 13, Some(13), Some(9), 3)
+    );
+    assert_eq!(a.batters[0]["away0"].credited_runs, 2);
+    assert_eq!(a.batters[0]["away0"].classified_hits, Some(1));
+    assert_eq!(log[9].event().participants.batter.as_deref(), Some("away0"));
+    assert_eq!(log[9].event().kind, EventKind::OutOfParkHomeRun);
+    assert_eq!(log[9].event().delta.moves[0].from, Base::Plate);
+    assert_eq!(p.earned_runs, Some(9));
 }
