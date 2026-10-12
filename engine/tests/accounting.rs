@@ -3901,3 +3901,429 @@ fn sole_safe_hit_er_keeps_nonstation_missing_review_cause_and_history_unknown() 
         }
     }
 }
+
+// Fixed authored play script, not a second statistic accumulator/oracle.
+fn literal_reviewed_game(reverse_moves: bool, reverse_credits: bool) -> Vec<EventTransition> {
+    let mut before = state();
+    before.inning = 1;
+    before.outs = 0;
+    before.bases = [None, None, None];
+    let mut log = vec![];
+    for frame in 0..17 {
+        let offense = before.half.offense();
+        let script = if frame == 0 {
+            vec![
+                CreditKind::OrdinaryWalk,
+                CreditKind::Single,
+                CreditKind::Double,
+                CreditKind::Triple,
+                CreditKind::Hit,
+            ]
+        } else if frame == 1 {
+            vec![
+                CreditKind::HitByPitch,
+                CreditKind::OrdinaryWalk,
+                CreditKind::IntentionalWalk,
+                CreditKind::Single,
+                CreditKind::Double,
+                CreditKind::Triple,
+                CreditKind::Hit,
+            ]
+        } else {
+            vec![]
+        };
+        for outcome in
+            script
+                .into_iter()
+                .chain([CreditKind::AtBat, CreditKind::Strikeout, CreditKind::AtBat])
+        {
+            let batter = before.teams[offense].batting_order
+                [before.teams[offense].next_batter as usize]
+                .clone();
+            let defense = &before.teams[1 - offense];
+            let retirement = matches!(outcome, CreditKind::AtBat | CreditKind::Strikeout);
+            let award = matches!(
+                outcome,
+                CreditKind::OrdinaryWalk | CreditKind::IntentionalWalk | CreditKind::HitByPitch
+            );
+            let homer = outcome == CreditKind::Hit;
+            let destination = match outcome {
+                CreditKind::AtBat | CreditKind::Strikeout => Destination::Out,
+                CreditKind::Double => Destination::Second,
+                CreditKind::Triple => Destination::Third,
+                CreditKind::Hit => Destination::Home,
+                _ => Destination::First,
+            };
+            let mut moves = vec![batter_move(&before, destination)];
+            let mut credits = vec![credit(&batter, outcome)];
+            if award && outcome != CreditKind::HitByPitch {
+                credits.push(credit(&batter, CreditKind::Walk));
+            }
+            if retirement {
+                credits.push(credit(&batter, CreditKind::NoHit));
+                credits.push(credit(
+                    &defense.batting_order[usize::from(outcome == CreditKind::Strikeout)],
+                    CreditKind::Putout,
+                ));
+                if outcome == CreditKind::AtBat {
+                    credits.push(credit(&defense.pitcher, CreditKind::Assist));
+                }
+            } else if !award && !homer {
+                credits.push(credit(&batter, CreditKind::Hit));
+                credits.push(credit(&batter, CreditKind::AtBat));
+            }
+            let mut runs = u8::from(homer);
+            if homer {
+                credits.push(credit(&batter, CreditKind::Run));
+                credits.push(credit(&batter, CreditKind::Rbi));
+                credits.push(credit(&batter, CreditKind::PlateAppearance));
+            }
+            for (i, runner) in before.bases.iter().enumerate() {
+                if let Some(runner) = runner {
+                    let to = if award {
+                        [Destination::Second, Destination::Third, Destination::Home][i]
+                    } else if frame == 0 && outcome == CreditKind::Double {
+                        Destination::Third
+                    } else {
+                        Destination::Home
+                    };
+                    moves.push(RunnerMove {
+                        runner: runner.clone(),
+                        from: [Base::First, Base::Second, Base::Third][i],
+                        to,
+                    });
+                    if to == Destination::Home {
+                        runs += 1;
+                        credits.push(credit(&runner.player_id, CreditKind::Run));
+                        credits.push(credit(&batter, CreditKind::Rbi));
+                    }
+                }
+            }
+            let mut action = event(
+                &before,
+                if homer {
+                    EventKind::OutOfParkHomeRun
+                } else {
+                    EventKind::PlateAppearance
+                },
+                moves,
+                u8::from(retirement),
+                runs,
+                credits,
+                vec![],
+            );
+            if retirement && before.outs == 2 {
+                action.delta.third_out = Some(ThirdOut {
+                    runner_id: batter.clone(),
+                    kind: ThirdOutKind::BatterBeforeFirst,
+                    home_before_out: vec![],
+                });
+            }
+            if award {
+                action.protected_award =
+                    Some(bbsim_engine::ProtectedAwardFacts { batter_id: batter });
+            } else if homer {
+                action.sole_home_run = Some(bbsim_engine::SoleHomeRunFacts { batter_id: batter });
+            } else if outcome == CreditKind::AtBat {
+                action.ordinary_ground_throw = Some(bbsim_engine::OrdinaryGroundThrowFacts {
+                    batter_id: batter,
+                    thrower_id: defense.pitcher.clone(),
+                    receiver_id: defense.batting_order[0].clone(),
+                });
+            } else if outcome == CreditKind::Strikeout {
+                action.caught_strikeout = Some(bbsim_engine::CaughtStrikeoutFacts {
+                    batter_id: batter,
+                    catcher_id: defense.batting_order[1].clone(),
+                });
+            } else {
+                action.sole_safe_hit = Some(bbsim_engine::SoleSafeHitFacts { batter_id: batter });
+            }
+            if reverse_moves {
+                action.delta.moves.reverse();
+            }
+            if reverse_credits {
+                action.delta.credits.reverse();
+            }
+            let t = apply(&before, reviewed(action)).unwrap_or_else(|error| {
+                panic!(
+                    "literal frame{frame} outcome{outcome:?} outs{}: {error:?}",
+                    before.outs
+                )
+            });
+            before = t.after().clone();
+            log.push(t);
+        }
+    }
+    assert!(before.over);
+    assert_eq!(
+        (before.inning, before.half, before.score),
+        (9, Half::Top, [5, 7])
+    );
+    log
+}
+
+#[test]
+fn literal_reviewed_game_reconciles_player_lines_and_independent_coverage() {
+    use bbsim_engine::accounting::{
+        BatterLine, FielderLine, FieldingCoverageLine, HitBreakdown, PitcherLine,
+    };
+    // PA, AB, H, K, R, RBI, BB: authored from the fixed batting rotation.
+    let away = [
+        (4, 3, 0, 3, 1, 0, 1),
+        (4, 4, 1, 0, 1, 1, 0),
+        (4, 4, 1, 0, 1, 0, 0),
+        (4, 4, 1, 3, 1, 2, 0),
+        (4, 4, 1, 0, 1, 2, 0),
+        (3, 3, 0, 0, 0, 0, 0),
+        (3, 3, 0, 3, 0, 0, 0),
+        (3, 3, 0, 0, 0, 0, 0),
+        (3, 3, 0, 0, 0, 0, 0),
+    ];
+    let home = [
+        (4, 3, 0, 0, 1, 0, 0),
+        (4, 3, 0, 0, 1, 0, 1),
+        (4, 3, 0, 3, 1, 0, 1),
+        (4, 4, 1, 0, 1, 3, 0),
+        (3, 3, 1, 0, 1, 1, 0),
+        (3, 3, 1, 2, 1, 1, 0),
+        (3, 3, 1, 0, 1, 2, 0),
+        (3, 3, 0, 0, 0, 0, 0),
+        (3, 3, 0, 3, 0, 0, 0),
+    ];
+    for reverse_moves in [false, true] {
+        for reverse_credits in [false, true] {
+            let log = literal_reviewed_game(reverse_moves, reverse_credits);
+            assert_eq!(log.len(), 63);
+            for (i, t) in log.iter().enumerate() {
+                assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+                assert_eq!(
+                    EventTransition::try_new(
+                        t.before().clone(),
+                        t.event().clone(),
+                        t.after().clone()
+                    )
+                    .unwrap(),
+                    *t
+                );
+                if i > 0 {
+                    t.follows(&log[i - 1]).unwrap();
+                }
+            }
+            let a = derive_accounting(&log).unwrap();
+            assert!(a.complete_game);
+            assert_eq!(a.runs, [5, 7]);
+            let mut innings =
+                std::collections::BTreeMap::from([(1, [Some(5), Some(7)]), (9, [Some(0), None])]);
+            for inning in 2..=8 {
+                innings.insert(inning, [Some(0), Some(0)]);
+            }
+            assert_eq!(a.innings, innings);
+            for (side, rows) in [away, home].iter().enumerate() {
+                assert_eq!(a.batters[side].len(), 9);
+                for (slot, &(pa, ab, hits, k, runs, rbi, walks)) in rows.iter().enumerate() {
+                    let id = &log[0].before().teams[side].batting_order[slot];
+                    let start = if side == 0 { 1 } else { 3 };
+                    let breakdown = HitBreakdown {
+                        singles: u32::from(slot == start),
+                        doubles: u32::from(slot == start + 1),
+                        triples: u32::from(slot == start + 2),
+                        home_runs: u32::from(slot == start + 3),
+                    };
+                    assert_eq!(
+                        a.batters[side][id],
+                        BatterLine {
+                            plate_appearances: pa,
+                            at_bats: Some(ab),
+                            credited_hits: hits,
+                            classified_hits: Some(hits),
+                            credited_hit_breakdown: Some(breakdown),
+                            credited_walks: walks,
+                            credited_intentional_walks: Some(u32::from(side == 1 && slot == 2)),
+                            credited_strikeouts: k,
+                            credited_runs: runs,
+                            credited_rbi: rbi,
+                            classified_rbi: Some(rbi),
+                            credited_hit_by_pitch: u32::from(side == 1 && slot == 0),
+                            ..BatterLine::default()
+                        },
+                        "side{side} slot{slot}"
+                    );
+                }
+                let (outs, bf, ab, runs, walks, ibb, k, hbp, ground) = if side == 0 {
+                    (24, 31, 28, 7, 2, 1, 8, 1, 16)
+                } else {
+                    (27, 32, 31, 5, 1, 0, 9, 0, 18)
+                };
+                let team = &log[0].before().teams[side];
+                assert_eq!(a.pitchers[side].len(), 1);
+                assert_eq!(
+                    a.pitchers[side][&team.pitcher],
+                    PitcherLine {
+                        outs_recorded: outs,
+                        batters_faced: bf,
+                        at_bats_against: Some(ab),
+                        runs_allowed: runs,
+                        earned_runs: Some(runs),
+                        credited_hits_allowed: 4,
+                        classified_hits_allowed: Some(4),
+                        credited_hit_breakdown_allowed: Some(HitBreakdown {
+                            singles: 1,
+                            doubles: 1,
+                            triples: 1,
+                            home_runs: 1
+                        }),
+                        credited_walks_allowed: walks,
+                        credited_intentional_walks_allowed: Some(ibb),
+                        credited_strikeouts: k,
+                        credited_hit_batters: hbp,
+                        ..PitcherLine::default()
+                    }
+                );
+                assert_eq!(a.classified_fielding[side].len(), 9);
+                for (id, line) in &a.classified_fielding[side] {
+                    let po = if id == &team.batting_order[0] {
+                        ground
+                    } else if id == &team.batting_order[1] {
+                        k
+                    } else {
+                        0
+                    };
+                    let assists = if id == &team.pitcher { ground } else { 0 };
+                    assert_eq!(
+                        *line,
+                        FieldingCoverageLine {
+                            observed_events: bf,
+                            putouts: Some(po),
+                            assists: Some(assists),
+                            errors: Some(0),
+                            passed_balls: Some(0)
+                        }
+                    );
+                    let credited = a.fielders[side].get(id).cloned().unwrap_or_default();
+                    assert_eq!(
+                        credited,
+                        FielderLine {
+                            credited_putouts: po,
+                            credited_assists: assists,
+                            credited_errors: 0,
+                            credited_passed_balls: 0
+                        }
+                    );
+                }
+                assert!(!a.classified_fielding[side].contains_key(&team.batting_order[8]));
+                assert_eq!(
+                    a.classified_fielding[side]
+                        .values()
+                        .map(|f| f.putouts.unwrap())
+                        .sum::<u32>(),
+                    outs
+                );
+                assert_eq!(
+                    a.batters[1 - side]
+                        .values()
+                        .map(|b| b.plate_appearances)
+                        .sum::<u32>(),
+                    bf
+                );
+                assert_eq!(
+                    a.batters[1 - side]
+                        .values()
+                        .map(|b| b.credited_runs)
+                        .sum::<u32>(),
+                    runs
+                );
+                assert_eq!(
+                    a.batters[1 - side]
+                        .values()
+                        .map(|b| b.credited_hit_breakdown.as_ref().unwrap().total_bases())
+                        .sum::<u32>(),
+                    10
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn literal_reviewed_game_missing_facts_preserve_physics_not_complete_scoring() {
+    let clean = literal_reviewed_game(true, true);
+    let expected = derive_accounting(&clean).unwrap();
+    for missing in 0..4 {
+        // Away single, ground retirement or HR: all precede later complete plays.
+        let index = [1, 1, 5, 4][missing];
+        let mut log = clean.clone();
+        let mut e = log[index].event().clone();
+        match missing {
+            0 => e.sole_safe_hit = None,
+            1 => e.fielding_review = FieldingReview::Unknown,
+            2 => e.ordinary_ground_throw = None,
+            _ => e.sole_home_run = None,
+        }
+        let t = apply(log[index].before(), e).unwrap();
+        assert_eq!(t.after(), log[index].after());
+        assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
+        log[index] = t;
+        let a = derive_accounting(&log).unwrap();
+        assert!(a.complete_game);
+        assert_eq!(a.runs, expected.runs);
+        assert_eq!(a.innings, expected.innings);
+        assert_eq!(a.fielders, expected.fielders);
+        assert_eq!(a.batters[1], expected.batters[1]);
+        assert_eq!(a.pitchers[0], expected.pitchers[0]);
+        assert_eq!(a.classified_fielding[0], expected.classified_fielding[0]);
+        assert_eq!(
+            a.pitchers[1]["home_starter"].earned_runs,
+            if missing == 3 { Some(5) } else { None }
+        );
+        let batter = clean[index].event().participants.batter.as_ref().unwrap();
+        assert_eq!(
+            a.batters[0][batter].classified_rbi,
+            if missing == 0 || missing == 3 {
+                None
+            } else {
+                expected.batters[0][batter].classified_rbi
+            }
+        );
+        for f in a.classified_fielding[1].values() {
+            assert_eq!((f.putouts, f.assists), (None, None));
+            assert_eq!(
+                (f.errors, f.passed_balls),
+                if missing == 1 {
+                    (None, None)
+                } else {
+                    (Some(0), Some(0))
+                }
+            );
+            assert_eq!(f.observed_events, 32);
+        }
+        // Normalize only the separately asserted evidence-sensitive cells;
+        // every other credited/statistical/coverage value must remain exact.
+        let mut normalized = a;
+        normalized.classified_fielding[1] = expected.classified_fielding[1].clone();
+        normalized.pitchers[1]
+            .get_mut("home_starter")
+            .unwrap()
+            .earned_runs = Some(5);
+        normalized.batters[0]
+            .get_mut(batter)
+            .unwrap()
+            .classified_rbi = expected.batters[0][batter].classified_rbi;
+        assert_eq!(normalized, expected);
+    }
+    for (index, kind) in [(1, CreditKind::Rbi), (5, CreditKind::Putout)] {
+        let mut e = clean[index].event().clone();
+        e.delta.credits.retain(|c| c.kind != kind);
+        assert_eq!(
+            apply(clean[index].before(), e.clone()),
+            Err(TransitionError::IllegalCredit)
+        );
+        assert_eq!(
+            EventTransition::try_new(
+                clean[index].before().clone(),
+                e,
+                clean[index].after().clone()
+            ),
+            Err(TransitionError::IllegalCredit)
+        );
+    }
+}
