@@ -408,8 +408,9 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
     // an observed boundary in this contiguous log.
     let mut clean_half = starts_game(first.before());
     // Conservative missed-third-out certificate: observed clean zero-run
-    // prefix, one reviewed sole muff at two outs, clean suffix, no personnel
-    // changes and one actual pitcher. Rule9.16(i) forbids relief inheritance.
+    // prefix, a reviewed muff at two outs, clean/reviewed-muff suffix, no
+    // personnel changes and one actual pitcher. Rule9.16(i) forbids relief
+    // inheritance. Later reviewed errors cannot reopen the virtual inning.
     let mut unearned_half = clean_half;
     let mut missed_third_out = false;
     let mut half_pitcher = first.event().participants.pitcher.clone();
@@ -470,7 +471,10 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             && event.muffed_ground_ball.is_some()
             && event.fielding_review == FieldingReview::SoleGroundMuff
         {
-            unearned_half &= !missed_third_out && half_runs.is_empty();
+            // Only the first missed retirement needs a zero-run prefix.
+            // Further bound muffs occur after the virtual inning already ended;
+            // this conjunction still cannot repair earlier unknown evidence.
+            unearned_half &= missed_third_out || half_runs.is_empty();
             missed_third_out = true;
         } else {
             unearned_half &= clean;
