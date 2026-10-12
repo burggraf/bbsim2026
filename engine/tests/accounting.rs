@@ -3188,3 +3188,177 @@ fn passed_ball_kind_cannot_claim_no_misplay_even_without_fielding_credit() {
         Err(bbsim_engine::TransitionError::IllegalCredit)
     );
 }
+
+// Actual observed origins/occupancy from the earlier independent half fixture;
+// replace only the retirement, preserving every physical before/after state.
+fn clean_caught_half(
+    mask: u8,
+    outs: u8,
+    half: Half,
+    holds: bool,
+    reverse_moves: bool,
+    reverse_credits: bool,
+) -> (Vec<EventTransition>, usize) {
+    let (mut log, index) = clean_ground_half(mask, outs, half, holds, reverse_moves);
+    let original = &log[index];
+    let before = original.before();
+    let mut e = original.event().clone();
+    let batter = e.participants.batter.clone().unwrap();
+    let catcher = before.teams[1 - half.offense()].batting_order[0].clone();
+    e.ordinary_ground_throw = None;
+    e.caught_strikeout = Some(bbsim_engine::CaughtStrikeoutFacts {
+        batter_id: batter.clone(),
+        catcher_id: catcher.clone(),
+    });
+    e.delta.credits = vec![
+        credit(&batter, CreditKind::PlateAppearance),
+        credit(&batter, CreditKind::AtBat),
+        credit(&batter, CreditKind::NoHit),
+        credit(&batter, CreditKind::Strikeout),
+        credit(&catcher, CreditKind::Putout),
+    ];
+    if reverse_credits {
+        e.delta.credits.reverse();
+    }
+    let replacement = apply(before, e).unwrap();
+    assert_eq!(replacement.after(), original.after());
+    log[index] = replacement;
+    (log, index)
+}
+
+#[test]
+fn bound_caught_k_er_has_literal_observed_lines_in_384_hold_and_order_frames() {
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 0u8..8 {
+                for holds in [false, true] {
+                    for reverse_moves in [false, true] {
+                        for reverse_credits in [false, true] {
+                            let (log, index) = clean_caught_half(
+                                mask,
+                                outs,
+                                half,
+                                holds,
+                                reverse_moves,
+                                reverse_credits,
+                            );
+                            for t in &log {
+                                assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
+                            }
+                            let a = derive_accounting(&log).unwrap();
+                            let side = 1 - half.offense();
+                            let pitcher = &log[index].event().participants.pitcher;
+                            let catcher = &log[index]
+                                .event()
+                                .caught_strikeout
+                                .as_ref()
+                                .unwrap()
+                                .catcher_id;
+                            let p = &a.pitchers[side][pitcher];
+                            let runs = if outs == 2 { 1 } else { mask.count_ones() + 2 };
+                            let ab = if outs == 2 { 4 } else { 5 };
+                            assert_eq!(p.earned_runs, Some(runs),
+                                "{half:?} outs{outs} mask{mask} holds{holds} moves{reverse_moves} credits{reverse_credits}");
+                            assert_eq!(
+                                (p.runs_allowed, p.outs_recorded, p.batters_faced),
+                                (runs, 3, mask.count_ones() + ab)
+                            );
+                            assert_eq!(p.at_bats_against, Some(ab));
+                            assert_eq!(
+                                p.classified_hits_allowed,
+                                Some(if outs == 2 { 1 } else { 2 })
+                            );
+                            assert_eq!(p.credited_strikeouts, 3);
+                            assert_eq!(a.runs[half.offense()], runs);
+                            assert_eq!(
+                                a.batters[half.offense()]
+                                    .values()
+                                    .map(|b| b.plate_appearances)
+                                    .sum::<u32>(),
+                                mask.count_ones() + ab
+                            );
+                            assert_eq!(
+                                a.batters[half.offense()]
+                                    .values()
+                                    .map(|b| b.credited_strikeouts)
+                                    .sum::<u32>(),
+                                3
+                            );
+                            assert_eq!(a.fielders[side][catcher].credited_putouts, 1);
+                            assert_eq!(a.fielders[side][catcher].credited_assists, 0);
+                            frames += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 384);
+}
+
+#[test]
+fn bound_caught_k_er_does_not_repair_missing_facts_review_origin_or_completion() {
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            let (clean, index) = clean_caught_half(7, outs, half, true, true, true);
+            let side = 1 - half.offense();
+            let pitcher = &clean[index].event().participants.pitcher;
+            let start = usize::from(half == Half::Bottom) * 3;
+            for missing in 0..3 {
+                let mut log = clean.clone();
+                let position = if missing == 2 { start } else { index };
+                let mut e = log[position].event().clone();
+                if missing == 0 {
+                    e.caught_strikeout = None;
+                } else {
+                    e.fielding_review = FieldingReview::Unknown;
+                }
+                let replacement = apply(log[position].before(), e).unwrap();
+                assert_eq!(replacement.after(), log[position].after());
+                log[position] = replacement;
+                let a = derive_accounting(&log).unwrap();
+                assert!(a.pitchers[side][pitcher].runs_allowed > 0);
+                assert_eq!(a.pitchers[side][pitcher].earned_runs, None);
+                assert_eq!(a.runs, derive_accounting(&clean).unwrap().runs);
+                assert_eq!(a.fielders, derive_accounting(&clean).unwrap().fielders);
+            }
+            let partial: Vec<_> = clean[start..]
+                .iter()
+                .map(|t| {
+                    let mut before = t.before().clone();
+                    before.inning += 1;
+                    apply(&before, t.event().clone()).unwrap()
+                })
+                .collect();
+            let a = derive_accounting(&partial).unwrap();
+            assert!(a.pitchers[side][pitcher].runs_allowed > 0);
+            assert_eq!(a.pitchers[side][pitcher].earned_runs, None);
+            assert_eq!(
+                derive_accounting(&clean[..clean.len() - 1])
+                    .unwrap()
+                    .pitchers[side][pitcher]
+                    .earned_runs,
+                None
+            );
+        }
+    }
+}
+
+#[test]
+fn generic_single_movement_strikeout_retains_legacy_clean_er_proof() {
+    for half in [Half::Top, Half::Bottom] {
+        for holds in [false, true] {
+            let (mut log, index) = clean_caught_half(0, 1, half, holds, true, true);
+            let pitcher = log[index].event().participants.pitcher.clone();
+            let mut e = log[index].event().clone();
+            e.caught_strikeout = None;
+            log[index] = apply(log[index].before(), e).unwrap();
+            let a = derive_accounting(&log).unwrap();
+            assert_eq!(
+                a.pitchers[1 - half.offense()][&pitcher].earned_runs,
+                Some(2)
+            );
+        }
+    }
+}

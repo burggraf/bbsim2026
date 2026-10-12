@@ -317,6 +317,7 @@ fn clean_play(before: &GameState, event: &Event) -> bool {
             // with held runners; the whole-chance review above excludes erased
             // misplays. Credits/endpoints alone never supply this method.
             event.ordinary_ground_throw.is_some()
+                || event.caught_strikeout.is_some()
                 || clean_station_hit(before, event)
                 || clean_forced_award(before, event)
                 || (m.len() == 1
