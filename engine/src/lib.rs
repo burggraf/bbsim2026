@@ -3,6 +3,7 @@
 
 pub mod accounting;
 mod balk;
+mod caught;
 mod codec;
 mod contact;
 mod ground;
@@ -393,6 +394,14 @@ pub struct OrdinaryGroundThrowFacts {
     pub thrower_id: String,
     pub receiver_id: String,
 }
+/// Ordinary legal called/swinging third strike received directly by this
+/// catcher, retiring this batter before first with other before runners held.
+/// No recovery throw, foul-bunt strikeout or deflection is asserted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaughtStrikeoutFacts {
+    pub batter_id: String,
+    pub catcher_id: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -403,6 +412,7 @@ pub struct Event {
     pub single_delivery: Option<SingleDeliveryFacts>,
     pub balk: Option<BalkFacts>,
     pub ordinary_ground_throw: Option<OrdinaryGroundThrowFacts>,
+    pub caught_strikeout: Option<CaughtStrikeoutFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -426,6 +436,18 @@ pub struct EventTransition {
 }
 
 impl EventTransition {
+    /// Event-local caught-K proof; missing facts/review are not known zero maps.
+    pub fn caught_strikeout_fielding(&self) -> Option<accounting::FieldingContribution> {
+        if self.event.fielding_review != FieldingReview::NoMisplay {
+            return None;
+        }
+        let facts = self.event.caught_strikeout.as_ref()?;
+        Some(accounting::FieldingContribution {
+            putouts: [(facts.catcher_id.clone(), 1)].into(),
+            assists: Default::default(),
+        })
+    }
+
     /// Event-local qualified PO/A only, not a complete-game fielding certificate.
     pub fn ordinary_ground_fielding(&self) -> Option<accounting::FieldingContribution> {
         if self.event.fielding_review != FieldingReview::NoMisplay {

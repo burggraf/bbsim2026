@@ -91,6 +91,7 @@ fn safe_reach(before: &GameState, destination: Destination) -> (Event, GameState
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        caught_strikeout: None,
         ordinary_ground_throw: None,
         delta: Delta {
             moves,

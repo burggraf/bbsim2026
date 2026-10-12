@@ -41,31 +41,7 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
     }) {
         return Err(TransitionError::IllegalCredit);
     }
-    rules::validate_event_shape(event)?;
-    rules::validate_move_origins(&before.bases, event, Some(&defense.pitcher))?;
-    rules::validate_outs(before, event)?;
-    if event.delta.outs != 1
-        || event.delta.runs != 0
-        || event.delta.moves.iter().any(|m| {
-            !matches!(
-                (m.from, m.to),
-                (Base::Plate, Destination::Out)
-                    | (Base::First, Destination::First)
-                    | (Base::Second, Destination::Second)
-                    | (Base::Third, Destination::Third)
-            )
-        })
-    {
-        return Err(TransitionError::DeltaMismatch);
-    }
-    match (&event.delta.third_out, before.outs) {
-        (Some(out), 2)
-            if out.runner_id == facts.batter_id
-                && out.kind == ThirdOutKind::BatterBeforeFirst
-                && out.home_before_out.is_empty() => {}
-        (None, 0 | 1) => {}
-        _ => return Err(TransitionError::DeltaMismatch),
-    }
+    rules::validate_held_batter_before_first(before, event, &facts.batter_id)?;
     rules::validate_fielding_review(event)?;
     rules::validate_pa_credits(event)?;
     rules::validate_credit_counts(event)?;

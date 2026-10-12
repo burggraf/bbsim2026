@@ -18,7 +18,7 @@ outs pool as other contact. That last category is rendered as an ordinary
 one-out ground/contact play with a declared shortstop assist/first-baseman PO,
 **not** as faithful trajectory/FC/sacrifice/double-play management. Fly/line/pop
 subtypes are not estimated in this first preview.
-K is rendered caught; HR as out-of-park. All such mechanism coarsenings stay
+K is rendered caught and declares [ordinary caught-K facts](../engine/ordinary-caught-k.md) for its existing fictional slot0 catcher/PO; only this selected outcome supplies the facts. This adds event-local evidence, not a new roll, outcome, stat counter or whole-box certificate. HR is out-of-park. All such mechanism coarsenings stay
 explicit; absent mechanisms are unimplemented, not structurally impossible.
 
 Probability for category i: `(count_i + 0.5)/(N + 9*0.5)`, a symmetric Jeffreys

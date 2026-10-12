@@ -84,6 +84,7 @@ fn batter_event(
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        caught_strikeout: None,
         ordinary_ground_throw: None,
     }
 }

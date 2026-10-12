@@ -319,6 +319,11 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
             thrower_id: defense.batting_order[3].clone(),
             receiver_id: defense.batting_order[1].clone(),
         });
+    let caught_strikeout =
+        (outcome == Outcome::Strikeout).then(|| bbsim_engine::CaughtStrikeoutFacts {
+            batter_id: batter.clone(),
+            catcher_id: defense.batting_order[0].clone(),
+        });
     Ok(Event {
         kind,
         participants: Participants {
@@ -341,6 +346,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         two_out_contact: None,
         single_delivery: None,
         balk: None,
+        caught_strikeout,
         ordinary_ground_throw,
     })
 }

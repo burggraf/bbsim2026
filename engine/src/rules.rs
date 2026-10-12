@@ -325,6 +325,44 @@ pub(crate) fn validate_no_hit(event: &Event) -> Result<(), TransitionError> {
     Ok(())
 }
 
+// Shared by bound ground throws and caught K; supplied counters alone do not
+// establish this method. Preserve carried identities/charges even on the third out.
+pub(crate) fn validate_held_batter_before_first(
+    before: &GameState,
+    event: &Event,
+    batter: &str,
+) -> Result<(), TransitionError> {
+    let defense = &before.teams[1 - before.half.offense()];
+    validate_event_shape(event)?;
+    validate_move_origins(&before.bases, event, Some(&defense.pitcher))?;
+    validate_outs(before, event)?;
+    if event.delta.outs != 1
+        || event.delta.runs != 0
+        || event.delta.moves.iter().any(|m| {
+            !matches!(
+                (m.from, m.to),
+                (Base::Plate, Destination::Out)
+                    | (Base::First, Destination::First)
+                    | (Base::Second, Destination::Second)
+                    | (Base::Third, Destination::Third)
+            )
+        })
+    {
+        return Err(TransitionError::DeltaMismatch);
+    }
+    match (&event.delta.third_out, before.outs) {
+        (Some(out), 2)
+            if out.runner_id == batter
+                && out.kind == ThirdOutKind::BatterBeforeFirst
+                && out.home_before_out.is_empty() =>
+        {
+            Ok(())
+        }
+        (None, 0 | 1) => Ok(()),
+        _ => Err(TransitionError::DeltaMismatch),
+    }
+}
+
 /// Determine the batter-runner's carried charge, not who faced this PA.
 /// Rule 9.16(g): a lone runner retired by a fielder's choice is replaced by
 /// the batter with that runner's responsibility. More complex chains need
@@ -334,6 +372,7 @@ pub(crate) fn batter_charge<'a>(
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
     // Known bound contact facts precede unrelated occurrence/charge uncertainty.
+    super::caught::validate(before, event)?;
     super::ground::validate(before, event)?;
     // Credit-only contradictions must not be masked by unknown FC lineage.
     super::balk::preflight(before, event)?;
