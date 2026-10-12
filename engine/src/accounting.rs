@@ -313,11 +313,13 @@ fn clean_play(before: &GameState, event: &Event) -> bool {
         EventKind::FieldersChoice => true,
         EventKind::PlateAppearance => {
             let m = &event.delta.moves;
-            // Validated bound facts prove one before-first ordinary retirement
-            // with held runners; the whole-chance review above excludes erased
-            // misplays. Credits/endpoints alone never supply this method.
+            // Bound retirement facts prove one before-first out with held
+            // runners; sole-hit facts bind continuous unaided safe advances.
+            // Whole-chance review excludes erased misplays in both cases.
+            // Credits/endpoints alone never supply these methods.
             event.ordinary_ground_throw.is_some()
                 || event.caught_strikeout.is_some()
+                || event.sole_safe_hit.is_some()
                 || clean_station_hit(before, event)
                 || clean_forced_award(before, event)
                 || (m.len() == 1
