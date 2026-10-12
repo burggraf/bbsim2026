@@ -443,10 +443,12 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 .as_ref()
                 .map(|f| f.batter_id.clone());
         } else if error_batter.is_some() {
-            // No advancement reconstruction: only held-runner caught outs
+            // No advancement reconstruction: held-runner caught/ground outs
             // and sole homers after the one empty-base lost retirement.
-            empty_muff_half &=
-                clean && (event.caught_strikeout.is_some() || event.sole_home_run.is_some());
+            empty_muff_half &= clean
+                && (event.caught_strikeout.is_some()
+                    || event.ordinary_ground_throw.is_some()
+                    || event.sole_home_run.is_some());
         } else {
             empty_muff_half &= clean;
         }

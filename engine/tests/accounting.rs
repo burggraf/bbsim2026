@@ -6555,3 +6555,234 @@ fn empty_muff_er_error_reach_is_not_a_permanent_unearned_actor_label() {
     assert_eq!(log[9].event().delta.moves[0].from, Base::Plate);
     assert_eq!(p.earned_runs, Some(9));
 }
+
+fn ground_muff_er_suffix(
+    model: &[EventTransition],
+    pitcher_thrower: bool,
+    mixed: bool,
+) -> (Vec<EventTransition>, u32) {
+    let mut log = vec![];
+    let mut seen_muff = false;
+    let mut retirement = 0;
+    let mut grounds = 0;
+    for t in model {
+        let mut e = t.event().clone();
+        seen_muff |= e.muffed_ground_ball.is_some();
+        if seen_muff && e.caught_strikeout.is_some() {
+            let use_ground = !mixed || retirement % 2 == 0;
+            retirement += 1;
+            if use_ground {
+                let before = t.before();
+                let defense = &before.teams[1 - before.half.offense()];
+                let thrower = if pitcher_thrower {
+                    defense.pitcher.clone()
+                } else {
+                    defense.batting_order[3].clone()
+                };
+                let receiver = defense.batting_order[1].clone();
+                let batter = e.participants.batter.clone().unwrap();
+                e.caught_strikeout = None;
+                e.ordinary_ground_throw = Some(bbsim_engine::OrdinaryGroundThrowFacts {
+                    batter_id: batter.clone(),
+                    thrower_id: thrower.clone(),
+                    receiver_id: receiver.clone(),
+                });
+                e.delta
+                    .credits
+                    .retain(|c| !matches!(c.kind, CreditKind::Strikeout | CreditKind::Putout));
+                e.delta.credits.extend([
+                    credit(&batter, CreditKind::AtBat),
+                    credit(&receiver, CreditKind::Putout),
+                    credit(&thrower, CreditKind::Assist),
+                ]);
+                grounds += 1;
+            }
+        }
+        let changed = apply(t.before(), e).unwrap();
+        assert_eq!(changed.before(), t.before());
+        assert_eq!(changed.after(), t.after());
+        assert_eq!(changed.event().delta.moves, t.event().delta.moves);
+        assert_eq!(
+            (
+                changed.event().delta.outs,
+                changed.event().delta.runs,
+                changed.event().delta.third_out.clone()
+            ),
+            (
+                t.event().delta.outs,
+                t.event().delta.runs,
+                t.event().delta.third_out.clone()
+            )
+        );
+        assert_eq!(changed.event().delta.changes, t.event().delta.changes);
+        assert_eq!(
+            EventTransition::try_new(
+                changed.before().clone(),
+                changed.event().clone(),
+                changed.after().clone()
+            )
+            .unwrap(),
+            changed
+        );
+        assert_eq!(
+            EventTransition::from_bytes(&changed.to_bytes()).unwrap(),
+            changed
+        );
+        log.push(changed);
+    }
+    (log, grounds)
+}
+
+#[test]
+fn ground_muff_er_suffix_has_literal_earned_runs_in_192_mixed_retirement_frames() {
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..2 {
+            for pattern in 0..3 {
+                for rm in [false, true] {
+                    for rc in [false, true] {
+                        for pitcher_thrower in [false, true] {
+                            for mixed in [false, true] {
+                                let model = empty_muff_er_ordered_half(half, outs, pattern, rm, rc);
+                                let (log, grounds) =
+                                    ground_muff_er_suffix(&model, pitcher_thrower, mixed);
+                                let a = derive_accounting(&log).unwrap();
+                                let defense = 1 - half.offense();
+                                let final_before = log.last().unwrap().before();
+                                let p = &a.pitchers[defense][&final_before.teams[defense].pitcher];
+                                let homers = if pattern == 1 { 1 } else { 2 };
+                                let expected_ground = if mixed {
+                                    (3 - u32::from(outs)).div_ceil(2)
+                                } else {
+                                    3 - u32::from(outs)
+                                };
+                                assert_eq!(grounds, expected_ground);
+                                assert_eq!(
+                                    (
+                                        p.runs_allowed,
+                                        p.outs_recorded,
+                                        p.batters_faced,
+                                        p.at_bats_against,
+                                        p.classified_hits_allowed,
+                                        p.credited_strikeouts
+                                    ),
+                                    (
+                                        1 + homers,
+                                        3,
+                                        4 + homers,
+                                        Some(4 + homers),
+                                        Some(homers),
+                                        3 - grounds
+                                    )
+                                );
+                                let field = &a.classified_fielding[defense];
+                                let team = &final_before.teams[defense];
+                                let thrower = if pitcher_thrower {
+                                    &team.pitcher
+                                } else {
+                                    &team.batting_order[3]
+                                };
+                                assert_eq!(field[&team.batting_order[1]].putouts, Some(grounds));
+                                assert_eq!(
+                                    field[&team.batting_order[0]].putouts,
+                                    Some(3 - grounds)
+                                );
+                                assert_eq!(field[thrower].assists, Some(grounds));
+                                assert_eq!(
+                                    field.values().map(|l| l.errors.unwrap()).sum::<u32>(),
+                                    1
+                                );
+                                for l in field.values() {
+                                    assert_eq!(l.observed_events, 4 + homers);
+                                    assert_eq!(l.passed_balls, Some(0));
+                                }
+                                let er = match pattern {
+                                    0 => 2,
+                                    1 => u32::from(outs == 0),
+                                    _ => 2 - u32::from(outs == 1),
+                                };
+                                assert_eq!(p.earned_runs,Some(er),"{half:?} outs{outs} pattern{pattern} moves{rm} credits{rc} pitcher{pitcher_thrower} mixed{mixed}");
+                                frames += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 192);
+}
+
+#[test]
+fn ground_muff_er_suffix_missing_ground_facts_or_review_preserves_uncertainty() {
+    let model = empty_muff_er_ordered_half(Half::Top, 1, 2, false, false);
+    let (control, _) = ground_muff_er_suffix(&model, false, false);
+    let index = control
+        .iter()
+        .position(|t| t.event().ordinary_ground_throw.is_some())
+        .unwrap();
+    for facts_missing in [false, true] {
+        let mut log = control.clone();
+        let mut e = log[index].event().clone();
+        if facts_missing {
+            e.ordinary_ground_throw = None;
+        } else {
+            e.fielding_review = FieldingReview::Unknown;
+        }
+        let t = apply(log[index].before(), e).unwrap();
+        assert_eq!(t.before(), log[index].before());
+        assert_eq!(t.after(), log[index].after());
+        assert_eq!(t.event().delta, log[index].event().delta);
+        log[index] = t;
+        let a = derive_accounting(&log).unwrap();
+        assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 3);
+        assert_eq!(a.pitchers[1]["home_starter"].earned_runs, None);
+    }
+    let mut log = control.clone();
+    let mut e = log[1].event().clone();
+    e.muffed_ground_ball = None;
+    e.fielding_review = FieldingReview::Unknown;
+    log[1] = apply(log[1].before(), e).unwrap();
+    finish_with_three_strikeouts(
+        log.last().unwrap().after().clone(),
+        &mut log,
+        FieldingReview::NoMisplay,
+    );
+    let known = empty_muff_er_ordered_half(Half::Top, 0, 0, false, false);
+    append_rebased_muff_er_half(&mut log, &known);
+    assert_eq!(
+        derive_accounting(&log).unwrap().pitchers[1]["home_starter"].earned_runs,
+        None
+    );
+}
+
+#[test]
+fn ground_muff_er_suffix_repeated_actor_and_two_out_integration_keep_scope() {
+    let model = empty_muff_er_ordered_half(Half::Top, 0, 3, false, false);
+    let (log, grounds) = ground_muff_er_suffix(&model, false, false);
+    assert_eq!(grounds, 3);
+    let a = derive_accounting(&log).unwrap();
+    assert_eq!(a.pitchers[1]["home_starter"].runs_allowed, 10);
+    assert_eq!(a.pitchers[1]["home_starter"].earned_runs, Some(9));
+    let mut frames = 0;
+    for half in [Half::Top, Half::Bottom] {
+        for mask in 0..8 {
+            for rm in [false, true] {
+                for rc in [false, true] {
+                    let (model, _) = two_out_muff_er_half(mask, half, rm, rc, false, false, 2);
+                    let (log, grounds) = ground_muff_er_suffix(&model, false, false);
+                    assert_eq!(grounds, 1);
+                    let a = derive_accounting(&log).unwrap();
+                    let p = &a.pitchers[1 - half.offense()]
+                        [&log.last().unwrap().event().participants.pitcher];
+                    assert_eq!(
+                        (p.runs_allowed, p.outs_recorded, p.earned_runs),
+                        (mask.count_ones() + 2, 3, Some(0))
+                    );
+                    frames += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 64);
+}
