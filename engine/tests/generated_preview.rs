@@ -7,8 +7,8 @@ mod preview;
 #[path = "../examples/support/preview_cli.rs"]
 mod preview_cli;
 use bbsim_engine::{
-    accounting::derive_accounting, apply, Base, Destination, EventTransition, GameState, Half,
-    TeamState,
+    accounting::{derive_accounting, FieldingCoverageLine},
+    apply, Base, Destination, EventTransition, GameState, Half, TeamState,
 };
 use preview::{Baseline, Outcome, Rng, ALL};
 
@@ -174,10 +174,44 @@ fn only_chosen_contact_out_supplies_bound_ground_throw_evidence() {
             assert_eq!(old.before(), t.before());
             assert_eq!(old.after(), t.after());
             assert_eq!(old.event().delta, t.event().delta);
-            assert_eq!(
-                derive_accounting(&[old]).unwrap(),
-                derive_accounting(&[t]).unwrap()
-            );
+            let mut unbound = derive_accounting(&[old]).unwrap();
+            let bound = derive_accounting(&[t]).unwrap();
+            let actors: Vec<_> = (1..=8)
+                .map(|i| format!("Home-{i}"))
+                .chain(["Home-pitcher".into()])
+                .collect();
+            let known = actors
+                .iter()
+                .map(|id| {
+                    (
+                        id.clone(),
+                        FieldingCoverageLine {
+                            observed_events: 1,
+                            putouts: Some(u32::from(id == "Home-2")),
+                            assists: Some(u32::from(id == "Home-4")),
+                        },
+                    )
+                })
+                .collect();
+            let unknown = actors
+                .into_iter()
+                .map(|id| {
+                    (
+                        id,
+                        FieldingCoverageLine {
+                            observed_events: 1,
+                            putouts: None,
+                            assists: None,
+                        },
+                    )
+                })
+                .collect();
+            assert_eq!(bound.classified_fielding, [Default::default(), known]);
+            assert_eq!(unbound.classified_fielding, [Default::default(), unknown]);
+            // Assert the new evidence-sensitive component above, then retain
+            // whole-object equality for every pre-existing accounting field.
+            unbound.classified_fielding = bound.classified_fielding.clone();
+            assert_eq!(unbound, bound);
         } else {
             assert!(event.ordinary_ground_throw.is_none());
             assert_eq!(t.ordinary_ground_fielding(), None);

@@ -514,6 +514,15 @@ impl EventTransition {
         })
     }
 
+    /// Union of qualified event-local PO/A proofs, not whole-game coverage.
+    pub fn fielding_contribution(&self) -> Option<accounting::FieldingContribution> {
+        self.ordinary_ground_fielding()
+            .or_else(|| self.caught_strikeout_fielding())
+            .or_else(|| self.sole_safe_hit_fielding())
+            .or_else(|| self.protected_award_fielding())
+            .or_else(|| self.sole_home_run_fielding())
+    }
+
     /// Event-local protected-award PO/A; missing cause/review stays unknown.
     /// Empty maps mean zero only in this qualified event's before-defense scope.
     pub fn protected_award_fielding(&self) -> Option<accounting::FieldingContribution> {

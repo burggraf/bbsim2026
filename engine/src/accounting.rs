@@ -2,7 +2,7 @@
 //! Credited counts are not complete official box cells: the event vocabulary
 //! cannot yet distinguish every PA/fielding/earned-run outcome. Unknown stays
 //! `None`, not zero. No game-state score is used to accumulate a line.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     Base, CreditKind, Destination, Event, EventKind, EventTransition, FieldingReview, GameState,
@@ -138,6 +138,24 @@ impl Default for PitcherLine {
         }
     }
 }
+/// Independent PO/A coverage across this actor's observed defensive events.
+/// Known totals do not certify a complete official fielding line or game.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FieldingCoverageLine {
+    pub observed_events: u32,
+    pub putouts: Option<u32>,
+    pub assists: Option<u32>,
+}
+impl Default for FieldingCoverageLine {
+    fn default() -> Self {
+        Self {
+            observed_events: 0,
+            putouts: Some(0),
+            assists: Some(0),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FielderLine {
     pub credited_putouts: u32,
@@ -155,6 +173,8 @@ pub struct GameAccounting {
     pub batters: [BTreeMap<String, BatterLine>; 2],
     pub pitchers: [BTreeMap<String, PitcherLine>; 2],
     pub fielders: [BTreeMap<String, FielderLine>; 2],
+    /// Separate observed-defense coverage; legacy credited maps stay unchanged.
+    pub classified_fielding: [BTreeMap<String, FieldingCoverageLine>; 2],
     /// True only if the contiguous log starts at an empty 1st/top 0-0
     /// and ends in a terminal snapshot. This does not certify credit coverage.
     pub complete_game: bool,
@@ -351,6 +371,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         batters: std::array::from_fn(|_| BTreeMap::new()),
         pitchers: std::array::from_fn(|_| BTreeMap::new()),
         fielders: std::array::from_fn(|_| BTreeMap::new()),
+        classified_fielding: std::array::from_fn(|_| BTreeMap::new()),
         complete_game: starts_game(first.before()) && log.last().unwrap().after().over,
     };
     let mut frame = (first.before().inning, first.before().half);
@@ -370,6 +391,31 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         clean_half &= clean_play(before, event);
         let offense = before.half.offense();
         let defense = 1 - offense;
+        if event.kind != EventKind::Substitution {
+            let team = &before.teams[defense];
+            // A no-DH pitcher is also in the batting order; observe him once.
+            let actors: BTreeSet<_> = team
+                .batting_order
+                .iter()
+                .chain([&team.pitcher])
+                .filter(|id| crate::rules::fielding_eligible(team, id))
+                .collect();
+            let contribution = transition.fielding_contribution();
+            for id in actors {
+                let line = result.classified_fielding[defense]
+                    .entry(id.clone())
+                    .or_default();
+                line.observed_events += 1;
+                line.putouts = line
+                    .putouts
+                    .zip(contribution.as_ref())
+                    .map(|(total, proof)| total + proof.putouts.get(id).copied().unwrap_or(0));
+                line.assists = line
+                    .assists
+                    .zip(contribution.as_ref())
+                    .map(|(total, proof)| total + proof.assists.get(id).copied().unwrap_or(0));
+            }
+        }
         let credited_runs = event
             .delta
             .credits
