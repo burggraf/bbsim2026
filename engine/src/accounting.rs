@@ -443,11 +443,15 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             && event.fielding_review == FieldingReview::SoleGroundMuff
             && event.muffed_ground_ball.is_some()
         {
-            // Later empty-base episodes cannot move any surviving runner:
-            // previously certified reaches have already scored. Only the
-            // first episode requires a zero-run prefix; earned runs established
-            // before later missed retirements must not be erased.
-            empty_muff_half &= error_batter.is_some() || half_runs.is_empty();
+            // Earlier clean scoring stays earned. Seed once, not at later
+            // empty-base episodes: their prior totals include unearned reaches.
+            // The scalar certificate cannot cover inherited/other charges.
+            if error_batter.is_none() {
+                empty_muff_half &= half_runs.keys().all(|(side, pitcher)| {
+                    *side == 1 - before.half.offense() && pitcher == &half_pitcher
+                });
+                empty_muff_earned = half_runs.values().sum();
+            }
             lost_muff_outs = (lost_muff_outs + 1).min(3);
             error_batter = event
                 .muffed_ground_ball

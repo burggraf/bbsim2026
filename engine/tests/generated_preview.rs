@@ -83,7 +83,7 @@ fn cli_requires_a_baseline_and_validates_seed_and_flags() {
 }
 
 #[test]
-fn generated_terminal_shows_contact_outs_seeded_game_and_unknown_er() {
+fn generated_terminal_shows_contact_outs_seeded_game_and_known_or_unknown_er() {
     assert_eq!(preview::MODEL_VERSION, "pooled-jeffreys-preview-v1");
     assert_eq!(preview::POLICY_VERSION, "station-ground-contact-v1");
     assert_eq!(preview::RNG_VERSION, "splitmix64-v1");
@@ -95,8 +95,74 @@ fn generated_terminal_shows_contact_outs_seeded_game_and_unknown_er() {
     assert!(text.contains("ground/contact out"));
     assert!(text.contains("GAME OVER"));
     assert!(text.contains("ER"));
-    assert!(text.contains('?'));
+    // The unchanged seed's bottom-four clean grand slam precedes an empty-base
+    // muff and three ground outs. The stranded error runner cannot unearn those
+    // four runs, or Home-2's earlier clean scoring in bottom three.
+    assert_eq!(log.len(), 75);
+    assert_eq!(log.last().unwrap().after().score, [3, 11]);
+    let stats = derive_accounting(&log).unwrap();
+    assert_eq!(stats.pitchers[0]["Away-pitcher"].earned_runs, Some(11));
+    assert_eq!(stats.pitchers[1]["Home-pitcher"].earned_runs, Some(3));
+    let pitcher_row = |rendered: &str, name: &str| {
+        rendered
+            .lines()
+            .find(|line| line.starts_with(name))
+            .unwrap()
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        pitcher_row(&text, "Away-pitcher"),
+        ["Away-pitcher", "40", "8.0", "11", "12", "1", "7", "11"]
+    );
+    assert_eq!(
+        pitcher_row(&text, "Home-pitcher"),
+        ["Home-pitcher", "35", "9.0", "3", "6", "1", "8", "3"]
+    );
+    assert!(!text.contains('?'));
     assert_eq!(text.matches("Play ").count(), log.len());
+
+    // Missing review, not a different seed or invented physical play, still
+    // makes ER unknown. Preserve the historical unknown-marker assertion here.
+    let mut partial = log.clone();
+    assert_eq!(log[36].before().inning, 4);
+    assert_eq!(log[36].before().half, Half::Bottom);
+    assert_eq!(log[36].before().outs, 0);
+    assert!(log[36].before().bases.iter().all(Option::is_none));
+    assert!(log[36].event().muffed_ground_ball.is_some());
+    assert_eq!(
+        log[36].event().fielding_review,
+        bbsim_engine::FieldingReview::SoleGroundMuff
+    );
+    let mut missing_review = log[36].event().clone();
+    missing_review.fielding_review = bbsim_engine::FieldingReview::Unknown;
+    partial[36] = apply(log[36].before(), missing_review).unwrap();
+    assert_eq!(
+        EventTransition::from_bytes(&partial[36].to_bytes()).unwrap(),
+        partial[36]
+    );
+    for (known, unknown) in log.iter().zip(&partial) {
+        assert_eq!(known.before(), unknown.before());
+        assert_eq!(known.after(), unknown.after());
+        assert_eq!(known.event().delta, unknown.event().delta);
+    }
+    let partial_stats = derive_accounting(&partial).unwrap();
+    assert_eq!(partial_stats.pitchers[0]["Away-pitcher"].earned_runs, None);
+    assert_eq!(partial_stats.pitchers[1], stats.pitchers[1]);
+    assert_eq!(partial_stats.runs, stats.runs);
+    let mut output = Vec::new();
+    presentation::present(&partial, &mut &b""[..], &mut output, true).unwrap();
+    let text = String::from_utf8(output).unwrap();
+    assert!(text.contains('?'));
+    assert!(text.contains("ground/contact out"));
+    assert!(text.contains("GAME OVER"));
+    assert!(text.contains("ER"));
+    assert_eq!(text.matches("Play ").count(), partial.len());
+    assert_eq!(
+        pitcher_row(&text, "Away-pitcher"),
+        ["Away-pitcher", "40", "8.0", "11", "12", "1", "7", "?"]
+    );
 }
 
 #[test]
