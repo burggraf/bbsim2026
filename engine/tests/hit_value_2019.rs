@@ -85,6 +85,7 @@ fn hit(before: &GameState, to: Destination, class: Option<CreditKind>) -> Event 
         single_delivery: None,
         balk: None,
         caught_strikeout: None,
+        protected_award: None,
         ordinary_ground_throw: None,
         delta: Delta {
             runs: credits.iter().filter(|c| c.kind == CreditKind::Run).count() as u8,
@@ -271,6 +272,7 @@ fn strikeout(before: &GameState) -> Event {
         single_delivery: None,
         balk: None,
         caught_strikeout: None,
+        protected_award: None,
         ordinary_ground_throw: None,
         delta: Delta {
             moves: vec![RunnerMove {
@@ -672,7 +674,7 @@ fn well_formed_classification_forgeries_are_semantically_rejected() {
             event.fielding_review = review;
             let valid = apply(&before, event).unwrap();
             let original = valid.to_bytes();
-            assert!(original.starts_with(b"BBE21"));
+            assert!(original.starts_with(b"BBE22"));
             assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
             let batter = valid.event().participants.batter.as_ref().unwrap();
             let mut marker = (batter.len() as u64).to_le_bytes().to_vec();
@@ -819,6 +821,7 @@ fn unclassified_hit_unknown_is_irreversible_and_local_to_actor_and_actual_pitche
             single_delivery: None,
             balk: None,
             caught_strikeout: None,
+            protected_award: None,
             ordinary_ground_throw: None,
             delta: Delta {
                 moves: vec![],

@@ -8,6 +8,7 @@ mod codec;
 mod contact;
 mod ground;
 mod pitch;
+mod protected_award;
 mod reducer;
 mod rules;
 pub use reducer::apply;
@@ -402,6 +403,11 @@ pub struct CaughtStrikeoutFacts {
     pub batter_id: String,
     pub catcher_id: String,
 }
+/// All runner advancement in this PA is solely the BB/HBP protected force chain.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProtectedAwardFacts {
+    pub batter_id: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -413,6 +419,7 @@ pub struct Event {
     pub balk: Option<BalkFacts>,
     pub ordinary_ground_throw: Option<OrdinaryGroundThrowFacts>,
     pub caught_strikeout: Option<CaughtStrikeoutFacts>,
+    pub protected_award: Option<ProtectedAwardFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -436,6 +443,18 @@ pub struct EventTransition {
 }
 
 impl EventTransition {
+    /// Event-local protected-award RBI proof, not complete segment/box coverage.
+    pub fn protected_award_rbi(&self) -> Option<accounting::RbiContribution> {
+        let facts = self.event.protected_award.as_ref()?;
+        Some(accounting::RbiContribution {
+            runs_batted_in: [(
+                facts.batter_id.clone(),
+                u32::from(self.before.bases.iter().all(Option::is_some)),
+            )]
+            .into(),
+        })
+    }
+
     /// Event-local caught-K proof; missing facts/review are not known zero maps.
     pub fn caught_strikeout_fielding(&self) -> Option<accounting::FieldingContribution> {
         if self.event.fielding_review != FieldingReview::NoMisplay {

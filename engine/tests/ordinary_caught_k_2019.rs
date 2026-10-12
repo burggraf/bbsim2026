@@ -109,6 +109,7 @@ fn event(before: &GameState, catcher_slot: usize, holds: bool, reverse: bool) ->
             batter_id: batter,
             catcher_id: catcher,
         }),
+        protected_award: None,
     }
 }
 
@@ -329,6 +330,8 @@ fn event_bytes(action: &Event) -> Vec<u8> {
             bytes_string(&mut bytes, &facts.catcher_id);
         }
     }
+    assert!(action.protected_award.is_none());
+    bytes.push(0);
     bytes
 }
 fn splice_event(t: &EventTransition, original: &Event, replacement: &Event) -> Vec<u8> {
@@ -353,7 +356,7 @@ fn factual_wire(before: &GameState, action: &Event) -> Vec<u8> {
     generic.caught_strikeout = None;
     let t = apply(before, generic.clone()).unwrap();
     assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
-    assert_eq!(&t.to_bytes()[..5], b"BBE21");
+    assert_eq!(&t.to_bytes()[..5], b"BBE22");
     let mut positive = action.clone();
     positive.caught_strikeout.as_mut().unwrap().catcher_id =
         before.teams[1 - before.half.offense()].batting_order[1].clone();
@@ -397,7 +400,7 @@ fn caught_fact_option_and_obsolete_version_cannot_bypass_validation() {
     assert_eq!(positions.len(), 1);
     let mut generic = action.clone();
     generic.caught_strikeout = None;
-    let prefix = event_bytes(&generic).len() - 1;
+    let prefix = event_bytes(&generic).len() - 2;
     let mut bad = bytes;
     assert_eq!(bad[positions[0] + prefix], 1);
     bad[positions[0] + prefix] = 2;

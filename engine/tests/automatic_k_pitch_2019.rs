@@ -55,6 +55,7 @@ fn fixture(half: Half, outs: u8, mask: u8, advancing: u8, passed: bool) -> (Game
         two_out_contact: None,
         balk: None,
         caught_strikeout: None,
+        protected_award: None,
         ordinary_ground_throw: None,
         single_delivery: Some(SingleDeliveryFacts {
             context: DeliveryContext::UncaughtThirdStrike,
@@ -159,7 +160,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
     );
     let reduced = reduced.unwrap();
     assert_eq!(direct.unwrap(), reduced);
-    assert_eq!(&reduced.to_bytes()[..5], b"BBE21");
+    assert_eq!(&reduced.to_bytes()[..5], b"BBE22");
     assert_eq!(
         EventTransition::from_bytes(&reduced.to_bytes()).unwrap(),
         reduced
@@ -746,14 +747,14 @@ fn complete_wire_accepts_explicit_first_touch_then_catcher_throw_to_second() {
     let old = wire_event(&event);
     let offset = unique_offset(&bytes, &old);
     let mut changed = old.clone();
-    assert_eq!(&changed[changed.len() - 4..], &[0, 0, 0, 0]);
-    changed.truncate(changed.len() - 4); // Unknown recovery, no balk/ground/caught facts
+    assert_eq!(&changed[changed.len() - 5..], &[0, 0, 0, 0, 0]);
+    changed.truncate(changed.len() - 5); // Unknown recovery, no balk/ground/caught/award facts
     changed.push(5); // new bound after-First catcher throw
     wire_string(&mut changed, &receiver);
     changed.push(wire_destination(Destination::Second));
-    changed.extend([0, 0, 0]); // no balk, ground or caught facts
+    changed.extend([0, 0, 0, 0]); // no balk, ground, caught or award facts
     bytes.splice(offset..offset + old.len(), changed);
-    bytes[..5].copy_from_slice(b"BBE21");
+    bytes[..5].copy_from_slice(b"BBE22");
     assert_eq!(
         EventTransition::from_bytes(&bytes).map(|t| t.event().delta.outs),
         Ok(1)
@@ -2560,8 +2561,12 @@ fn wire_event(event: &Event) -> Vec<u8> {
         Some(facts) => bytes.extend_from_slice(&wire_delivery(facts)),
         None => bytes.push(0),
     }
-    assert!(event.ordinary_ground_throw.is_none() && event.caught_strikeout.is_none());
-    bytes.extend([0, 0, 0]); // no balk, ground or caught facts
+    assert!(
+        event.ordinary_ground_throw.is_none()
+            && event.caught_strikeout.is_none()
+            && event.protected_award.is_none()
+    );
+    bytes.extend([0, 0, 0, 0]); // no balk, ground, caught or award facts
     bytes
 }
 fn unique_offset(bytes: &[u8], needle: &[u8]) -> usize {

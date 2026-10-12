@@ -77,6 +77,7 @@ fn event(
         single_delivery: None,
         balk: None,
         caught_strikeout: None,
+        protected_award: None,
         ordinary_ground_throw: None,
     }
 }
@@ -503,7 +504,7 @@ fn no_hit_semantic_wire_contradiction_has_valid_hit_control() {
     .unwrap();
     let bytes = original.to_bytes();
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), original);
-    assert!(bytes.starts_with(b"BBE21"));
+    assert!(bytes.starts_with(b"BBE22"));
     let mut needle = (3u64).to_le_bytes().to_vec();
     for tag in [3u8, 12, 0] {
         needle.extend_from_slice(&(5u64).to_le_bytes());

@@ -260,6 +260,20 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                             );
                             assert!(t.caught_strikeout_fielding().unwrap().assists.is_empty());
                         }
+                        let protected = matches!(outcome, Outcome::Walk | Outcome::Hbp);
+                        assert_eq!(t.event().protected_award.is_some(), protected);
+                        assert_eq!(t.protected_award_rbi().is_some(), protected);
+                        if let Some(facts) = &t.event().protected_award {
+                            assert_eq!(
+                                facts.batter_id,
+                                before.teams[offense].batting_order
+                                    [before.teams[offense].next_batter as usize]
+                            );
+                            assert_eq!(
+                                t.protected_award_rbi().unwrap().runs_batted_in[&facts.batter_id],
+                                u32::from(mask == 7)
+                            );
+                        }
                         // Literal controls for the reproduced winning-order failure and
                         // the loaded walk-off; legality alone does not freeze v1 policy.
                         if half == Half::Bottom && outs == 0 && outcome == Outcome::Triple {

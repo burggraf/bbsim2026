@@ -325,6 +325,28 @@ pub(crate) fn validate_no_hit(event: &Event) -> Result<(), TransitionError> {
     Ok(())
 }
 
+// Geometry only: callers separately bind the award classification/cause/review.
+pub(crate) fn protected_award_moves(before: &GameState, event: &Event) -> bool {
+    let forced = before.bases.iter().take_while(|b| b.is_some()).count();
+    let destinations = [
+        Destination::First,
+        Destination::Second,
+        Destination::Third,
+        Destination::Home,
+    ];
+    event.delta.moves.iter().all(|m| {
+        let index = match m.from {
+            Base::Plate => return m.to == Destination::First,
+            Base::First => 0,
+            Base::Second => 1,
+            Base::Third => 2,
+        };
+        m.to == destinations[index + usize::from(index < forced)]
+    }) && [Base::First, Base::Second, Base::Third][..forced]
+        .iter()
+        .all(|base| event.delta.moves.iter().any(|m| m.from == *base))
+}
+
 // Shared by bound ground throws and caught K; supplied counters alone do not
 // establish this method. Preserve carried identities/charges even on the third out.
 pub(crate) fn validate_held_batter_before_first(
@@ -371,7 +393,8 @@ pub(crate) fn batter_charge<'a>(
     before: &'a GameState,
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
-    // Known bound contact facts precede unrelated occurrence/charge uncertainty.
+    // Known bound causal facts precede unrelated occurrence/charge uncertainty.
+    super::protected_award::validate(before, event)?;
     super::caught::validate(before, event)?;
     super::ground::validate(before, event)?;
     // Credit-only contradictions must not be masked by unknown FC lineage.

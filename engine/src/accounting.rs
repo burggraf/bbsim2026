@@ -17,6 +17,12 @@ pub struct FieldingContribution {
     pub assists: BTreeMap<String, u32>,
 }
 
+/// Cause-derived RBI for the named batter in one qualified PA, not a full box.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RbiContribution {
+    pub runs_batted_in: BTreeMap<String, u32>,
+}
+
 /// Breakdown of supplied Hit credits, not proof of complete official H/TB.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HitBreakdown {
@@ -248,24 +254,7 @@ fn clean_forced_award(before: &GameState, event: &Event) -> bool {
     {
         return false;
     }
-    let forced = before.bases.iter().take_while(|b| b.is_some()).count();
-    let destinations = [
-        Destination::First,
-        Destination::Second,
-        Destination::Third,
-        Destination::Home,
-    ];
-    event.delta.moves.iter().all(|m| {
-        let index = match m.from {
-            Base::Plate => return m.to == Destination::First,
-            Base::First => 0,
-            Base::Second => 1,
-            Base::Third => 2,
-        };
-        m.to == destinations[index + usize::from(index < forced)]
-    }) && [Base::First, Base::Second, Base::Third][..forced]
-        .iter()
-        .all(|base| event.delta.moves.iter().any(|m| m.from == *base))
+    crate::rules::protected_award_moves(before, event)
 }
 
 /// A deliberately narrow errorless-play proof. Absence of an Error credit

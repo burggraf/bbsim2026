@@ -110,6 +110,7 @@ fn event(
         single_delivery: None,
         balk: None,
         caught_strikeout: None,
+        protected_award: None,
         ordinary_ground_throw: None,
     }
 }

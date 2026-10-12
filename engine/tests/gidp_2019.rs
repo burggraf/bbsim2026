@@ -118,6 +118,7 @@ fn fixture(half: Half, outs: u8, reverse_force: bool, crossing: bool) -> (GameSt
         single_delivery: None,
         balk: None,
         caught_strikeout: None,
+        protected_award: None,
         ordinary_ground_throw: None,
         two_out_contact: Some(TwoOutContactFacts {
             contact: ContactClass::Grounded,
@@ -346,7 +347,7 @@ fn well_formed_gidp_and_contact_forgeries_are_semantically_rejected() {
     let (before, event) = fixture(Half::Top, 0, false, false);
     let valid = apply(&before, event).unwrap();
     let original = valid.to_bytes();
-    assert!(original.starts_with(b"BBE21"));
+    assert!(original.starts_with(b"BBE22"));
     assert_eq!(EventTransition::from_bytes(&original).unwrap(), valid);
     let mut credit_forgery = original.clone();
     let kind = unique_tag(&credit_forgery, "away0", 22);

@@ -324,6 +324,11 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
             batter_id: batter.clone(),
             catcher_id: defense.batting_order[0].clone(),
         });
+    let protected_award = matches!(outcome, Outcome::Walk | Outcome::Hbp).then(|| {
+        bbsim_engine::ProtectedAwardFacts {
+            batter_id: batter.clone(),
+        }
+    });
     Ok(Event {
         kind,
         participants: Participants {
@@ -348,6 +353,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         balk: None,
         caught_strikeout,
         ordinary_ground_throw,
+        protected_award,
     })
 }
 
