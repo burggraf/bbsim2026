@@ -1,6 +1,7 @@
 """Real loopback HTTP and Rust CLI integration; no mocked game outcomes."""
 from contextlib import contextmanager
 from pathlib import Path
+import html
 import json
 import re
 import subprocess
@@ -70,6 +71,13 @@ class LivePreviewTests(unittest.TestCase):
             self.assertEqual(traced.count('TRACE PLAY 1 BEGIN'), 1)
             self.assertIn('Before state:', traced)
             self.assertIn('After state:', traced)
+            self.assertIn('COMMENTARY FORMAT: radio-v1', traced)
+            for seed, native in expected.items():
+                page = build_live_viewer(native, seed)
+                calls = re.findall(r'^CALL PLAY \d+: (.+)$', native, re.MULTILINE)
+                self.assertGreater(len(calls), 0, f'seed {seed}')
+                for call in calls:
+                    self.assertIn(html.escape(call), page)
             plays = lambda text: text[text.index("Play 01"):]
             self.assertNotEqual(plays(expected[1]), plays(expected[2]))
             with running(BINARY, baseline) as url:

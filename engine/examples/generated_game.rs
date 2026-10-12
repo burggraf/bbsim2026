@@ -48,6 +48,7 @@ fn main() -> io::Result<()> {
     writeln!(output,"Coarse ground/contact outs and station advancement; no player ratings, fatigue, DP, tactics or runner-only mechanisms yet.\n")?;
     if options.trace {
         game_trace::write(&log, &mut output)?;
+        game_trace::write_commentary(&log, &mut output)?;
     }
     presentation::present(&log, &mut io::stdin().lock(), &mut output, options.autoplay)
 }

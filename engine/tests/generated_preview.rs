@@ -759,3 +759,154 @@ fn two_thousand_games_are_repeatable_legal_and_conserve_available_statistics() {
         }
     }
 }
+
+fn radio(t: &EventTransition) -> String {
+    let mut output = Vec::new();
+    game_trace::write_commentary(std::slice::from_ref(t), &mut output).unwrap();
+    String::from_utf8(output).unwrap()
+}
+
+#[test]
+fn radio_calls_name_actual_batter_pitcher_and_bound_fielders_for_all_categories() {
+    let calls = [
+        "Home-pitcher to Away-1: strike three! Away-1 is out; Home-1 receives the strike.",
+        "Home-pitcher to Away-1: ball four! Away-1 takes first.",
+        "Home-pitcher to Away-1: hit by pitch. Away-1 takes first.",
+        "Home-pitcher to Away-1: a single!",
+        "Home-pitcher to Away-1: a double!",
+        "Home-pitcher to Away-1: a triple!",
+        "Home-pitcher to Away-1: home run!",
+        "Home-pitcher to Away-1: ground ball, mishandled by Home-4! Away-1 reaches first on the error.",
+        "Home-pitcher to Away-1: ground ball to Home-4, the throw to Home-2 — Away-1 is out at first!",
+    ];
+    for (outcome, expected) in ALL.into_iter().zip(calls) {
+        let before = initial();
+        let t = apply(&before, preview::event_for(&before, outcome).unwrap()).unwrap();
+        let text = radio(&t);
+        assert!(
+            text.contains(&format!("CALL PLAY 1: {expected}\n")),
+            "{outcome:?}: {text}"
+        );
+        assert!(text.contains(
+            "RECAP PLAY 1: Before: Top 1 · 0 outs · Away 0–Home 0 · bases empty → After:"
+        ));
+        if matches!(
+            outcome,
+            Outcome::Single
+                | Outcome::Double
+                | Outcome::Triple
+                | Outcome::HomeRun
+                | Outcome::Walk
+                | Outcome::Hbp
+        ) {
+            assert!(!text.contains("Home-4") && !text.contains("Home-2"));
+        }
+        assert!(!text.contains("swinging") && !text.contains("left field"));
+    }
+}
+
+#[test]
+fn radio_covers_all_before_runners_moving_scoring_or_holding_without_changing_transition() {
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 0u8..8 {
+                for outcome in ALL {
+                    let mut before = initial();
+                    before.half = half;
+                    before.outs = outs;
+                    for i in 0..3 {
+                        if mask & (1 << i) != 0 {
+                            before.bases[i] = Some(bbsim_engine::Runner {
+                                player_id: before.teams[half.offense()].batting_order[i + 5]
+                                    .clone(),
+                                responsible_pitcher: before.teams[1 - half.offense()]
+                                    .pitcher
+                                    .clone(),
+                            });
+                        }
+                    }
+                    let t = apply(&before, preview::event_for(&before, outcome).unwrap()).unwrap();
+                    let frozen = t.to_bytes();
+                    let text = radio(&t);
+                    let call = text
+                        .lines()
+                        .find(|l| l.starts_with("CALL PLAY 1:"))
+                        .unwrap();
+                    for r in before.bases.iter().flatten() {
+                        assert!(
+                            call.contains(&r.player_id),
+                            "{outcome:?}/{mask}/{outs}/{half:?}: {call}"
+                        );
+                    }
+                    assert_eq!(t.to_bytes(), frozen);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn radio_explains_held_runners_normalized_third_out_and_terminal_state() {
+    let mut before = initial();
+    before.outs = 2;
+    before.bases[0] = Some(bbsim_engine::Runner {
+        player_id: "Away-6".into(),
+        responsible_pitcher: "Home-pitcher".into(),
+    });
+    let t = apply(
+        &before,
+        preview::event_for(&before, Outcome::ContactOut).unwrap(),
+    )
+    .unwrap();
+    let text = radio(&t);
+    assert!(
+        text.contains("Away-6 holds at first. Side retired."),
+        "{text}"
+    );
+    assert!(text.contains("After: Bottom 1 · 0 outs · Away 0–Home 0 · bases empty"));
+    before = initial();
+    before.inning = 9;
+    before.half = Half::Bottom;
+    let t = apply(
+        &before,
+        preview::event_for(&before, Outcome::HomeRun).unwrap(),
+    )
+    .unwrap();
+    let text = radio(&t);
+    assert!(text.contains("The game is over."));
+    assert!(text.contains("After: Final · Away 0–Home 1 · bases empty"));
+}
+
+#[test]
+fn radio_only_calls_credited_runs_and_does_not_invent_missing_fielding_facts() {
+    let mut before = initial();
+    before.bases[2] = Some(bbsim_engine::Runner {
+        player_id: "Away-6".into(),
+        responsible_pitcher: "Home-pitcher".into(),
+    });
+    let t = apply(
+        &before,
+        preview::event_for(&before, Outcome::Single).unwrap(),
+    )
+    .unwrap();
+    assert!(radio(&t).contains("Away-6 scores from third."));
+    let mut event = preview::event_for(&before, Outcome::ContactOut).unwrap();
+    event.ordinary_ground_throw = None;
+    let t = apply(&before, event).unwrap();
+    let text = radio(&t);
+    assert!(!text.contains("the throw") && !text.contains("ground ball to"));
+    assert!(text.contains("Home-4 (assist)") && text.contains("Home-2 (putout)"));
+    // A physical home crossing on a before-first third out is not a credited run.
+    before.outs = 2;
+    let mut event = preview::event_for(&before, Outcome::ContactOut).unwrap();
+    event.ordinary_ground_throw = None;
+    event.delta.moves.push(bbsim_engine::RunnerMove {
+        runner: before.bases[2].clone().unwrap(),
+        from: Base::Third,
+        to: Destination::Home,
+    });
+    let t = apply(&before, event).unwrap();
+    let text = radio(&t);
+    assert!(text.contains("Away-6 crosses home from third; run not counted."));
+    assert!(!text.contains("scores from third"));
+}

@@ -29,9 +29,13 @@ describes the existing internal data path.
 - **Restart:** replay this same game from the beginning, not reroll it.
 - **Final result:** jump to the final score, line score and supplied statistics.
 - **Full game log:** below the field, closed by default. Open it for a scrolling
-  list of every play/result and engine-provided before/after inning, outs, score,
-  runners and pitcher charges. Expand any entry's **Full native state and event
-  facts** for complete immutable snapshots, lineups/cursors, pitcher/DH/bench
+  list of every play, with a concise radio-style call naming the batter, pitcher,
+  moving/scoring/held runners, and involved fielders when recorded. A compact
+  before/after recap gives inning, outs, score and base occupants. The same call
+  appears beside the field during playback. Fictional player IDs are identities,
+  not actual MLB names; unrecorded hit locations/fielders and strike types are not
+  invented. Expand any entry's **Full native state and event facts** for complete
+  immutable snapshots, pitcher charges, lineups/cursors, pitcher/DH/bench
   state, runner moves, outs/runs/credits and all supplied event facts. The entire
   game is available independently of playback position; no missing states are
   guessed. After states normalize half-inning boundaries (outs reset to zero);
@@ -43,7 +47,7 @@ of fabricated games. The standard-library server binds only to loopback, serves
 no arbitrary files, rejects foreign Host headers and accepts only a seed from
 browser requests. The executable/baseline paths are startup settings, not browser
 inputs. This is a development prototype, not a production web server or release.
-No new dependencies or engine/model changes.
+No new dependencies or simulation-core/model changes.
 
 ## Optional server-free playback
 
@@ -81,7 +85,12 @@ Away 9–Home 3. These are exploratory simulations, not historical matchup evide
 The optional `engine-debug-v1` trace is a human-inspection format, not the
 canonical codec or independent validation certificate. Native trace tests compare
 all full snapshots/summary fields to the actual Rust transitions, including
-inning boundaries and the terminal play. Traced/untraced game/stat output agrees.
+inning boundaries and the terminal play. Separate `radio-v1` commentary comes
+from those same native transitions; original debug bodies are unchanged. Tests
+cover all nine preview results, names/fielding facts, all base masks/outs/halves,
+held runners, uncredited home crossings, inning endings and terminal recaps.
+Older debug-only records retain their original summaries; malformed or partial
+commentary is rejected. Traced/untraced game/stat output agrees.
 Statistics remain supplied-credit totals, not complete official boxes; unknowns
 remain `?`. The viewer recognizes only the current complete terminal format and
 rejects malformed/incomplete records; it does not replace canonical validation.

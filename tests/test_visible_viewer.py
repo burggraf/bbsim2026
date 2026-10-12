@@ -27,7 +27,41 @@ def traced_record():
     return 'TRACE FORMAT: engine-debug-v1\n' + blocks + RECORD
 
 
+def announced_record():
+    commentary = 'COMMENTARY FORMAT: radio-v1\n' + ''.join(
+        f'CALL PLAY {i}: Home-pitcher to Away-{i}: a single! <inspect & escape>\n'
+        f'RECAP PLAY {i}: Before: Top 1 · 0 outs · Away 0–Home 0 · bases empty → After: Top 1 · 0 outs · Away 0–Home 0 · Away-{i} at first\n'
+        for i in range(1, 4))
+    return commentary + traced_record()
+
+
 class VisibleViewerTests(unittest.TestCase):
+    def test_radio_calls_and_compact_recaps_are_visible_outside_technical_details(self):
+        page = build_viewer(announced_record())
+        for i in range(1, 4):
+            entry = page.split(f'id="log-play{i}"', 1)[1].split('</article>', 1)[0]
+            visible = entry.split('<details>', 1)[0]
+            self.assertIn(f'Home-pitcher to Away-{i}: a single!', visible)
+            self.assertIn('Before: Top 1 · 0 outs', visible)
+            self.assertIn(f'After: Top 1 · 0 outs · Away 0–Home 0 · Away-{i} at first', visible)
+            self.assertIn('&lt;inspect &amp; escape&gt;', visible)
+            self.assertNotIn('<inspect & escape>', page)
+            self.assertNotIn('supplied before', visible)
+            self.assertIn('GameState', entry.split('<details>', 1)[1])
+            frame = page.split(f'id="frame{i}"', 1)[1].split('</section>', 1)[0]
+            self.assertIn(f'Home-pitcher to Away-{i}: a single!', frame)
+        self.assertIn('<details class="game-log" id="game-log">', page)
+
+    def test_incomplete_misnumbered_or_unsupported_commentary_is_rejected(self):
+        source = announced_record()
+        for broken in [source.replace('CALL PLAY 2:', 'CALL PLAY 4:'),
+                       source.replace('RECAP PLAY 2:', 'MISSING PLAY 2:'),
+                       source.replace('radio-v1', 'unknown'),
+                       source.replace('COMMENTARY FORMAT: radio-v1\n', ''),
+                       source.replace('RECAP PLAY 1:', 'RECAP PLAY 2:', 1)]:
+            with self.subTest(source=broken), self.assertRaises(ValueError):
+                build_viewer(broken)
+
     def test_full_log_is_closed_scrollable_and_preserves_every_native_snapshot(self):
         page = build_viewer(traced_record())
         self.assertIn('<details class="game-log" id="game-log">', page)

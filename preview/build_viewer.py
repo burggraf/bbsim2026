@@ -15,7 +15,7 @@ h1{font-size:30px;margin:8px 0}.eyebrow{color:#9ab7b1;letter-spacing:3px;font-si
 svg{display:block;width:100%;height:auto;max-height:390px}.play h2{font-size:23px;line-height:1.4}.progress{color:#a6e4bd;font-size:13px;text-transform:uppercase;letter-spacing:2px}
 nav{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}a{display:inline-block;text-decoration:none;color:#e9f0f2;background:#2a414f;border:1px solid #466373;border-radius:8px;padding:12px 16px}a.primary{background:#b6eb91;color:#142719;border-color:#b6eb91;font-weight:700}a:focus-visible{outline:3px solid #ffda77;outline-offset:4px}a:hover{filter:brightness(1.15)}
 footer{font-size:13px;margin-top:26px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px ui-monospace,monospace;line-height:1.6;background:#15242f;border-radius:12px;padding:20px}summary{cursor:pointer;color:#b6eb91;padding:16px 0}
-.game-log{margin-top:24px;border:1px solid #304756;border-radius:12px;padding:0 18px}.game-log-scroll{max-height:520px;overflow-y:auto;overscroll-behavior:contain;padding:0 12px 12px}.game-log-entry{border-top:1px solid #304756;padding:12px 0}.game-log-entry h3{font-size:17px}.game-log-entry pre{margin:8px 0}.game-log-entry summary{font-size:13px}.game-log-scroll:focus-visible{outline:3px solid #ffda77}
+.game-log{margin-top:24px;border:1px solid #304756;border-radius:12px;padding:0 18px}.game-log-scroll{max-height:520px;overflow-y:auto;overscroll-behavior:contain;padding:0 12px 12px}.game-log-entry{border-top:1px solid #304756;padding:12px 0}.game-log-entry h3{font-size:17px}.game-log-entry pre{margin:8px 0}.game-log-entry summary{font-size:13px}.radio-call{line-height:1.55;margin:8px 0}.state-recap{font-size:13px;color:#aebfc8;line-height:1.6;margin:8px 0}.game-log-scroll:focus-visible{outline:3px solid #ffda77}
 @media(max-width:720px){.layout{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}.runs{font-size:44px}.score{padding:16px}.status{font-size:13px}main{padding:20px 14px}}
 """
 
@@ -54,6 +54,16 @@ def build_viewer(source: str) -> str:
     trace = list(re.finditer(r'^TRACE PLAY (\d+) BEGIN\n(.*?)^TRACE PLAY \1 END\n',
                              source, re.MULTILINE | re.DOTALL))
     has_trace = bool(re.search(r'^TRACE (FORMAT:|PLAY )', source, re.MULTILINE))
+    commentary = list(re.finditer(r'^CALL PLAY (\d+): ([^\n]+)\nRECAP PLAY \1: ([^\n]+)\n',
+                                  source, re.MULTILINE))
+    has_commentary = bool(re.search(r'^(COMMENTARY FORMAT:|CALL PLAY |RECAP PLAY )', source, re.MULTILINE))
+    if has_commentary:
+        if (not has_trace
+                or re.findall(r'^COMMENTARY FORMAT: (.+)$', source, re.MULTILINE) != ['radio-v1']
+                or len(commentary) != count
+                or len(re.findall(r'^(?:CALL|RECAP) PLAY ', source, re.MULTILINE)) != 2 * count
+                or [int(c.group(1)) for c in commentary] != list(range(1, count + 1))):
+            raise ValueError('Expected complete ordered supported commentary per native play')
     entries = []
     if has_trace:
         if (re.findall(r'^TRACE FORMAT: (.+)$', source, re.MULTILINE) != ['engine-debug-v1']
@@ -68,12 +78,20 @@ def build_viewer(source: str) -> str:
                                  r'Before:\n(.+?)\nEvent:\n(.+?)\nAfter:\n(.+)\n', body, re.DOTALL)
             if not parts:
                 raise ValueError('Native trace must include before, event and after snapshots')
-            heading = f'Play {i:02} · {record.group(2)} · {record.group(3)}'
+            heading = f'Play {i:02} · {record.group(2)}'
+            if has_commentary:
+                call, recap = commentary[i - 1].group(2, 3)
+                compact = f'<p class="radio-call">{escape(call)}</p><p class="state-recap">{escape(recap)}</p>'
+                frames[i] = (call, *frames[i][1:])
+            else:
+                heading += f' · {record.group(3)}'
+                compact = f'<pre>Before: {escape(parts.group(1))}\nAfter:  {escape(parts.group(2))}</pre>'
             entries.append(f'<article class="game-log-entry" id="log-play{i}"><h3>{escape(heading)}</h3>'
-                           f'<pre>Before: {escape(parts.group(1))}\nAfter:  {escape(parts.group(2))}</pre>'
-                           '<details><summary>Full native state and event facts</summary>'
+                           + compact + '<details><summary>Full native state and event facts</summary>'
                            f'<pre>{escape(body)}</pre></details></article>')
-        log_content = ('<p>Engine-provided before/event/after snapshots. After states normalize inning '
+        log_content = ('<p>Calls and state recaps use recorded facts only; fictional player IDs are shown. '
+                       'Hit locations and unrecorded fielders are not invented. '
+                       'Engine-provided before/event/after snapshots. After states normalize inning '
                        'boundaries; the event retains outs, runs, runner moves and credits. '
                        'Expand an entry for full lineups, pitchers, runner charges and all supplied facts.</p>'
                        + ''.join(entries))
