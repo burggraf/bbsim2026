@@ -514,6 +514,19 @@ impl EventTransition {
         })
     }
 
+    /// Reviewed event-local E/PB zeroes, independent of PO/A coverage.
+    pub fn reviewed_misplay_zeros(&self) -> Option<accounting::MisplayContribution> {
+        if self.event.kind == EventKind::Substitution
+            || self.event.fielding_review != FieldingReview::NoMisplay
+        {
+            return None;
+        }
+        Some(accounting::MisplayContribution {
+            errors: Default::default(),
+            passed_balls: Default::default(),
+        })
+    }
+
     /// Union of qualified event-local PO/A proofs, not whole-game coverage.
     pub fn fielding_contribution(&self) -> Option<accounting::FieldingContribution> {
         self.ordinary_ground_fielding()

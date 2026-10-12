@@ -189,6 +189,8 @@ fn only_chosen_contact_out_supplies_bound_ground_throw_evidence() {
                             observed_events: 1,
                             putouts: Some(u32::from(id == "Home-2")),
                             assists: Some(u32::from(id == "Home-4")),
+                            errors: Some(0),
+                            passed_balls: Some(0),
                         },
                     )
                 })
@@ -202,6 +204,8 @@ fn only_chosen_contact_out_supplies_bound_ground_throw_evidence() {
                             observed_events: 1,
                             putouts: None,
                             assists: None,
+                            errors: Some(0),
+                            passed_balls: Some(0),
                         },
                     )
                 })

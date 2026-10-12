@@ -17,6 +17,14 @@ pub struct FieldingContribution {
     pub assists: BTreeMap<String, u32>,
 }
 
+/// Complete E/PB within one reviewed event's before-defense scope only.
+/// Empty maps mean zero in that scope, not a whole-game certificate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MisplayContribution {
+    pub errors: BTreeMap<String, u32>,
+    pub passed_balls: BTreeMap<String, u32>,
+}
+
 /// Independently classified RBI for the named batter in one PA, not a full box.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RbiContribution {
@@ -138,13 +146,15 @@ impl Default for PitcherLine {
         }
     }
 }
-/// Independent PO/A coverage across this actor's observed defensive events.
+/// Independent fielding coverage across this actor's observed defensive events.
 /// Known totals do not certify a complete official fielding line or game.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FieldingCoverageLine {
     pub observed_events: u32,
     pub putouts: Option<u32>,
     pub assists: Option<u32>,
+    pub errors: Option<u32>,
+    pub passed_balls: Option<u32>,
 }
 impl Default for FieldingCoverageLine {
     fn default() -> Self {
@@ -152,6 +162,8 @@ impl Default for FieldingCoverageLine {
             observed_events: 0,
             putouts: Some(0),
             assists: Some(0),
+            errors: Some(0),
+            passed_balls: Some(0),
         }
     }
 }
@@ -401,6 +413,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 .filter(|id| crate::rules::fielding_eligible(team, id))
                 .collect();
             let contribution = transition.fielding_contribution();
+            let misplays = transition.reviewed_misplay_zeros();
             for id in actors {
                 let line = result.classified_fielding[defense]
                     .entry(id.clone())
@@ -414,6 +427,14 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                     .assists
                     .zip(contribution.as_ref())
                     .map(|(total, proof)| total + proof.assists.get(id).copied().unwrap_or(0));
+                line.errors = line
+                    .errors
+                    .zip(misplays.as_ref())
+                    .map(|(total, proof)| total + proof.errors.get(id).copied().unwrap_or(0));
+                line.passed_balls = line
+                    .passed_balls
+                    .zip(misplays.as_ref())
+                    .map(|(total, proof)| total + proof.passed_balls.get(id).copied().unwrap_or(0));
             }
         }
         let credited_runs = event
