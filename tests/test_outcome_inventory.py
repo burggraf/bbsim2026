@@ -14,7 +14,7 @@ import io
 def event(**changes):
     row = dict(event_key='1', game_id='GAME1', event_id='1', season='2019',
                result='InPlayOut', pa='1', trajectory='GroundBall', location='Shortstop',
-               depth='Default', fielder='6', derived_known='1', derived_unknown='0',
+               depth='Default', angle='Default', fielder='6', derived_known='1', derived_unknown='0',
                derived_fly='0', derived_ground='1', derived_line='0', derived_pop='0',
                derived_bunts='0', derived_location_known='1', derived_fielder_known='1', bip='1',
                outs_before='0', base_mask='0', outs='1', runs='0',
@@ -63,6 +63,15 @@ class OutcomeInventoryTests(unittest.TestCase):
         self.assertEqual(report.get('coverage', {}).get('bip_fielder_unknown'), 2)
         known_fielder = inventory([event(trajectory='Unknown')])
         self.assertEqual(known_fielder['coverage']['bip_fielder_unknown'], 0)
+
+    def test_recorded_foul_angle_is_preserved_without_fabricating_ball_status(self):
+        rows = [event(event_key=i, event_id=i, angle=tag) for i, tag in
+                enumerate(['Foul', 'FoulLine', 'Default', 'Unknown'], 1)]
+        report = inventory(rows)
+        self.assertEqual(report.get('raw_angles'), {'Foul': 1, 'FoulLine': 1, 'Default': 1, 'Unknown': 1})
+        self.assertEqual(report.get('coverage', {}).get('recorded_foul_angle_events'), 1)
+        self.assertNotIn('foul_outs', report)
+        self.assertNotIn('fair_balls', report)
 
     def test_opportunity_units_are_supplied_exposures_not_force_outs_or_rates(self):
         row = event(runner_rows=1, runner_runs=0, runner_outs=0, unforced_runner_outs=0,
@@ -146,7 +155,7 @@ class OutcomeSqlTests(unittest.TestCase):
         sql = Path('audits/2019-outcomes.sql').read_text()
         create = """
 CREATE TABLE audit_manifest AS SELECT '2a3362ba0bc970515048c87c5bf5bcaab1bd093593b7bafc1e50e2ebaa241583' AS catalog_sha256;
-CREATE TABLE events AS SELECT 1 AS event_key,'GAME1' AS game_id,1 AS event_id,2019 AS season,FALSE AS no_play_flag,'InPlayOut' AS plate_appearance_result,'GroundBall' AS batted_trajectory,'Shortstop' AS batted_location_general,'Default' AS batted_location_depth,6 AS batted_to_fielder,0 AS outs,0 AS base_state,1 AS outs_on_play,0 AS runs_on_play,'BATTER' AS batter_id,'PITCHER' AS pitcher_id;
+CREATE TABLE events AS SELECT 1 AS event_key,'GAME1' AS game_id,1 AS event_id,2019 AS season,FALSE AS no_play_flag,'InPlayOut' AS plate_appearance_result,'GroundBall' AS batted_trajectory,'Shortstop' AS batted_location_general,'Default' AS batted_location_depth,'FoulLine' AS batted_location_angle,6 AS batted_to_fielder,0 AS outs,0 AS base_state,1 AS outs_on_play,0 AS runs_on_play,'BATTER' AS batter_id,'PITCHER' AS pitcher_id;
 CREATE TABLE states AS SELECT 1 AS event_key,1 AS outs_on_play,0 AS runs_on_play,FALSE AS frame_end_flag,1 AS outs_end,0 AS base_state_end,NULL::VARCHAR AS runner_first_id_start,NULL::VARCHAR AS runner_second_id_start,NULL::VARCHAR AS runner_third_id_start;
 CREATE TABLE batting AS SELECT 1 AS event_key,1 AS plate_appearances,1 AS outs_on_play,0 AS grounded_into_double_plays;
 CREATE TABLE fielding AS SELECT 1 AS event_key,1 AS personnel_fielding_key,1 AS putouts,1 AS assists,0 AS errors,0 AS double_plays,0 AS triple_plays;
@@ -185,6 +194,8 @@ CREATE TABLE running AS SELECT 1 AS event_key,'BATTER' AS runner_id,0 AS runs,0 
                     report = inventory(csv.DictReader(io.StringIO(result.stdout)))
                     self.assertEqual(report['totals']['events'], 1)
                     self.assertEqual(report['coverage']['bip_events'], 1)
+                    self.assertEqual(report.get('raw_angles'), {'FoulLine': 1})
+                    self.assertEqual(report.get('coverage', {}).get('recorded_foul_angle_events'), 0)
 
     def test_manifest_requires_one_supported_snapshot_and_attribution(self):
         valid = dict(schema_version='f03-spike-1', catalog_sha256='2a3362ba0bc970515048c87c5bf5bcaab1bd093593b7bafc1e50e2ebaa241583',

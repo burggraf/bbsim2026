@@ -43,6 +43,7 @@ WITH guard AS (
 SELECT e.event_key,e.game_id,e.event_id,e.season,e.plate_appearance_result AS result,
  b.plate_appearances AS pa,e.batted_trajectory AS trajectory,
  e.batted_location_general AS location,e.batted_location_depth AS depth,
+ e.batted_location_angle AS angle,
  e.batted_to_fielder AS fielder,
  -- Preserve literal flags: the narrow categories/bunt statistic do not partition all known trajectories.
  c.trajectory_known AS derived_known,c.trajectory_unknown AS derived_unknown,

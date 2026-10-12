@@ -13,7 +13,7 @@ DERIVED_FLAGS = ('derived_known', 'derived_unknown', 'derived_fly', 'derived_gro
                  'derived_line', 'derived_pop', 'derived_bunts', 'derived_location_known', 'derived_fielder_known')
 RUNNER_UNITS = ('runner_runs', 'runner_outs', 'unforced_runner_outs', 'steals', 'cs',
                 'pickoffs', 'wp', 'pb', 'balk', 'unspecified', 'indifference', 'error_advances')
-FIELDS = set(('event_key game_id event_id season result pa trajectory location depth fielder '
+FIELDS = set(('event_key game_id event_id season result pa trajectory location depth angle fielder '
               'bip outs_before base_mask outs runs state_outs state_runs '
               'batting_outs putouts assists errors dp tp gidp frame_end after_outs '
               'after_base_mask batter_id pitcher_id first second third personnel_key '
@@ -37,7 +37,7 @@ def inventory(rows):
     coverage, signals, results, raw, derived_flags, multiplicity = (Counter() for _ in range(6))
     signatures, contexts, fielders, runner_units = (Counter() for _ in range(4))
     opportunity_units, opportunity_contexts = Counter(), {}
-    locations, depths, fielding_units = Counter(), Counter(), Counter()
+    locations, depths, angles, fielding_units = (Counter() for _ in range(4))
     examples, keys, games = {}, set(), set()
     for row in rows:
         if set(row) != FIELDS or any(not isinstance(v, str) for v in row.values()):
@@ -109,6 +109,7 @@ def inventory(rows):
         raw[trajectory] += 1
         locations[row['location'] or '<missing>'] += 1
         depths[row['depth'] or '<missing>'] += 1
+        angles[row['angle'] or '<missing>'] += 1
         multiplicity[str(made)] += 1
         totals.update(events=1, pa=int(pa == 1), non_pa=int(pa != 1), outs=made,
                       runs=runs, putouts=made, runner_run_units=supplied['runner_runs'])
@@ -117,7 +118,8 @@ def inventory(rows):
         cell = opportunity_contexts.setdefault(context, Counter())
         cell.update(events=1, runner_rows=n_runner, events_without_runner_rows=int(n_runner == 0))
         cell.update({f: supplied[f] for f in OPPORTUNITY_UNITS})
-        coverage.update(frame_end_events=int(boundary), events_without_runner_rows=int(n_runner == 0),
+        coverage.update(recorded_foul_angle_events=int(row['angle'] == 'Foul'),
+                        frame_end_events=int(boundary), events_without_runner_rows=int(n_runner == 0),
                         bip_events=int(bip),
                         bip_raw_trajectory_unknown=int(bip and trajectory in ('<missing>', 'Unknown')),
                         bip_raw_location_unknown=int(bip and row['location'] in ('', 'Unknown')),
@@ -139,9 +141,10 @@ def inventory(rows):
     def cells(counter, names):
         return [dict(zip(names, values), events=n) for values, n in sorted(counter.items())]
 
-    return dict(format='2019-outcome-inventory-v1', games=len(games), totals=dict(totals),
+    return dict(format='2019-outcome-inventory-v2', games=len(games), totals=dict(totals),
                 results=dict(sorted(results.items())), raw_trajectories=dict(sorted(raw.items())),
                 raw_locations=dict(sorted(locations.items())), raw_depths=dict(sorted(depths.items())),
+                raw_angles=dict(sorted(angles.items())),
                 supplied_fielding_units=dict(fielding_units),
                 derived_contact_flags=dict(sorted(derived_flags.items())), out_multiplicity=dict(sorted(multiplicity.items())),
                 coverage=dict(coverage), signals=dict(signals), supplied_runner_units=dict(runner_units),
