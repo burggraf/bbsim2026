@@ -53,6 +53,7 @@ fn substitution(before: &GameState, changes: Vec<PersonnelChange>) -> Event {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        muffed_ground_ball: None,
         ordinary_ground_throw: None,
     }
 }
@@ -90,6 +91,7 @@ fn batter_out(before: &GameState) -> Event {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        muffed_ground_ball: None,
         ordinary_ground_throw: None,
     }
 }

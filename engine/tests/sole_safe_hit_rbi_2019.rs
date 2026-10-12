@@ -105,6 +105,7 @@ fn hit(before: &GameState, value: usize, cause: bool, review: FieldingReview) ->
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: cause.then_some(SoleSafeHitFacts { batter_id: id }),
+        muffed_ground_ball: None,
     }
 }
 
@@ -246,11 +247,13 @@ fn event_bytes(event: &Event) -> Vec<u8> {
             string(&mut out, &facts.batter_id);
         }
     }
+    assert!(event.muffed_ground_ball.is_none());
+    out.push(0);
     out
 }
 fn splice(t: &EventTransition, event: &Event) -> Vec<u8> {
     let mut bytes = t.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE24");
+    assert_eq!(&bytes[..5], b"BBE25");
     let original = event_bytes(t.event());
     let positions: Vec<_> = bytes
         .windows(original.len())
@@ -660,12 +663,18 @@ fn previous_prefix_and_invalid_new_option_are_encoding_not_semantic_errors() {
         .position(|w| w == original)
         .unwrap()
         + original.len()
-        - 1;
+        - 2; // safe-hit option precedes the new muff None
     let mut invalid = bytes.clone();
     assert_eq!(invalid[offset], 0);
     invalid[offset] = 2;
     assert_eq!(
         EventTransition::from_bytes(&invalid),
+        Err(TransitionError::InvalidEncoding)
+    );
+    let mut previous = bytes.clone();
+    previous[..5].copy_from_slice(b"BBE24");
+    assert_eq!(
+        EventTransition::from_bytes(&previous),
         Err(TransitionError::InvalidEncoding)
     );
     let mut old = bytes;

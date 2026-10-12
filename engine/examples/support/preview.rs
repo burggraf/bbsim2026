@@ -336,6 +336,11 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         .then(|| bbsim_engine::SoleSafeHitFacts {
             batter_id: batter.clone(),
         });
+    let muffed_ground_ball =
+        (outcome == Outcome::Roe).then(|| bbsim_engine::MuffedGroundBallFacts {
+            batter_id: batter.clone(),
+            fielder_id: defense.batting_order[3].clone(),
+        });
     Ok(Event {
         kind,
         participants: Participants {
@@ -351,7 +356,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
             third_out,
         },
         fielding_review: if outcome == Outcome::Roe {
-            FieldingReview::Unknown
+            FieldingReview::SoleGroundMuff
         } else {
             FieldingReview::NoMisplay
         },
@@ -363,6 +368,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         protected_award,
         sole_home_run,
         sole_safe_hit,
+        muffed_ground_ball,
     })
 }
 

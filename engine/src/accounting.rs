@@ -419,7 +419,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 .filter(|id| crate::rules::fielding_eligible(team, id))
                 .collect();
             let contribution = transition.fielding_contribution();
-            let misplays = transition.reviewed_misplay_zeros();
+            let misplays = transition.misplay_contribution();
             for id in actors {
                 let line = result.classified_fielding[defense]
                     .entry(id.clone())

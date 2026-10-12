@@ -113,6 +113,7 @@ fn play(before: &GameState, holds: bool, pitcher_throws: bool, pitcher_receives:
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        muffed_ground_ball: None,
         ordinary_ground_throw: Some(OrdinaryGroundThrowFacts {
             batter_id: batter,
             thrower_id: thrower.clone(),
@@ -305,8 +306,9 @@ fn event_bytes(event: &Event) -> Vec<u8> {
             && event.protected_award.is_none()
             && event.sole_home_run.is_none()
             && event.sole_safe_hit.is_none()
+            && event.muffed_ground_ball.is_none()
     );
-    out.extend([0, 0, 0, 0]);
+    out.extend([0, 0, 0, 0, 0]);
     out
 }
 fn wire(valid: &EventTransition, replacement: &Event) -> Vec<u8> {
@@ -748,7 +750,7 @@ fn valid_wire_controls_isolate_version_truncation_and_invalid_fact_tag() {
     let before = state(0, 0, Half::Top, true);
     let t = apply(&before, play(&before, false, false, false)).unwrap();
     let bytes = t.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE24");
+    assert_eq!(&bytes[..5], b"BBE25");
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), t);
     let mut earlier = bytes.clone();
     earlier[..5].copy_from_slice(b"BBE19");
@@ -769,7 +771,7 @@ fn valid_wire_controls_isolate_version_truncation_and_invalid_fact_tag() {
     let event = event_bytes(t.event());
     let mut no_facts = t.event().clone();
     no_facts.ordinary_ground_throw = None;
-    let prefix_len = event_bytes(&no_facts).len() - 5;
+    let prefix_len = event_bytes(&no_facts).len() - 6;
     let offsets: Vec<_> = bytes
         .windows(event.len())
         .enumerate()

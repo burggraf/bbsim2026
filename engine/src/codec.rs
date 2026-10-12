@@ -144,7 +144,7 @@ binary_enum!(Destination { First = 0, Second = 1, Third = 2, Home = 3, Out = 4 }
 binary_enum!(RunnerEvent { WildPitch = 0, PassedBall = 1, StealAttempt = 2, Pickoff = 3, Balk = 4 });
 binary_enum!(CreditKind { PlateAppearance = 0, Strikeout = 1, Walk = 2, Hit = 3, Run = 4, Rbi = 5, StolenBase = 6, CaughtStealing = 7, Putout = 8, Assist = 9, Error = 10, PassedBall = 11, AtBat = 12, HitByPitch = 13, SacrificeBunt = 14, SacrificeFly = 15, InterferenceAward = 16, Single = 17, Double = 18, Triple = 19, OrdinaryWalk = 20, IntentionalWalk = 21, GroundedIntoDoublePlay = 22, WildPitch = 23, Balk = 24, NoHit = 25 });
 binary_enum!(ThirdOutKind { BatterBeforeFirst = 0, Force = 1, Timing = 2, PrecedingRunnerAppeal = 3, BatterAfterFirstTiming = 4 });
-binary_enum!(FieldingReview { Unknown = 0, NoMisplay = 1 });
+binary_enum!(FieldingReview { Unknown = 0, NoMisplay = 1, SoleGroundMuff = 2 });
 binary_enum!(ContactClass { Grounded = 0, NotGrounded = 1 });
 binary_enum!(ContactContinuity { Continuous = 0, Discontinuous = 1, Unknown = 2 });
 binary_enum!(ForceLoss { RemovedByFirstOut = 0, PreviouslyRemoved = 1, NeverForced = 2, Unknown = 3 });
@@ -440,6 +440,10 @@ binary_struct!(CaughtStrikeoutFacts {
 binary_struct!(ProtectedAwardFacts { batter_id });
 binary_struct!(SoleHomeRunFacts { batter_id });
 binary_struct!(SoleSafeHitFacts { batter_id });
+binary_struct!(MuffedGroundBallFacts {
+    batter_id,
+    fielder_id
+});
 binary_struct!(Event {
     kind,
     participants,
@@ -452,13 +456,14 @@ binary_struct!(Event {
     caught_strikeout,
     protected_award,
     sole_home_run,
-    sole_safe_hit
+    sole_safe_hit,
+    muffed_ground_ball
 });
 
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE24".to_vec();
+        let mut out = b"BBE25".to_vec();
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
@@ -466,7 +471,7 @@ impl EventTransition {
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
         let payload = bytes
-            .strip_prefix(b"BBE24")
+            .strip_prefix(b"BBE25")
             .ok_or(TransitionError::InvalidEncoding)?;
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;

@@ -224,6 +224,95 @@ fn only_chosen_contact_out_supplies_bound_ground_throw_evidence() {
 }
 
 #[test]
+fn only_chosen_roe_binds_muff_review_without_changing_physics_or_other_coverage() {
+    use bbsim_engine::{accounting::FieldingContribution, FieldingReview, Runner};
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 0u8..8 {
+                let mut before = initial();
+                before.half = half;
+                before.outs = outs;
+                let offense = half.offense();
+                let side = 1 - offense;
+                before.bases = std::array::from_fn(|i| {
+                    (mask & (1 << i) != 0).then(|| Runner {
+                        player_id: before.teams[offense].batting_order[i + 5].clone(),
+                        responsible_pitcher: before.teams[side].pitcher.clone(),
+                    })
+                });
+                for outcome in ALL {
+                    let e = preview::event_for(&before, outcome).unwrap();
+                    let t = apply(&before, e.clone()).unwrap();
+                    if outcome != Outcome::Roe {
+                        assert!(e.muffed_ground_ball.is_none());
+                        assert_ne!(e.fielding_review, FieldingReview::SoleGroundMuff);
+                        assert_eq!(t.muffed_ground_fielding(), None);
+                        assert_eq!(t.muffed_ground_misplays(), None);
+                        continue;
+                    }
+                    let facts = e
+                        .muffed_ground_ball
+                        .as_ref()
+                        .expect("chosen mechanical muff");
+                    let fielder = before.teams[side].batting_order[3].clone();
+                    assert_eq!(facts.batter_id, before.teams[offense].batting_order[0]);
+                    assert_eq!(facts.fielder_id, fielder);
+                    assert_eq!(e.fielding_review, FieldingReview::SoleGroundMuff);
+                    assert_eq!(
+                        t.muffed_ground_fielding(),
+                        Some(FieldingContribution {
+                            putouts: Default::default(),
+                            assists: Default::default(),
+                        })
+                    );
+                    assert_eq!(t.reviewed_misplay_zeros(), None);
+                    assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
+                    let mut absent = e.clone();
+                    absent.muffed_ground_ball = None;
+                    assert_eq!(
+                        apply(&before, absent.clone()),
+                        Err(bbsim_engine::TransitionError::UnsupportedRule)
+                    );
+                    absent.fielding_review = FieldingReview::Unknown;
+                    let old = apply(&before, absent).unwrap();
+                    assert_eq!(old.before(), t.before());
+                    assert_eq!(old.after(), t.after());
+                    assert_eq!(old.event().delta, t.event().delta);
+                    let bound = derive_accounting(&[t]).unwrap();
+                    let mut partial = derive_accounting(&[old]).unwrap();
+                    assert_eq!(bound.classified_fielding[side].len(), 9);
+                    for (id, line) in &bound.classified_fielding[side] {
+                        assert_eq!(
+                            line,
+                            &FieldingCoverageLine {
+                                observed_events: 1,
+                                putouts: Some(0),
+                                assists: Some(0),
+                                errors: Some(u32::from(id == &fielder)),
+                                passed_balls: Some(0),
+                            }
+                        );
+                        assert_eq!(
+                            partial.classified_fielding[side][id],
+                            FieldingCoverageLine {
+                                observed_events: 1,
+                                putouts: None,
+                                assists: None,
+                                errors: None,
+                                passed_balls: None,
+                            }
+                        );
+                    }
+                    // Only independently asserted fielding evidence changes.
+                    partial.classified_fielding = bound.classified_fielding.clone();
+                    assert_eq!(partial, bound);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn every_category_has_a_legal_engine_event() {
     for outcome in ALL {
         let before = initial();

@@ -186,6 +186,7 @@ fn event(before: &GameState, shape: Shape) -> Event {
         }),
         sole_safe_hit: matches!(shape, Shape::Single)
             .then_some(SoleSafeHitFacts { batter_id: batter }),
+        muffed_ground_ball: None,
     }
 }
 fn checked(before: &GameState, event: Event) -> EventTransition {

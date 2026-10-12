@@ -7,6 +7,7 @@ mod caught;
 mod codec;
 mod contact;
 mod ground;
+mod ground_muff;
 mod pitch;
 mod protected_award;
 mod reducer;
@@ -233,6 +234,8 @@ pub struct Delta {
 pub enum FieldingReview {
     Unknown,
     NoMisplay,
+    /// All chances reviewed; only the canonically bound ordinary ground muff.
+    SoleGroundMuff,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -422,6 +425,14 @@ pub struct SoleHomeRunFacts {
 pub struct SoleSafeHitFacts {
     pub batter_id: String,
 }
+/// One mechanical ground-ball muff losing a routine before-first retirement;
+/// all represented station-one advances are exclusively caused by that error.
+/// No throw/assist chain or recovery putout; whole-chance review is separate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MuffedGroundBallFacts {
+    pub batter_id: String,
+    pub fielder_id: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -436,6 +447,7 @@ pub struct Event {
     pub protected_award: Option<ProtectedAwardFacts>,
     pub sole_home_run: Option<SoleHomeRunFacts>,
     pub sole_safe_hit: Option<SoleSafeHitFacts>,
+    pub muffed_ground_ball: Option<MuffedGroundBallFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -514,6 +526,35 @@ impl EventTransition {
         })
     }
 
+    /// Bound ordinary muff plus whole-chance review: scoped PO0/A0, not a box.
+    pub fn muffed_ground_fielding(&self) -> Option<accounting::FieldingContribution> {
+        self.event.muffed_ground_ball.as_ref()?;
+        if self.event.fielding_review != FieldingReview::SoleGroundMuff {
+            return None;
+        }
+        Some(accounting::FieldingContribution {
+            putouts: Default::default(),
+            assists: Default::default(),
+        })
+    }
+
+    /// Bound named E1/PB0; Unknown prior chances remain unclassified.
+    pub fn muffed_ground_misplays(&self) -> Option<accounting::MisplayContribution> {
+        let facts = self.event.muffed_ground_ball.as_ref()?;
+        if self.event.fielding_review != FieldingReview::SoleGroundMuff {
+            return None;
+        }
+        Some(accounting::MisplayContribution {
+            errors: [(facts.fielder_id.clone(), 1)].into(),
+            passed_balls: Default::default(),
+        })
+    }
+
+    pub fn misplay_contribution(&self) -> Option<accounting::MisplayContribution> {
+        self.reviewed_misplay_zeros()
+            .or_else(|| self.muffed_ground_misplays())
+    }
+
     /// Reviewed event-local E/PB zeroes, independent of PO/A coverage.
     pub fn reviewed_misplay_zeros(&self) -> Option<accounting::MisplayContribution> {
         if self.event.kind == EventKind::Substitution
@@ -534,6 +575,7 @@ impl EventTransition {
             .or_else(|| self.sole_safe_hit_fielding())
             .or_else(|| self.protected_award_fielding())
             .or_else(|| self.sole_home_run_fielding())
+            .or_else(|| self.muffed_ground_fielding())
     }
 
     /// Event-local protected-award PO/A; missing cause/review stays unknown.
@@ -734,7 +776,9 @@ impl EventTransition {
             {
                 return Err(match event.fielding_review {
                     FieldingReview::NoMisplay => TransitionError::IllegalCredit,
-                    FieldingReview::Unknown => TransitionError::UnsupportedRule,
+                    FieldingReview::Unknown | FieldingReview::SoleGroundMuff => {
+                        TransitionError::UnsupportedRule
+                    }
                 });
             }
         }
