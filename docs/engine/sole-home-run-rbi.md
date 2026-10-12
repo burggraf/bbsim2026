@@ -15,7 +15,7 @@ assert that all scoring during a potentially multi-effect PA was by that hit.
 RBI is not independent cause evidence. The preview's existing HR policy does
 score every runner exclusively on the batter's out-of-park hit.
 
-2019 Rule9.04(a)(1), printed111/PDF124, awards RBI for every run scoring unaided
+2019 Rule9.04(a)(1), printed111/PDF123, awards RBI for every run scoring unaided
 by an error as part of the play begun by the batter's safe hit, including HR,
 unless9.04(b) applies. Rule9.04(b) excludes force/reverse-force DP and the muffed
 first-base throw that would complete a force DP. This slice is the zero-out sole

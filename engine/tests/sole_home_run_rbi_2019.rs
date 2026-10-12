@@ -93,6 +93,7 @@ fn hr(before: &GameState, cause: bool, review: FieldingReview) -> Event {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: cause.then_some(SoleHomeRunFacts { batter_id: id }),
+        sole_safe_hit: None,
     }
 }
 fn checked(before: &GameState, event: Event) -> EventTransition {
@@ -206,11 +207,13 @@ fn event_bytes(event: &Event) -> Vec<u8> {
             string(&mut out, &facts.batter_id);
         }
     }
+    assert!(event.sole_safe_hit.is_none());
+    out.push(0);
     out
 }
 fn splice(t: &EventTransition, event: &Event) -> Vec<u8> {
     let mut bytes = t.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE23");
+    assert_eq!(&bytes[..5], b"BBE24");
     let original = event_bytes(t.event());
     let positions: Vec<_> = bytes
         .windows(original.len())
@@ -326,7 +329,7 @@ fn sole_hr_option_corruption_and_previous_prefix_are_encoding_errors() {
     let mut generic = event;
     generic.sole_home_run = None;
     let mut bad = t.to_bytes();
-    let offset = positions[0] + event_bytes(&generic).len() - 1;
+    let offset = positions[0] + event_bytes(&generic).len() - 2;
     assert_eq!(bad[offset], 1);
     bad[offset] = 2;
     assert_eq!(

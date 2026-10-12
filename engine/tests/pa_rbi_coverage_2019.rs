@@ -61,6 +61,7 @@ fn blank(before: &GameState) -> Event {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
     }
 }
 fn batter(event: &Event) -> String {

@@ -12,6 +12,7 @@ mod protected_award;
 mod reducer;
 mod rules;
 mod sole_home_run;
+mod sole_safe_hit;
 pub use reducer::apply;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -415,6 +416,12 @@ pub struct ProtectedAwardFacts {
 pub struct SoleHomeRunFacts {
     pub batter_id: String,
 }
+/// Every represented advance/run is exclusively continuous advancement in
+/// this batter's classified safe-hit play, unaided by error or a separate episode.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SoleSafeHitFacts {
+    pub batter_id: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -428,6 +435,7 @@ pub struct Event {
     pub caught_strikeout: Option<CaughtStrikeoutFacts>,
     pub protected_award: Option<ProtectedAwardFacts>,
     pub sole_home_run: Option<SoleHomeRunFacts>,
+    pub sole_safe_hit: Option<SoleSafeHitFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -451,6 +459,21 @@ pub struct EventTransition {
 }
 
 impl EventTransition {
+    /// Event-local safe-hit causal proof, not complete segment/box coverage.
+    pub fn sole_safe_hit_rbi(&self) -> Option<accounting::RbiContribution> {
+        let facts = self.event.sole_safe_hit.as_ref()?;
+        let runs = self
+            .event
+            .delta
+            .moves
+            .iter()
+            .filter(|m| m.to == Destination::Home)
+            .count() as u32;
+        Some(accounting::RbiContribution {
+            runs_batted_in: [(facts.batter_id.clone(), runs)].into(),
+        })
+    }
+
     /// Event-local sole-HR proof, not complete segment/box coverage.
     pub fn sole_home_run_rbi(&self) -> Option<accounting::RbiContribution> {
         let facts = self.event.sole_home_run.as_ref()?;
@@ -476,6 +499,7 @@ impl EventTransition {
         }
         self.protected_award_rbi()
             .or_else(|| self.sole_home_run_rbi())
+            .or_else(|| self.sole_safe_hit_rbi())
     }
 
     /// Event-local protected-award RBI proof, not complete segment/box coverage.

@@ -87,6 +87,7 @@ fn batter_event(
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     }
 }

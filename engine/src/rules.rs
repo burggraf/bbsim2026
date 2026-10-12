@@ -394,6 +394,7 @@ pub(crate) fn batter_charge<'a>(
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
     // Known bound causal facts precede unrelated occurrence/charge uncertainty.
+    super::sole_safe_hit::validate(before, event)?;
     super::sole_home_run::validate(before, event)?;
     super::protected_award::validate(before, event)?;
     super::caught::validate(before, event)?;
@@ -781,7 +782,7 @@ pub(crate) fn validate_run_credits(
 }
 
 /// Credit-only prerequisites, safe before any movement/charge inference.
-fn hit_value_credit(event: &Event) -> Result<Option<u8>, TransitionError> {
+pub(crate) fn hit_value_credit(event: &Event) -> Result<Option<u8>, TransitionError> {
     let mut values = event
         .delta
         .credits

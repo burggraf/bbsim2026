@@ -120,6 +120,7 @@ fn award(
         caught_strikeout: None,
         protected_award: Some(ProtectedAwardFacts { batter_id: batter }),
         sole_home_run: None,
+        sole_safe_hit: None,
     }
 }
 
@@ -305,13 +306,13 @@ fn event_bytes(event: &Event) -> Vec<u8> {
             string(&mut bytes, &facts.batter_id);
         }
     }
-    assert!(event.sole_home_run.is_none());
-    bytes.push(0);
+    assert!(event.sole_home_run.is_none() && event.sole_safe_hit.is_none());
+    bytes.extend([0, 0]);
     bytes
 }
 fn splice(t: &EventTransition, replacement: &Event) -> Vec<u8> {
     let mut bytes = t.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE23");
+    assert_eq!(&bytes[..5], b"BBE24");
     let original = event_bytes(t.event());
     let offsets: Vec<_> = bytes
         .windows(original.len())
@@ -475,7 +476,7 @@ fn protected_fact_option_and_obsolete_prefix_are_encoding_not_semantic_errors() 
     assert_eq!(offsets.len(), 1);
     let mut generic = event;
     generic.protected_award = None;
-    let offset = offsets[0] + event_bytes(&generic).len() - 2; // award before sole-HR None
+    let offset = offsets[0] + event_bytes(&generic).len() - 3; // award before sole-HR/safe-hit None
     assert_eq!(bytes[offset], 1);
     bytes[offset] = 2;
     assert_eq!(

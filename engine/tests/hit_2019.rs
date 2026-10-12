@@ -97,6 +97,7 @@ fn force_event(before: &GameState, out_base: usize, reverse: bool) -> Event {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     }
 }
@@ -303,6 +304,7 @@ fn supplied_hits_with_other_retirements_are_not_inferred_as_force_outs() {
                 caught_strikeout: None,
                 protected_award: None,
                 sole_home_run: None,
+                sole_safe_hit: None,
                 ordinary_ground_throw: None,
             };
             let valid = apply(&before, event).unwrap();

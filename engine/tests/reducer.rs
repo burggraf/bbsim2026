@@ -82,6 +82,7 @@ fn derives_f02_runner_only_wild_pitch_without_advancing_batter() {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     };
     let transition = apply(&before, event).unwrap();
@@ -131,6 +132,7 @@ fn pa(
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     }
 }
@@ -204,6 +206,7 @@ fn caught_stealing_third_out_clears_stranded_runners() {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     };
     let next = apply(&before, event).unwrap();
@@ -339,6 +342,7 @@ fn substitution_changes_pitcher_and_inherits_pinch_runner_responsibility() {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     };
     let next = apply(&before, event).unwrap();
@@ -379,6 +383,7 @@ fn illegal_collision_does_not_mutate_caller_state() {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     };
     assert!(apply(&before, event).is_err());
@@ -512,6 +517,7 @@ fn pickoff_follows_prior_event_without_plate_appearance() {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
     };
     let next = apply(prior.after(), event).unwrap();

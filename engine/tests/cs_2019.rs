@@ -55,6 +55,7 @@ fn event(before: &GameState, kind: EventKind, review: FieldingReview) -> Event {
         caught_strikeout: None,
         protected_award: None,
         sole_home_run: None,
+        sole_safe_hit: None,
         ordinary_ground_throw: None,
         delta: Delta {
             moves: vec![],

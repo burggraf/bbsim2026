@@ -7,7 +7,8 @@ mod preview;
 #[path = "../examples/support/preview_cli.rs"]
 mod preview_cli;
 use bbsim_engine::{
-    accounting::derive_accounting, apply, EventTransition, GameState, Half, TeamState,
+    accounting::derive_accounting, apply, Base, Destination, EventTransition, GameState, Half,
+    TeamState,
 };
 use preview::{Baseline, Outcome, Rng, ALL};
 
@@ -285,10 +286,36 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                                 1 + (mask as u32).count_ones()
                             );
                         }
-                        let rbi_known = protected || home_run || t.event().delta.runs == 0;
+                        let safe_hit =
+                            matches!(outcome, Outcome::Single | Outcome::Double | Outcome::Triple);
+                        assert_eq!(t.event().sole_safe_hit.is_some(), safe_hit);
+                        assert_eq!(t.sole_safe_hit_rbi().is_some(), safe_hit);
+                        if let Some(facts) = &t.event().sole_safe_hit {
+                            assert_eq!(&facts.batter_id, batter);
+                            let named_scorers = t
+                                .event()
+                                .delta
+                                .moves
+                                .iter()
+                                .filter(|m| m.from != Base::Plate && m.to == Destination::Home)
+                                .count() as u32;
+                            assert_eq!(
+                                t.sole_safe_hit_rbi().unwrap().runs_batted_in[batter],
+                                named_scorers
+                            );
+                        }
+                        let rbi_known =
+                            protected || home_run || safe_hit || t.event().delta.runs == 0;
                         assert_eq!(t.rbi_contribution().is_some(), rbi_known);
                         let expected_rbi = rbi_known.then_some(if home_run {
                             1 + (mask as u32).count_ones()
+                        } else if safe_hit {
+                            t.event()
+                                .delta
+                                .moves
+                                .iter()
+                                .filter(|m| m.from != Base::Plate && m.to == Destination::Home)
+                                .count() as u32
                         } else {
                             u32::from(protected && mask == 7)
                         });
