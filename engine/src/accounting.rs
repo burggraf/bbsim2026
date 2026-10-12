@@ -415,6 +415,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
     let mut half_pitcher = first.event().participants.pitcher.clone();
     let mut empty_muff_half = clean_half;
     let mut error_batter = None;
+    let mut error_runner = None;
     let mut empty_muff_earned = 0;
     let mut half_runs: BTreeMap<(usize, String), u32> = BTreeMap::new();
     for (index, transition) in log.iter().enumerate() {
@@ -428,6 +429,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             half_pitcher = event.participants.pitcher.clone();
             empty_muff_half = clean_half;
             error_batter = None;
+            error_runner = None;
             empty_muff_earned = 0;
             half_runs.clear();
         }
@@ -442,13 +444,15 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 .muffed_ground_ball
                 .as_ref()
                 .map(|f| f.batter_id.clone());
+            error_runner = error_batter.clone();
         } else if error_batter.is_some() {
-            // No advancement reconstruction: held-runner caught/ground outs
-            // and sole homers after the one empty-base lost retirement.
+            // Exact station advances do not depend on the error runner's
+            // presence. Other unaided safe-hit policies remain unproved here.
             empty_muff_half &= clean
                 && (event.caught_strikeout.is_some()
                     || event.ordinary_ground_throw.is_some()
-                    || event.sole_home_run.is_some());
+                    || event.sole_home_run.is_some()
+                    || (event.sole_safe_hit.is_some() && clean_station_hit(before, event)));
         } else {
             empty_muff_half &= clean;
         }
@@ -688,16 +692,16 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                         .credited_strikeouts += 1;
                 }
                 CreditKind::Run => {
-                    // Only the clean HR batter's current reach can earn a run
-                    // in this suffix. The original error reach is unearned,
-                    // but its actor may later return with a distinct clean PA.
+                    // Only the original error reach is unearned; clear it
+                    // on scoring so that actor's later clean reach can earn.
                     // One lost out ends the virtual inning at two actual outs.
-                    if empty_muff_half
-                        && error_batter.is_some()
-                        && event.participants.batter.as_ref() == Some(&credit.player_id)
-                        && before.outs < 2
+                    let error_reach = error_runner.as_ref() == Some(&credit.player_id);
+                    if empty_muff_half && error_batter.is_some() && !error_reach && before.outs < 2
                     {
                         empty_muff_earned += 1;
+                    }
+                    if error_reach {
+                        error_runner = None;
                     }
                     batter.credited_runs += 1;
                     let scorer = event
