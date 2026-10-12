@@ -514,6 +514,21 @@ impl EventTransition {
         })
     }
 
+    /// Event-local sole-safe-hit PO/A proof; missing cause/review stays unknown.
+    /// Empty maps mean zero only in this qualified event's before-defense scope.
+    pub fn sole_safe_hit_fielding(&self) -> Option<accounting::FieldingContribution> {
+        self.event.sole_safe_hit.as_ref()?;
+        if self.event.fielding_review != FieldingReview::NoMisplay {
+            return None;
+        }
+        // Canonical exclusive safe-hit facts rule out retirements/extra episodes;
+        // full review rules out Rule 9.10's error-prevented-out assist exception.
+        Some(accounting::FieldingContribution {
+            putouts: Default::default(),
+            assists: Default::default(),
+        })
+    }
+
     /// Event-local caught-K proof; missing facts/review are not known zero maps.
     pub fn caught_strikeout_fielding(&self) -> Option<accounting::FieldingContribution> {
         if self.event.fielding_review != FieldingReview::NoMisplay {

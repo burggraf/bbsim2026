@@ -675,3 +675,140 @@ fn previous_prefix_and_invalid_new_option_are_encoding_not_semantic_errors() {
         Err(TransitionError::InvalidEncoding)
     );
 }
+
+#[test]
+fn reviewed_exclusive_safe_hits_prove_zero_po_a_in_576_independent_frames() {
+    let mut frames = 0;
+    for value in 1..=3 {
+        for mask in 0..8 {
+            for outs in 0..3 {
+                for half in [Half::Top, Half::Bottom] {
+                    let before = state(mask, outs, half);
+                    for reverse_moves in [false, true] {
+                        for reverse_credits in [false, true] {
+                            let mut event = hit(&before, value, true, FieldingReview::NoMisplay);
+                            if reverse_moves {
+                                event.delta.moves.reverse();
+                            }
+                            if reverse_credits {
+                                event.delta.credits.reverse();
+                            }
+                            assert_eq!(event.delta.outs, 0);
+                            assert!(event.delta.moves.iter().all(|m| m.to != Destination::Out));
+                            assert!(!event.delta.credits.iter().any(|c| matches!(
+                                c.kind,
+                                CreditKind::Putout | CreditKind::Assist
+                            )));
+                            let t = checked(&before, event);
+                            let expected = bbsim_engine::accounting::FieldingContribution {
+                                putouts: std::collections::BTreeMap::new(),
+                                assists: std::collections::BTreeMap::new(),
+                            };
+                            assert_eq!(t.sole_safe_hit_fielding(), Some(expected.clone()));
+                            // Qualified absent actors are zero only in this before-defense.
+                            let defense = &before.teams[1 - half.offense()];
+                            let qualified = t.sole_safe_hit_fielding().unwrap();
+                            let fielders: Vec<_> = defense
+                                .batting_order
+                                .iter()
+                                .enumerate()
+                                .filter(|(slot, _)| Some(*slot as u8) != defense.dh_slot)
+                                .map(|(_, id)| id)
+                                .chain([&defense.pitcher])
+                                .collect();
+                            assert_eq!(fielders.len(), 9);
+                            for id in fielders {
+                                assert_eq!(qualified.putouts.get(id).copied().unwrap_or(0), 0);
+                                assert_eq!(qualified.assists.get(id).copied().unwrap_or(0), 0);
+                            }
+                            assert_eq!(t.caught_strikeout_fielding(), None);
+                            assert_eq!(t.ordinary_ground_fielding(), None);
+                            frames += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 576);
+}
+
+#[test]
+fn zero_po_a_requires_exclusive_cause_and_full_review_not_final_safe_bases() {
+    for value in 1..=3 {
+        let before = state(7, 1, Half::Top);
+        let bare = checked(
+            &before,
+            hit(&before, value, false, FieldingReview::NoMisplay),
+        );
+        assert_eq!(bare.sole_safe_hit_fielding(), None);
+        assert_eq!(bare.sole_safe_hit_rbi(), None);
+    }
+    let before = state(7, 2, Half::Top);
+    for prior_error in [false, true] {
+        let mut event = hit(&before, 1, true, FieldingReview::Unknown);
+        if prior_error {
+            event.delta.credits.push(credit("h4", CreditKind::Error));
+        }
+        let t = checked(&before, event);
+        assert_eq!(t.sole_safe_hit_fielding(), None);
+        assert_eq!(t.sole_safe_hit_rbi(), named("a0", 1));
+        let lines = derive_accounting(&[t]).unwrap();
+        assert_eq!(lines.batters[0]["a0"].classified_rbi, Some(1));
+        assert_eq!(lines.pitchers[1]["oldp"].earned_runs, None);
+        assert_eq!(
+            lines.fielders[1].get("h4").map(|f| f.credited_errors),
+            prior_error.then_some(1)
+        );
+    }
+}
+
+#[test]
+fn reviewed_held_and_unequal_continuous_advances_have_zero_po_a() {
+    let before = state(7, 0, Half::Top);
+    let mut event = hit(&before, 1, true, FieldingReview::NoMisplay);
+    event.delta.moves[1].to = Destination::Home;
+    event.delta.moves[2].to = Destination::Second;
+    event.delta.runs = 2;
+    event
+        .delta
+        .credits
+        .extend([credit("a3", CreditKind::Run), credit("a0", CreditKind::Rbi)]);
+    let t = checked(&before, event);
+    assert_eq!(t.sole_safe_hit_rbi(), named("a0", 2));
+    assert_eq!(
+        t.sole_safe_hit_fielding(),
+        Some(bbsim_engine::accounting::FieldingContribution {
+            putouts: std::collections::BTreeMap::new(),
+            assists: std::collections::BTreeMap::new(),
+        })
+    );
+    // This fielding getter does not broaden the station-only clean ER proof.
+    assert_eq!(
+        derive_accounting(&[t]).unwrap().pitchers[1]["oldp"].earned_runs,
+        None
+    );
+}
+
+#[test]
+fn legal_ordinary_walk_off_preserves_zero_po_a_scope_without_full_box_claim() {
+    for inning in [9, 11] {
+        let mut before = state(6, 2, Half::Bottom);
+        before.inning = inning;
+        let mut event = hit(&before, 1, true, FieldingReview::NoMisplay);
+        event.delta.moves[1].to = Destination::Second;
+        let t = checked(&before, event);
+        assert!(t.after().over);
+        assert_eq!(t.sole_safe_hit_rbi(), named("h0", 1));
+        assert_eq!(
+            t.sole_safe_hit_fielding(),
+            Some(bbsim_engine::accounting::FieldingContribution {
+                putouts: std::collections::BTreeMap::new(),
+                assists: std::collections::BTreeMap::new(),
+            })
+        );
+        let lines = derive_accounting(&[t]).unwrap();
+        assert!(!lines.complete_game);
+        assert_eq!(lines.pitchers[0]["oldp"].earned_runs, None);
+    }
+}
