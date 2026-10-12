@@ -41,6 +41,19 @@ available-stat conservation. It is not E-03/G1/P-01/P-02 completion, calibrated
 player simulation or authorization to narrow the approved accounting matrix.
 Production dependencies/gates below remain unchanged; PROGRESS owns live status.
 
+Maintainer D-13 (2026-10-12) prioritizes **P-03-preview**, a bounded visible internal
+viewer of an existing Rust-generated game, ahead of further E-03 refinements.
+Initial acceptance: a viewable field/score/runner/play display, Next/Previous/
+Restart/final controls, literal agreement with engine output and browser checks.
+[Reproduction and limits](../preview/README.md): native HTML, no new UI framework,
+browser-owned outcomes or production dependency/gate waiver. After approving the
+initial viewer, the maintainer authorizes New Game/seed/autoplay: a loopback-only
+adapter runs the existing Rust CLI, seeded regeneration is reproducible, and
+browser playback/pause/restart/terminal behavior has visible evidence. JavaScript
+only controls playback; it does not simulate. Deliver bounded observable
+checkpoints. Accuracy work is retained/deferred until basic gameplay exists,
+not abandoned; real team/lineup and rating work still needs its own evidence.
+
 ## Gates and signoff
 
 - **G0 — data:** F-04 has a coverage report, fixture reconciliation, measured filtered/offline import, attribution/licensing review and an explicit pilot/storage/OS decision. Stop or rescope if required event fields are not reliable.
