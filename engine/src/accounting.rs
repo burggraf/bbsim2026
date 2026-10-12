@@ -362,6 +362,7 @@ fn finish_half(
     accounting: &mut GameAccounting,
     runs: &BTreeMap<(usize, String), u32>,
     certified: bool,
+    unearned: bool,
 ) {
     for ((side, id), count) in runs {
         let pitcher = accounting.pitchers[*side].entry(id.clone()).or_default();
@@ -369,9 +370,11 @@ fn finish_half(
             if let Some(earned) = &mut pitcher.earned_runs {
                 *earned += count;
             }
-        } else {
+        } else if !unearned {
             pitcher.earned_runs = None;
         }
+        // A known unearned contribution adds zero; it cannot repair None from
+        // an earlier positive half with missing reconstruction.
     }
 }
 
@@ -397,6 +400,12 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
     // start (it could follow an unobserved solo HR). Later halves must follow
     // an observed boundary in this contiguous log.
     let mut clean_half = starts_game(first.before());
+    // Conservative missed-third-out certificate: observed clean zero-run
+    // prefix, one reviewed sole muff at two outs, clean suffix, no personnel
+    // changes and one actual pitcher. Rule9.16(i) forbids relief inheritance.
+    let mut unearned_half = clean_half;
+    let mut missed_third_out = false;
+    let mut half_pitcher = first.event().participants.pitcher.clone();
     let mut half_runs: BTreeMap<(usize, String), u32> = BTreeMap::new();
     for (index, transition) in log.iter().enumerate() {
         let before = transition.before();
@@ -404,11 +413,27 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         if index > 0 && (before.inning, before.half) != frame {
             frame = (before.inning, before.half);
             clean_half = before.outs == 0 && before.bases.iter().all(Option::is_none);
+            unearned_half = clean_half;
+            missed_third_out = false;
+            half_pitcher = event.participants.pitcher.clone();
             half_runs.clear();
         }
-        clean_half &= clean_play(before, event);
+        let clean = clean_play(before, event);
+        if before.outs == 2
+            && event.muffed_ground_ball.is_some()
+            && event.fielding_review == FieldingReview::SoleGroundMuff
+        {
+            unearned_half &= !missed_third_out && half_runs.is_empty();
+            missed_third_out = true;
+        } else {
+            unearned_half &= clean;
+        }
+        clean_half &= clean;
         let offense = before.half.offense();
         let defense = 1 - offense;
+        unearned_half &= event.delta.changes.is_empty()
+            && event.participants.pitcher == half_pitcher
+            && transition.after().teams[defense].pitcher == half_pitcher;
         if event.kind != EventKind::Substitution {
             let team = &before.teams[defense];
             // A no-DH pitcher is also in the batting order; observe him once.
@@ -691,7 +716,12 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         let ended = transition.after().over
             || (transition.after().inning, transition.after().half) != frame;
         if ended || index + 1 == log.len() {
-            finish_half(&mut result, &half_runs, clean_half && ended);
+            finish_half(
+                &mut result,
+                &half_runs,
+                clean_half && ended,
+                unearned_half && missed_third_out && ended,
+            );
         }
     }
     let last = log.last().unwrap().after();
