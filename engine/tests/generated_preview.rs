@@ -274,10 +274,24 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                                 u32::from(mask == 7)
                             );
                         }
-                        let rbi_known = protected || t.event().delta.runs == 0;
-                        assert_eq!(t.rbi_contribution().is_some(), rbi_known);
+                        let home_run = outcome == Outcome::HomeRun;
+                        assert_eq!(t.event().sole_home_run.is_some(), home_run);
+                        assert_eq!(t.sole_home_run_rbi().is_some(), home_run);
                         let batter = t.event().participants.batter.as_ref().unwrap();
-                        let expected_rbi = rbi_known.then_some(u32::from(protected && mask == 7));
+                        if let Some(facts) = &t.event().sole_home_run {
+                            assert_eq!(&facts.batter_id, batter);
+                            assert_eq!(
+                                t.sole_home_run_rbi().unwrap().runs_batted_in[batter],
+                                1 + (mask as u32).count_ones()
+                            );
+                        }
+                        let rbi_known = protected || home_run || t.event().delta.runs == 0;
+                        assert_eq!(t.rbi_contribution().is_some(), rbi_known);
+                        let expected_rbi = rbi_known.then_some(if home_run {
+                            1 + (mask as u32).count_ones()
+                        } else {
+                            u32::from(protected && mask == 7)
+                        });
                         assert_eq!(
                             t.rbi_contribution().map(|c| c.runs_batted_in[batter]),
                             expected_rbi

@@ -394,6 +394,7 @@ pub(crate) fn batter_charge<'a>(
     event: &Event,
 ) -> Result<&'a str, TransitionError> {
     // Known bound causal facts precede unrelated occurrence/charge uncertainty.
+    super::sole_home_run::validate(before, event)?;
     super::protected_award::validate(before, event)?;
     super::caught::validate(before, event)?;
     super::ground::validate(before, event)?;

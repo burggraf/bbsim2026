@@ -90,6 +90,7 @@ fn fixture(half: Half, outs: u8, mask: u8, reach: u8) -> (GameState, Event) {
         single_delivery: None,
         caught_strikeout: None,
         protected_award: None,
+        sole_home_run: None,
         ordinary_ground_throw: None,
         balk: Some(BalkFacts {
             cause: BalkCause::PitcherAction602a,
@@ -137,7 +138,7 @@ fn accepted(before: &GameState, event: Event) -> EventTransition {
     assert_eq!(direct, reduced);
     assert_eq!(reduced.after(), physical.after());
     let bytes = reduced.to_bytes();
-    assert_eq!(&bytes[..5], b"BBE22");
+    assert_eq!(&bytes[..5], b"BBE23");
     assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), reduced);
     reduced
 }
@@ -769,14 +770,14 @@ fn forged_progress(before: &GameState, event: &Event) -> Vec<u8> {
         });
     }
     tail.extend_from_slice(&0u64.to_le_bytes()); // changes
-    tail.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0]); // third-out/contact/delivery/balk/ground/caught/award None
+    tail.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]); // third-out/contact/delivery/balk/ground/caught/award/HR None
     let offsets: Vec<_> = bytes
         .windows(tail.len())
         .enumerate()
         .filter_map(|(i, window)| (window == tail).then_some(i))
         .collect();
     assert_eq!(offsets.len(), 1, "complete event tail must be unique");
-    let offset = offsets[0] + tail.len() - 4; // balk precedes ground, caught and award None
+    let offset = offsets[0] + tail.len() - 5; // balk precedes ground, caught, award and HR None
     let facts = event.balk.as_ref().unwrap();
     let BalkResolution::ActualMinimumProgress(witness) = &facts.resolution else {
         panic!("expected explicit wire witness")

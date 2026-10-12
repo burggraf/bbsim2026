@@ -11,6 +11,7 @@ mod pitch;
 mod protected_award;
 mod reducer;
 mod rules;
+mod sole_home_run;
 pub use reducer::apply;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -408,6 +409,12 @@ pub struct CaughtStrikeoutFacts {
 pub struct ProtectedAwardFacts {
     pub batter_id: String,
 }
+/// Every represented advance/run is exclusively this batter's out-of-park
+/// home run, unaided by an error; not an exhaustive fielding/ER review.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SoleHomeRunFacts {
+    pub batter_id: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
@@ -420,6 +427,7 @@ pub struct Event {
     pub ordinary_ground_throw: Option<OrdinaryGroundThrowFacts>,
     pub caught_strikeout: Option<CaughtStrikeoutFacts>,
     pub protected_award: Option<ProtectedAwardFacts>,
+    pub sole_home_run: Option<SoleHomeRunFacts>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -443,6 +451,18 @@ pub struct EventTransition {
 }
 
 impl EventTransition {
+    /// Event-local sole-HR proof, not complete segment/box coverage.
+    pub fn sole_home_run_rbi(&self) -> Option<accounting::RbiContribution> {
+        let facts = self.event.sole_home_run.as_ref()?;
+        Some(accounting::RbiContribution {
+            runs_batted_in: [(
+                facts.batter_id.clone(),
+                1 + self.before.bases.iter().flatten().count() as u32,
+            )]
+            .into(),
+        })
+    }
+
     /// Independently classified RBI for one observed PA, not a full box.
     pub fn rbi_contribution(&self) -> Option<accounting::RbiContribution> {
         if !self.event.kind.is_pa() {
@@ -455,6 +475,7 @@ impl EventTransition {
             });
         }
         self.protected_award_rbi()
+            .or_else(|| self.sole_home_run_rbi())
     }
 
     /// Event-local protected-award RBI proof, not complete segment/box coverage.

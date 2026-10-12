@@ -58,6 +58,7 @@ fn action(
         balk: None,
         caught_strikeout: None,
         protected_award: None,
+        sole_home_run: None,
         ordinary_ground_throw: None,
         delta: Delta {
             moves,

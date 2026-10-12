@@ -137,6 +137,7 @@ pub fn scripted_game() -> Result<Vec<EventTransition>, TransitionError> {
             balk: None,
             caught_strikeout: None,
             protected_award: None,
+            sole_home_run: None,
             ordinary_ground_throw: None,
         };
         let transition = apply(&state, event)?;

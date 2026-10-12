@@ -329,6 +329,9 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
             batter_id: batter.clone(),
         }
     });
+    let sole_home_run = (outcome == Outcome::HomeRun).then(|| bbsim_engine::SoleHomeRunFacts {
+        batter_id: batter.clone(),
+    });
     Ok(Event {
         kind,
         participants: Participants {
@@ -354,6 +357,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         caught_strikeout,
         ordinary_ground_throw,
         protected_award,
+        sole_home_run,
     })
 }
 

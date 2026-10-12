@@ -1,4 +1,4 @@
-//! Version 22 canonical binary event record. Little-endian integers, length-prefixed UTF-8;
+//! Version 23 canonical binary event record. Little-endian integers, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
 
@@ -438,6 +438,7 @@ binary_struct!(CaughtStrikeoutFacts {
     catcher_id
 });
 binary_struct!(ProtectedAwardFacts { batter_id });
+binary_struct!(SoleHomeRunFacts { batter_id });
 binary_struct!(Event {
     kind,
     participants,
@@ -448,13 +449,14 @@ binary_struct!(Event {
     balk,
     ordinary_ground_throw,
     caught_strikeout,
-    protected_award
+    protected_award,
+    sole_home_run
 });
 
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE22".to_vec();
+        let mut out = b"BBE23".to_vec();
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
@@ -462,7 +464,7 @@ impl EventTransition {
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
         let payload = bytes
-            .strip_prefix(b"BBE22")
+            .strip_prefix(b"BBE23")
             .ok_or(TransitionError::InvalidEncoding)?;
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;
