@@ -446,13 +446,14 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 .map(|f| f.batter_id.clone());
             error_runner = error_batter.clone();
         } else if error_batter.is_some() {
-            // Exact station advances do not depend on the error runner's
-            // presence. Other unaided safe-hit policies remain unproved here.
+            // Exact station advances and forces behind the leading error
+            // runner survive its deletion. Other advancement stays unproved.
             empty_muff_half &= clean
                 && (event.caught_strikeout.is_some()
                     || event.ordinary_ground_throw.is_some()
                     || event.sole_home_run.is_some()
-                    || (event.sole_safe_hit.is_some() && clean_station_hit(before, event)));
+                    || (event.sole_safe_hit.is_some() && clean_station_hit(before, event))
+                    || (event.protected_award.is_some() && clean_forced_award(before, event)));
         } else {
             empty_muff_half &= clean;
         }
