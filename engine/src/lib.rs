@@ -503,8 +503,11 @@ impl EventTransition {
         if !self.event.kind.is_pa() {
             return None;
         }
-        if self.event.delta.runs == 0 {
-            // Canonical legal-run conservation includes third-out suppression.
+        if self.event.delta.runs == 0
+            || (self.before.outs == 2 && self.event.muffed_ground_ball.is_some())
+        {
+            // Legal-run conservation includes third-out suppression. A bound
+            // muff losing that third out excludes error-assisted RBI (9.04(a)(3)).
             return Some(accounting::RbiContribution {
                 runs_batted_in: [(self.event.participants.batter.as_ref()?.clone(), 0)].into(),
             });

@@ -303,7 +303,27 @@ fn only_chosen_roe_binds_muff_review_without_changing_physics_or_other_coverage(
                             }
                         );
                     }
-                    // Only independently asserted fielding evidence changes.
+                    let batter = &facts.batter_id;
+                    assert_eq!(
+                        bound.batters[offense][batter].classified_rbi,
+                        if mask & 4 == 0 || outs == 2 {
+                            Some(0)
+                        } else {
+                            None
+                        }
+                    );
+                    assert_eq!(
+                        partial.batters[offense][batter].classified_rbi,
+                        if mask & 4 == 0 { Some(0) } else { None }
+                    );
+                    // Normalize only independently asserted two-out causal RBI
+                    // and fielding evidence; every other statistic stays exact.
+                    if outs == 2 && mask & 4 != 0 {
+                        partial.batters[offense]
+                            .get_mut(batter)
+                            .unwrap()
+                            .classified_rbi = Some(0);
+                    }
                     partial.classified_fielding = bound.classified_fielding.clone();
                     assert_eq!(partial, bound);
                 }
@@ -431,9 +451,16 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                                 named_scorers
                             );
                         }
-                        let rbi_known =
-                            protected || home_run || safe_hit || t.event().delta.runs == 0;
-                        assert_eq!(t.rbi_contribution().is_some(), rbi_known);
+                        let rbi_known = protected
+                            || home_run
+                            || safe_hit
+                            || t.event().delta.runs == 0
+                            || (outcome == Outcome::Roe && outs == 2);
+                        assert_eq!(
+                            t.rbi_contribution().is_some(),
+                            rbi_known,
+                            "RBI cause {half:?} outs{outs} mask{mask} {outcome:?}"
+                        );
                         let expected_rbi = rbi_known.then_some(if home_run {
                             1 + (mask as u32).count_ones()
                         } else if safe_hit {
