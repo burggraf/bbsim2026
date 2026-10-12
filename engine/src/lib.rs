@@ -514,6 +514,32 @@ impl EventTransition {
         })
     }
 
+    /// Event-local protected-award PO/A; missing cause/review stays unknown.
+    /// Empty maps mean zero only in this qualified event's before-defense scope.
+    pub fn protected_award_fielding(&self) -> Option<accounting::FieldingContribution> {
+        self.event.protected_award.as_ref()?;
+        if self.event.fielding_review != FieldingReview::NoMisplay {
+            return None;
+        }
+        Some(accounting::FieldingContribution {
+            putouts: Default::default(),
+            assists: Default::default(),
+        })
+    }
+
+    /// Event-local sole-HR PO/A; missing cause/review stays unknown.
+    /// Empty maps mean zero only in this qualified event's before-defense scope.
+    pub fn sole_home_run_fielding(&self) -> Option<accounting::FieldingContribution> {
+        self.event.sole_home_run.as_ref()?;
+        if self.event.fielding_review != FieldingReview::NoMisplay {
+            return None;
+        }
+        Some(accounting::FieldingContribution {
+            putouts: Default::default(),
+            assists: Default::default(),
+        })
+    }
+
     /// Event-local sole-safe-hit PO/A proof; missing cause/review stays unknown.
     /// Empty maps mean zero only in this qualified event's before-defense scope.
     pub fn sole_safe_hit_fielding(&self) -> Option<accounting::FieldingContribution> {

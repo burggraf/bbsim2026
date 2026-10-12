@@ -262,6 +262,7 @@ fn event_bytes(event: &Event) -> Vec<u8> {
             CreditKind::Walk => 2,
             CreditKind::Run => 4,
             CreditKind::Rbi => 5,
+            CreditKind::Assist => 9,
             CreditKind::HitByPitch => 13,
             CreditKind::OrdinaryWalk => 20,
             CreditKind::IntentionalWalk => 21,
@@ -626,5 +627,166 @@ fn unforced_scoring_is_not_an_exclusive_protected_award_cause() {
             extra,
             TransitionError::DeltaMismatch,
         );
+    }
+}
+
+fn checked_fielding_award(before: &GameState, event: Event) -> EventTransition {
+    let frozen = before.clone();
+    let t = apply(before, event.clone()).expect("independent legal award fixture");
+    assert_eq!(*before, frozen);
+    assert_eq!(
+        EventTransition::try_new(before.clone(), event, t.after().clone()),
+        Ok(t.clone())
+    );
+    assert_eq!(EventTransition::from_bytes(&t.to_bytes()), Ok(t.clone()));
+    assert_eq!(*before, frozen);
+    t
+}
+
+#[test]
+fn reviewed_awards_have_zero_po_a_in_1152_independent_order_frames() {
+    let mut frames = 0;
+    for category in 0..3 {
+        for mask in 0..8 {
+            for outs in 0..3 {
+                for half in [Half::Top, Half::Bottom] {
+                    let before = state(mask, outs, half);
+                    for holds in [false, true] {
+                        for reverse_moves in [false, true] {
+                            for reverse_credits in [false, true] {
+                                let mut event = award(
+                                    &before,
+                                    category == 2,
+                                    holds,
+                                    false,
+                                    FieldingReview::NoMisplay,
+                                );
+                                if category == 1 {
+                                    event
+                                        .delta
+                                        .credits
+                                        .iter_mut()
+                                        .find(|c| c.kind == CreditKind::OrdinaryWalk)
+                                        .unwrap()
+                                        .kind = CreditKind::IntentionalWalk;
+                                }
+                                if reverse_moves {
+                                    event.delta.moves.reverse();
+                                }
+                                if reverse_credits {
+                                    event.delta.credits.reverse();
+                                }
+                                let t = checked_fielding_award(&before, event);
+                                assert_eq!(
+                                    t.protected_award_fielding(),
+                                    Some(bbsim_engine::accounting::FieldingContribution {
+                                        putouts: std::collections::BTreeMap::new(),
+                                        assists: std::collections::BTreeMap::new(),
+                                    })
+                                );
+                                assert_eq!(t.sole_home_run_fielding(), None);
+                                assert_eq!(t.sole_safe_hit_fielding(), None);
+                                assert_eq!(t.before(), &before);
+                                assert_eq!(t.event().delta.outs, 0);
+                                frames += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 1152);
+}
+
+#[test]
+fn award_zero_fielding_requires_cause_and_review_and_retains_prior_chances() {
+    let before = state(7, 0, Half::Top);
+    let mut bare = award(&before, false, true, false, FieldingReview::NoMisplay);
+    bare.protected_award = None;
+    bare.delta
+        .credits
+        .push(credit("home-3", CreditKind::Assist));
+    let t = checked_fielding_award(&before, bare);
+    assert_eq!(t.protected_award_fielding(), None);
+    assert_eq!(
+        derive_accounting(&[t]).unwrap().fielders[1]["home-3"].credited_assists,
+        1
+    );
+    for earlier_chance in [false, true] {
+        let mut event = award(&before, false, true, false, FieldingReview::Unknown);
+        if earlier_chance {
+            event.delta.credits.extend([
+                credit("home-3", CreditKind::Assist),
+                credit("home-4", CreditKind::Error),
+            ]);
+        }
+        let t = checked_fielding_award(&before, event);
+        assert_eq!(t.protected_award_fielding(), None);
+        assert_eq!(
+            t.protected_award_rbi(),
+            Some(RbiContribution {
+                runs_batted_in: [("away-0".into(), 1)].into(),
+            })
+        );
+        let lines = derive_accounting(&[t]).unwrap();
+        assert_eq!(lines.batters[0]["away-0"].classified_rbi, Some(1));
+        assert_eq!(lines.pitchers[1]["prior-pitcher"].earned_runs, None);
+    }
+}
+
+#[test]
+fn reviewed_bound_award_assist_is_known_illegal_before_compound_uncertainty() {
+    let before = state(7, 1, Half::Top);
+    let valid = award(&before, false, true, false, FieldingReview::NoMisplay);
+    for compound in [true, false] {
+        let mut bad = valid.clone();
+        bad.delta.credits.push(credit("home-3", CreditKind::Assist));
+        if compound {
+            bad.balk = Some(BalkFacts {
+                cause: BalkCause::Unknown,
+                disposition: BalkDisposition::Unknown,
+                resolution: BalkResolution::Unknown,
+            });
+        }
+        reject_all_paths(&before, valid.clone(), bad, TransitionError::IllegalCredit);
+    }
+}
+
+#[test]
+fn reviewed_award_walk_off_keeps_zero_fielding_for_bb_ibb_and_hbp() {
+    for inning in [9, 11] {
+        for category in 0..3 {
+            let mut before = state(7, 2, Half::Bottom);
+            before.inning = inning;
+            let mut event = award(
+                &before,
+                category == 2,
+                true,
+                false,
+                FieldingReview::NoMisplay,
+            );
+            if category == 1 {
+                event
+                    .delta
+                    .credits
+                    .iter_mut()
+                    .find(|c| c.kind == CreditKind::OrdinaryWalk)
+                    .unwrap()
+                    .kind = CreditKind::IntentionalWalk;
+            }
+            let t = checked_fielding_award(&before, event);
+            assert!(t.after().over);
+            assert_eq!(
+                t.protected_award_fielding(),
+                Some(bbsim_engine::accounting::FieldingContribution {
+                    putouts: std::collections::BTreeMap::new(),
+                    assists: std::collections::BTreeMap::new(),
+                })
+            );
+            let lines = derive_accounting(&[t]).unwrap();
+            assert!(!lines.complete_game);
+            assert_eq!(lines.batters[1]["home-0"].classified_rbi, Some(1));
+        }
     }
 }

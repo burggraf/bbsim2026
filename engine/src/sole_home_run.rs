@@ -21,6 +21,9 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
     let _ = rules::walk_classification(before, event)?;
     if event.delta.credits.iter().any(|c| {
         !rules::credit_role_eligible(before, event, c)
+            // This bound zero-retirement cause plus full review excludes every
+            // Rule 9.10 assist; Unknown earlier chances remain partial.
+            || (event.fielding_review == FieldingReview::NoMisplay && c.kind == CreditKind::Assist)
             || matches!(
                 c.kind,
                 CreditKind::StolenBase

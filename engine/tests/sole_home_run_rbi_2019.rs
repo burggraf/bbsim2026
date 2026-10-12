@@ -157,6 +157,7 @@ fn event_bytes(event: &Event) -> Vec<u8> {
             CreditKind::Hit => 3,
             CreditKind::Run => 4,
             CreditKind::Rbi => 5,
+            CreditKind::Assist => 9,
             CreditKind::Error => 10,
             CreditKind::PassedBall => 11,
             CreditKind::Single => 17,
@@ -632,5 +633,109 @@ fn sole_hr_rbi_sums_but_never_repairs_an_actors_unknown_pa() {
         for n in 1..9 {
             assert_eq!(lines.batters[0][&format!("a{n}")].classified_rbi, Some(1));
         }
+    }
+}
+
+#[test]
+fn reviewed_sole_hr_has_zero_po_a_in_192_independent_order_frames() {
+    let mut frames = 0;
+    for mask in 0..8 {
+        for outs in 0..3 {
+            for half in [Half::Top, Half::Bottom] {
+                let before = state(mask, outs, half);
+                for reverse_moves in [false, true] {
+                    for reverse_credits in [false, true] {
+                        let mut event = hr(&before, true, FieldingReview::NoMisplay);
+                        if reverse_moves {
+                            event.delta.moves.reverse();
+                        }
+                        if reverse_credits {
+                            event.delta.credits.reverse();
+                        }
+                        let t = checked(&before, event);
+                        assert_eq!(
+                            t.sole_home_run_fielding(),
+                            Some(bbsim_engine::accounting::FieldingContribution {
+                                putouts: std::collections::BTreeMap::new(),
+                                assists: std::collections::BTreeMap::new(),
+                            })
+                        );
+                        assert_eq!(t.sole_safe_hit_fielding(), None);
+                        assert_eq!(t.protected_award_fielding(), None);
+                        assert_eq!(t.before(), &before);
+                        assert_eq!(t.event().delta.outs, 0);
+                        frames += 1;
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 192);
+}
+
+#[test]
+fn hr_zero_fielding_requires_cause_and_review_and_keeps_prior_chances_partial() {
+    let before = state(7, 0, Half::Top);
+    let mut bare = hr(&before, false, FieldingReview::NoMisplay);
+    bare.delta.credits.push(credit("h3", CreditKind::Assist));
+    let t = checked(&before, bare);
+    assert_eq!(t.sole_home_run_fielding(), None);
+    assert_eq!(
+        derive_accounting(&[t]).unwrap().fielders[1]["h3"].credited_assists,
+        1
+    );
+    for earlier_chance in [false, true] {
+        let mut event = hr(&before, true, FieldingReview::Unknown);
+        if earlier_chance {
+            event.delta.credits.extend([
+                credit("h3", CreditKind::Assist),
+                credit("h4", CreditKind::Error),
+            ]);
+        }
+        let t = checked(&before, event);
+        assert_eq!(t.sole_home_run_fielding(), None);
+        assert_eq!(t.sole_home_run_rbi(), named("a0", 4));
+        let lines = derive_accounting(&[t]).unwrap();
+        assert_eq!(lines.batters[0]["a0"].credited_rbi, 4);
+        assert_eq!(lines.pitchers[1]["oldp"].earned_runs, None);
+    }
+}
+
+#[test]
+fn reviewed_bound_hr_assist_is_known_illegal_before_compound_uncertainty() {
+    let before = state(7, 1, Half::Top);
+    let valid = hr(&before, true, FieldingReview::NoMisplay);
+    for compound in [true, false] {
+        let mut bad = valid.clone();
+        bad.delta.credits.push(credit("h3", CreditKind::Assist));
+        if compound {
+            bad.balk = Some(BalkFacts {
+                cause: BalkCause::PitcherAction602a,
+                disposition: BalkDisposition::PlayProceedsWithoutReference,
+                resolution: BalkResolution::Unknown,
+            });
+        }
+        reject(&before, &valid, bad, TransitionError::IllegalCredit);
+    }
+}
+
+#[test]
+fn reviewed_hr_walk_off_exception_retains_zero_fielding_and_all_rbi() {
+    for inning in [9, 11] {
+        let mut before = state(7, 2, Half::Bottom);
+        before.inning = inning;
+        let t = checked(&before, hr(&before, true, FieldingReview::NoMisplay));
+        assert!(t.after().over);
+        assert_eq!(t.sole_home_run_rbi(), named("h0", 4));
+        assert_eq!(
+            t.sole_home_run_fielding(),
+            Some(bbsim_engine::accounting::FieldingContribution {
+                putouts: std::collections::BTreeMap::new(),
+                assists: std::collections::BTreeMap::new(),
+            })
+        );
+        let lines = derive_accounting(&[t]).unwrap();
+        assert!(!lines.complete_game);
+        assert_eq!(lines.batters[1]["h0"].classified_rbi, Some(4));
     }
 }

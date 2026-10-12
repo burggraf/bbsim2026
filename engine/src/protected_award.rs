@@ -24,6 +24,9 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
         != 1
         || event.delta.credits.iter().any(|c| {
             !rules::credit_role_eligible(before, event, c)
+                // Full review of this bound zero-retirement award rules out
+                // Rule 9.10's error-prevented-out assist exception.
+                || (event.fielding_review == FieldingReview::NoMisplay && c.kind == CreditKind::Assist)
                 || matches!(
                     c.kind,
                     CreditKind::StolenBase
