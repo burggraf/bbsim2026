@@ -17,7 +17,7 @@ pub struct FieldingContribution {
     pub assists: BTreeMap<String, u32>,
 }
 
-/// Cause-derived RBI for the named batter in one qualified PA, not a full box.
+/// Independently classified RBI for the named batter in one PA, not a full box.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RbiContribution {
     pub runs_batted_in: BTreeMap<String, u32>,
@@ -56,6 +56,8 @@ pub struct BatterLine {
     pub credited_strikeouts: u32,
     pub credited_runs: u32,
     pub credited_rbi: u32,
+    /// RBI across observed PAs; None if any lacks independent scoring-cause proof.
+    pub classified_rbi: Option<u32>,
     pub credited_steals: u32,
     pub credited_caught_stealing: u32,
     pub credited_hit_by_pitch: u32,
@@ -78,6 +80,7 @@ impl Default for BatterLine {
             credited_strikeouts: 0,
             credited_runs: 0,
             credited_rbi: 0,
+            classified_rbi: Some(0),
             credited_steals: 0,
             credited_caught_stealing: 0,
             credited_hit_by_pitch: 0,
@@ -431,6 +434,10 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
                 .entry(current_pitcher.into())
                 .or_default();
             pitching_line.batters_faced += 1;
+            batting_line.classified_rbi = batting_line
+                .classified_rbi
+                .zip(transition.rbi_contribution())
+                .map(|(total, contribution)| total + contribution.runs_batted_in[batter]);
             batting_line.classified_hits = batting_line
                 .classified_hits
                 .zip(classified_hit)

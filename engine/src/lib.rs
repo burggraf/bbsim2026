@@ -443,6 +443,20 @@ pub struct EventTransition {
 }
 
 impl EventTransition {
+    /// Independently classified RBI for one observed PA, not a full box.
+    pub fn rbi_contribution(&self) -> Option<accounting::RbiContribution> {
+        if !self.event.kind.is_pa() {
+            return None;
+        }
+        if self.event.delta.runs == 0 {
+            // Canonical legal-run conservation includes third-out suppression.
+            return Some(accounting::RbiContribution {
+                runs_batted_in: [(self.event.participants.batter.as_ref()?.clone(), 0)].into(),
+            });
+        }
+        self.protected_award_rbi()
+    }
+
     /// Event-local protected-award RBI proof, not complete segment/box coverage.
     pub fn protected_award_rbi(&self) -> Option<accounting::RbiContribution> {
         let facts = self.event.protected_award.as_ref()?;

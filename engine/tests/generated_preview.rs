@@ -274,6 +274,20 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                                 u32::from(mask == 7)
                             );
                         }
+                        let rbi_known = protected || t.event().delta.runs == 0;
+                        assert_eq!(t.rbi_contribution().is_some(), rbi_known);
+                        let batter = t.event().participants.batter.as_ref().unwrap();
+                        let expected_rbi = rbi_known.then_some(u32::from(protected && mask == 7));
+                        assert_eq!(
+                            t.rbi_contribution().map(|c| c.runs_batted_in[batter]),
+                            expected_rbi
+                        );
+                        assert_eq!(
+                            derive_accounting(std::slice::from_ref(&t)).unwrap().batters[offense]
+                                [batter]
+                                .classified_rbi,
+                            expected_rbi
+                        );
                         // Literal controls for the reproduced winning-order failure and
                         // the loaded walk-off; legality alone does not freeze v1 policy.
                         if half == Half::Bottom && outs == 0 && outcome == Outcome::Triple {

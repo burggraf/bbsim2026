@@ -216,6 +216,7 @@ fn positive_matrix(passed: bool) {
                                 plate_appearances: 1,
                                 credited_strikeouts: 1,
                                 at_bats: Some(1),
+                                classified_rbi: (advancing & 4 == 0).then_some(0),
                                 ..BatterLine::default()
                             }
                         );
@@ -900,6 +901,7 @@ fn after_first_throw_accounting_keeps_participation_charge_and_fielding_distinct
                         plate_appearances: 1,
                         at_bats: Some(1),
                         credited_strikeouts: 1,
+                        classified_rbi: None, // one scored run; no exclusive RBI cause
                         ..BatterLine::default()
                     }
                 );
@@ -1626,6 +1628,7 @@ fn first_touch_controls_preserve_before_first_k_and_partial_after_first_retireme
                         plate_appearances: 1,
                         credited_strikeouts: 1,
                         at_bats: Some(1),
+                        classified_rbi: Some(0), // zero legal runs in this fixture
                         ..BatterLine::default()
                     }
                 );
@@ -1898,6 +1901,7 @@ fn mixed_recovery_positive_matrix(passed: bool) {
                                     plate_appearances: 1,
                                     credited_strikeouts: 1,
                                     at_bats: Some(1),
+                                    classified_rbi: (runs == 0).then_some(0),
                                     ..BatterLine::default()
                                 }
                             );
