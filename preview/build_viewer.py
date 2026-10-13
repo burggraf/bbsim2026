@@ -3,13 +3,21 @@ from pathlib import Path
 import argparse
 import html
 import re
+import json
+import math
 
 JOINT_MODEL = 'pooled-jeffreys-joint-proxy-preview-v1'
+RATED_MODEL = 'dirichlet-log5-player-proxy-preview-v1'
+
+
+def is_rated_record(source):
+    metadata = next((line for line in source.splitlines() if line.startswith('Seed:')), '')
+    return f'Model: {RATED_MODEL}' in metadata.split(' | ')
 
 
 def is_joint_record(source):
     metadata = next((line for line in source.splitlines() if line.startswith('Seed:')), '')
-    return f'Model: {JOINT_MODEL}' in metadata.split(' | ')
+    return f'Model: {JOINT_MODEL}' in metadata.split(' | ') or is_rated_record(source)
 
 
 REAL_POLICY = 'station-held-positional-starting-preview-v1'
@@ -41,6 +49,66 @@ def real_metadata(source):
                        or any(ord(c)<32 or 127<=ord(c)<=159 for c in p[4]) for p in rows)):
             raise ValueError('Invalid starting slot/position/name grain')
     return dict(teams), players
+
+
+def rating_panel(source, real):
+    if not is_rated_record(source):
+        return ''
+    if real is None:
+        raise ValueError('Rated model requires real starting metadata')
+    start = re.search(r'^(?:TRACE FORMAT:|COMMENTARY FORMAT:|Play [0-9]+ \|)', source, re.MULTILINE)
+    preamble = source[:start.start()] if start else source
+    if (re.findall(r'^RATINGS FORMAT: (.+)$', preamble, re.MULTILINE) != ['player-proxy-counts-v1']
+            or re.findall(r'^Rating prior strength: (.+)$', preamble, re.MULTILINE) != ['batter200 pitcher200']):
+        raise ValueError('Unsupported player rating metadata')
+    def vector(text, normalized=True):
+        values = json.loads(text)
+        if (not isinstance(values,list) or len(values)!=9
+                or any(type(x) not in (int,float) or not math.isfinite(x)
+                       or (not 0<x<1 if normalized else not 0<=x<=.5) for x in values)
+                or normalized and abs(sum(values)-1)>32*math.ulp(1.0)):
+            raise ValueError('Invalid native player probability/SD vector')
+        return values
+    rows=re.findall(r'^RATING (batter|pitcher) ([a-z0-9]+) \| N: ([0-9]+) \| Weight: ([^|\n]+) \| Mean: (\[[^\n]+\]) \| SD: (\[[^\n|]+\]) \| Counts: (\[[^\n|]+\])$',preamble,re.MULTILINE)
+    expected={('pitcher' if p[1]=='0' else 'batter',p[3]) for p in real[1]}
+    if len(rows)!=20 or len(re.findall(r'^RATING ',preamble,re.MULTILINE))!=20 or {(r[0],r[1]) for r in rows}!=expected:
+        raise ValueError('Incomplete/duplicate player posterior rows')
+    ratings={}
+    for role,player,n,weight,mean,sd,counts in rows:
+        weight=float(weight)
+        counts=json.loads(counts)
+        if (not math.isfinite(weight) or not 0<=weight<1 or int(n)>185703
+                or not isinstance(counts,list) or len(counts)!=9
+                or any(type(x) is not int or x<0 for x in counts) or sum(counts)!=int(n)):
+            raise ValueError('Invalid native shrinkage weight/count conservation')
+        ratings[role,player]=(n,weight,vector(mean),vector(sd,False),counts)
+    matches=re.findall(r'^MATCHUP (Away|Home) ([1-9]) ([a-z0-9]+) ([a-z0-9]+): (\[[^\n]+\])$',preamble,re.MULTILINE)
+    pitchers={p[0]:p[3] for p in real[1] if p[1]=='0'}
+    expected={(p[0],p[1],p[3],pitchers['Home' if p[0]=='Away' else 'Away']) for p in real[1] if p[1]!='0'}
+    if len(matches)!=18 or len(re.findall(r'^MATCHUP ',preamble,re.MULTILINE))!=18 or {r[:4] for r in matches}!=expected:
+        raise ValueError('Incomplete/duplicate matchup probability rows')
+    names={p[3]:p[4] for p in real[1]}
+    cells=[]
+    for side,slot,batter,pitcher,p in sorted(matches,key=lambda r:(r[0],int(r[1]))):
+        values=[side,slot,names[batter]+' ['+batter+']',names[pitcher]+' ['+pitcher+']',
+                ratings['batter',batter][0],ratings['pitcher',pitcher][0],
+                f'{ratings["batter",batter][1]:.1%}',f'{ratings["pitcher",pitcher][1]:.1%}',
+                *[f'{x:.3%}' for x in vector(p)]]
+        cells.append('<tr class="matchup-probability">'+''.join('<td>'+html.escape(v)+'</td>' for v in values)+'</tr>')
+    posterior=[]
+    for (role,player),(n,weight,mean,sd,counts) in sorted(ratings.items()):
+        values=[role,names[player]+' ['+player+']',n,f'{weight:.1%}',*[f'{c} / {m:.3%} / {s:.3%}' for c,m,s in zip(counts,mean,sd)]]
+        posterior.append('<tr class="role-posterior">'+''.join('<td>'+html.escape(v)+'</td>' for v in values)+'</tr>')
+    labels=['K','BB','HBP','1B','2B','3B','HR','ROE','Contact out']
+    header=lambda values:'<tr>'+''.join('<th>'+html.escape(v)+'</th>' for v in values)+'</tr>'
+    return ('<details id="player-probabilities" open><summary>Player-specific probabilities — hindsight pilot</summary>'
+            '<p>Fixed Dirichlet prior strength200 per role; generalized-log5 means, not calibrated or predictive. '
+            'N is included terminal-event participant observations, not official PA/BF. Data weight shows shrinkage. '
+            'No effective-handedness, park or opponent-adjusted fit; fielding/contact conditionals remain pooled.</p>'
+            '<div style="overflow-x:auto"><table><thead>'+header(['Side','Slot','Batter','Opposing starter','Batter N','Pitcher N','Batter data weight','Pitcher data weight',*labels])+'</thead><tbody>'+''.join(cells)+'</tbody></table></div>'
+            '<details><summary>Component counts / posterior means / SDs (assumed Dirichlet uncertainty)</summary>'
+            '<p>SDs are not validated ability intervals or propagated matchup uncertainty. Full-precision native values are in the provenance panel.</p>'
+            '<div style="overflow-x:auto"><table><thead>'+header(['Role','Player','N','Data weight',*labels])+'</thead><tbody>'+''.join(posterior)+'</tbody></table></div></details></details>')
 
 
 CSS = """
@@ -120,6 +188,12 @@ def build_viewer(source: str) -> str:
                           f'</tr></thead><tbody>{cells}</tbody></table>')
         experiment += ('<details id="starting-lineups"><summary>Recorded starting lineups and positions</summary>'
                        + ''.join(tables) + '</details>')
+    if is_rated_record(source):
+        intro = ('Recorded Seattle–Oakland starting personnel. Player-specific, league-shrunk participant-proxy '
+                 'probabilities: selected-season hindsight reconstruction, not calibrated or predictive. '
+                 'Closed starting roster; no substitutions or eligible bench/bullpen claim; starters stay all game. '
+                 'No handedness/park/fielding-skill model or historical-result claim.')
+        experiment += rating_panel(source, real)
     count = len(records)
     trace = list(re.finditer(r'^TRACE PLAY (\d+) BEGIN\n(.*?)^TRACE PLAY \1 END\n',
                              source, re.MULTILINE | re.DOTALL))

@@ -155,6 +155,50 @@ lineups. Data/exports/pages stay outside Git and must not be redistributed.
 [live status](../docs/PROGRESS.md) distinguishes pending versus verified work.
 Stop the temporary server with Ctrl-C when finished.
 
+## Optional player-specific probability pilot (same matchup)
+
+The separate **Seattle–Oakland player-probability pilot** adds league-shrunk
+batter/pitcher participant-proxy effects. This uses full2019 hindsight, not
+forecasting or calibrated abilities. The same real starting roster and positional
+policy remain; starters stay all game, with no substitutions/fatigue/handedness/
+park/fielding-skill model. The original **starting-lineup experiment** remains the
+pooled comparison. There is no second fielding roll.
+
+Export the accepted opportunity report and lineup witness to a new external file:
+
+```sh
+ratings_dir=$(mktemp -d /tmp/bbsim-player-ratings.XXXXXX)
+python3 -Werror -m preview.player_ratings \
+  /tmp/bbsim-player-opportunities/report-first.json \
+  /tmp/bbsim-lineup-readiness/report-first.json "$ratings_dir/ratings.tsv"
+cargo build --offline --locked --manifest-path engine/Cargo.toml --example generated_game
+python3 -Werror -m preview.serve --baseline /tmp/bbsim-preview-2019-counts.csv \
+  --contact-counts /tmp/bbsim-joint-preview/counts.csv \
+  --lineup /tmp/bbsim-real-lineup/lineup-first.tsv \
+  --ratings "$ratings_dir/ratings.tsv" --port 8765
+```
+
+Open `http://127.0.0.1:8765/?model=rated&seed=1`. Choose the player pilot or pooled
+starting-lineup experiment with the same seed. **Player-specific probabilities —
+hindsight pilot** shows18 batter/starter matchup distributions and20 role
+posterior means/component SDs, included participant counts and data weights.
+N is **not official PA/BF**. Fixed prior strength200 per role is provisional,
+not tuned or proven best; sparse/zero counts shrink toward positive pooled rates.
+Generalized-log5 combines independent marginals, retaining opponent/park/defense
+confounding. Component SDs are not validated ability intervals or propagated
+matchup uncertainty. Expand native provenance for unrounded values and source
+pins. Probability displays are supplied by Rust; the browser only renders them.
+
+`--ratings` requires lineup plus joint counts, and malformed inputs fail visibly;
+request fields never accept paths. Exported counts/digests do not authenticate
+manually edited rows: use the pinned exporter and source reconciliation. No data
+or generated pages are bundled/redistributable. Native inspection also accepts
+`--ratings "$ratings_dir/ratings.tsv"` alongside the earlier real-lineup command.
+[Preregistered formula/checks](../docs/modeling/player-probability-preview.md) and
+[live status](../docs/PROGRESS.md) distinguish implementation from verified work.
+Stop the local server with Ctrl-C when finished. This is the bounded milestone;
+manager/roster expansion and production/accuracy gates remain separate.
+
 ## Verification
 
 ```sh

@@ -128,6 +128,23 @@ impl JointModel {
         }
         let marginals = *base.probabilities();
         let conditionals = counts.map(|n_j| (n_j as f64 + 0.5) / (n as f64 + 2.5));
+        Self {
+            marginals,
+            conditionals,
+            boundaries: [1.0; 13],
+        }
+        .with_marginals(marginals)
+    }
+    /// Replace only PA marginals; keep the supplied contact-proxy mixture and one draw.
+    pub fn with_marginals(&self, marginals: [f64; 9]) -> Result<Self, String> {
+        if marginals
+            .iter()
+            .any(|p| !p.is_finite() || *p <= 0.0 || *p >= 1.0)
+            || (marginals.iter().sum::<f64>() - 1.0).abs() > 32.0 * f64::EPSILON
+        {
+            return Err("invalid matchup marginals".into());
+        }
+        let conditionals = self.conditionals;
         let mut boundaries = [1.0; 13];
         let mut cumulative = 0.0;
         for (edge, p) in boundaries[..8].iter_mut().zip(&marginals[..8]) {

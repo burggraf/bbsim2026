@@ -53,6 +53,68 @@ def joint_inputs(root):
 
 
 class LivePreviewTests(unittest.TestCase):
+    def test_rated_selector_and_prerequisites(self):
+        from test_player_ratings import rating_record
+        source=rating_record()
+        page=build_live_viewer(source,1,joint_available=True,real_available=True,rated_available=True)
+        self.assertIn('<option value="rated" selected>',page)
+        self.assertEqual(page.count(' selected>'),1)
+        server=None
+        try:
+            with self.assertRaises(ValueError):server=make_server('/missing','/missing',ratings='/missing')
+        finally:
+            if server is not None:server.server_close()
+        with self.assertRaises(ValueError):build_live_viewer(source,1,joint_available=True,rated_available=True)
+
+    def test_rated_http_matches_native_and_keeps_pooled_comparison(self):
+        from preview import player_ratings,real_lineup
+        from test_player_ratings import report
+        from test_real_lineup import witness
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);base,counts=joint_inputs(root);lineup=root/'lineup';lineup.write_text(real_lineup.encode_witness(witness()))
+            ratings=root/'ratings';ratings.write_text(player_ratings.encode(report(),witness()))
+            server=make_server(BINARY,base,contact_counts=counts,lineup=lineup,ratings=ratings)
+            thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+            try:
+                url=f'http://127.0.0.1:{server.server_port}'
+                for mode in ['default','joint','real','rated']:
+                    for seed in [1,2,0,18446744073709551615]:
+                        cmd=[str(BINARY),'--baseline',str(base),'--seed',str(seed),'--autoplay','--trace']
+                        if mode!='default':cmd+=['--contact-counts',str(counts)]
+                        if mode in ['real','rated']:cmd+=['--lineup',str(lineup)]
+                        if mode=='rated':cmd+=['--ratings',str(ratings)]
+                        native=subprocess.check_output(cmd,text=True,timeout=30)
+                        try:response=urlopen(url+f'/?seed={seed}&model={mode}',timeout=30)
+                        except HTTPError as error:
+                            with error:self.fail(f'Expected200: {error.code}: {error.read().decode()}')
+                        with response:self.assertEqual(response.read().decode(),build_live_viewer(native,seed,joint_available=True,real_available=True,rated_available=True))
+                ratings.write_text('bad')
+                with self.assertRaises(HTTPError) as error:urlopen(url+'/?model=rated',timeout=30)
+                with error.exception as response:self.assertEqual(response.code,500);response.read()
+                with urlopen(url+'/?model=real',timeout=30) as response:self.assertEqual(response.code,200);response.read()
+            finally:server.shutdown();thread.join(timeout=5);server.server_close()
+
+    def test_rated_queries_reject_paths_and_unconfigured_mode(self):
+        server=make_server('/missing','/missing',contact_counts='/missing',lineup='/missing',ratings='/missing')
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        try:
+            url=f'http://127.0.0.1:{server.server_port}'
+            for route in ['/?model=rated&model=rated','/?model=rated&ratings=/tmp/file','/?model=/tmp/ratings','/?model=rated&seed=-1']:
+                with self.assertRaises(HTTPError) as error:urlopen(url+route,timeout=5)
+                with error.exception as response:self.assertEqual(response.code,400);response.read()
+        finally:server.shutdown();thread.join(timeout=5);server.server_close()
+        with running('/missing','/missing','/missing','/missing') as url:
+            with self.assertRaises(HTTPError) as error:urlopen(url+'/?model=rated',timeout=5)
+            with error.exception as response:self.assertEqual(response.code,400);response.read()
+
+    def test_ratings_startup_guard_before_binding(self):
+        result=subprocess.run(['python3','-Werror','-m','preview.serve','--help'],capture_output=True,timeout=5)
+        self.assertEqual(result.returncode,0);self.assertIn(b'--ratings',result.stdout)
+        with tempfile.TemporaryDirectory() as d:
+            base,counts=joint_inputs(Path(d))
+            result=subprocess.run(['python3','-Werror','-m','preview.serve','--baseline',str(base),'--ratings','/missing','--port','0'],capture_output=True,timeout=5)
+            self.assertEqual(result.returncode,2);self.assertIn(b'requires --lineup',result.stderr);self.assertNotIn(b'Ready:',result.stdout)
+
     def test_real_selector_requires_configuration_and_uses_native_policy(self):
         from test_visible_viewer import RECORD, joint_record, real_record
         for source,selected in [(RECORD,'default'),(joint_record(),'joint'),(real_record(),'real')]:

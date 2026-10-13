@@ -214,6 +214,9 @@ impl Lineup {
             .collect()
     }
     pub fn write_preamble(&self, output: &mut dyn Write) -> io::Result<()> {
+        self.write_preamble_with_rates(output, false)
+    }
+    pub fn write_preamble_with_rates(&self, output: &mut dyn Write, rated: bool) -> io::Result<()> {
         writeln!(output, "LINEUP FORMAT: closed-starting-lineup-v1")?;
         writeln!(output, "Matchup: OAK201903200 | 2019-03-20 | TOK01")?;
         writeln!(output, "Starting witness report SHA256: {REPORT_SHA}")?;
@@ -234,7 +237,11 @@ impl Lineup {
                 )?;
             }
         }
-        writeln!(output,"Limits: generated exhibition, not the historical result; pooled probabilities, no player fitting or park effects; Closed starting roster, no substitutions or eligible bench/bullpen claim; starting pitchers stay all game; coarse positional assignments, not historical ball locations or fielding skill.")?;
+        if rated {
+            writeln!(output,"Limits: generated exhibition, not the historical result; provisional participant-proxy player effects, not calibrated or predictive; no park effects; Closed starting roster, no substitutions or eligible bench/bullpen claim; starting pitchers stay all game; coarse positional assignments, not historical ball locations or fielding skill.")?;
+        } else {
+            writeln!(output,"Limits: generated exhibition, not the historical result; pooled probabilities, no player fitting or park effects; Closed starting roster, no substitutions or eligible bench/bullpen claim; starting pitchers stay all game; coarse positional assignments, not historical ball locations or fielding skill.")?;
+        }
         writeln!(output, "{}", joint::ATTRIBUTION)
     }
 }

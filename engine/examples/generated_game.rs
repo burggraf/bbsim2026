@@ -8,6 +8,8 @@ mod joint;
 mod presentation;
 #[path = "support/preview.rs"]
 mod preview;
+#[path = "support/player_ratings.rs"]
+mod ratings;
 #[path = "support/real_lineup.rs"]
 mod real;
 use std::io::{self, Write};
@@ -19,10 +21,15 @@ fn option_error(error: String) -> ! {
 }
 fn main() -> io::Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (args, ratings_path) =
+        ratings::split_options(&args).unwrap_or_else(|error| option_error(error));
     let (args, lineup_path) =
         real::split_options(&args).unwrap_or_else(|error| option_error(error));
     let (args, contact_path) =
         joint::split_options(&args).unwrap_or_else(|error| option_error(error));
+    if ratings_path.is_some() && lineup_path.is_none() {
+        option_error("--ratings requires --lineup and --contact-counts".into());
+    }
     if lineup_path.is_some() && contact_path.is_none() {
         option_error("--lineup requires --contact-counts".into());
     }
@@ -47,8 +54,24 @@ fn main() -> io::Result<()> {
             real::Lineup::read_tsv(&std::fs::read_to_string(path)?).map_err(io::Error::other)
         })
         .transpose()?;
+    let ratings = ratings_path
+        .map(|path| {
+            ratings::Ratings::read_tsv(
+                &std::fs::read_to_string(path)?,
+                &baseline,
+                lineup.as_ref().expect("ratings require lineup"),
+            )
+            .map_err(io::Error::other)
+        })
+        .transpose()?;
     let (log, model_version, policy_version) = if let Some(model) = &joint {
-        if let Some(lineup) = &lineup {
+        if let (Some(ratings), Some(lineup)) = (&ratings, &lineup) {
+            (
+                ratings.game(options.seed, &baseline, model, lineup),
+                ratings::MODEL_VERSION,
+                real::POLICY_VERSION,
+            )
+        } else if let Some(lineup) = &lineup {
             (
                 lineup.game(options.seed, model),
                 joint::MODEL_VERSION,
@@ -70,7 +93,9 @@ fn main() -> io::Result<()> {
     };
     let log = log.map_err(io::Error::other)?;
     let mut output = io::stdout().lock();
-    if lineup.is_some() {
+    if ratings.is_some() {
+        writeln!(output,"EXPERIMENTAL GENERATED GAME — recorded Seattle/Oakland starting personnel, shrunk participant-proxy player probabilities; hindsight, not calibrated, predictive or the historical result.")?;
+    } else if lineup.is_some() {
         writeln!(output,"EXPERIMENTAL GENERATED GAME — recorded Seattle/Oakland starting personnel, pooled 2019 probabilities; not calibrated or the historical result.")?;
     } else {
         writeln!(output,"EXPERIMENTAL GENERATED GAME — fictional equal teams, pooled 2019 baseline; not calibrated.")?;
@@ -90,7 +115,12 @@ fn main() -> io::Result<()> {
     )?;
     writeln!(
         output,
-        "Posterior probabilities: {:?}",
+        "{}: {:?}",
+        if ratings.is_some() {
+            "League prior probabilities"
+        } else {
+            "Posterior probabilities"
+        },
         joint
             .as_ref()
             .map_or(*baseline.probabilities(), joint::JointModel::marginals)
@@ -102,14 +132,34 @@ fn main() -> io::Result<()> {
             "Conditional proxy probabilities Ground/Fly/LineDrive/PopUp/residual: {:?}",
             model.conditionals()
         )?;
-        writeln!(output, "Joint CDF edges: {:?}", model.boundaries())?;
+        writeln!(
+            output,
+            "{}: {:?}",
+            if ratings.is_some() {
+                "Reference pooled joint CDF edges"
+            } else {
+                "Joint CDF edges"
+            },
+            model.boundaries()
+        )?;
         writeln!(output, "{}", joint::ATTRIBUTION)?;
-        writeln!(output,"Generic narration; inspect trace for typed air/residual facts. No player ratings, range/arm, tag-ups, fatigue, DP, tactics or runner-only mechanisms yet.\n")?;
+        if ratings.is_some() {
+            writeln!(output,"Inspect trace for typed positional air/residual facts. Player effects are provisional participant proxies; no range/arm, tag-ups, fatigue, DP, tactics or runner-only mechanisms.\n")?;
+        } else {
+            writeln!(output,"Generic narration; inspect trace for typed air/residual facts. No player ratings, range/arm, tag-ups, fatigue, DP, tactics or runner-only mechanisms yet.\n")?;
+        }
     } else {
         writeln!(output,"Coarse ground/contact outs and station advancement; no player ratings, fatigue, DP, tactics or runner-only mechanisms yet.\n")?;
     }
     if let Some(lineup) = &lineup {
-        lineup.write_preamble(&mut output)?;
+        if ratings.is_some() {
+            lineup.write_preamble_with_rates(&mut output, true)?;
+        } else {
+            lineup.write_preamble(&mut output)?;
+        }
+    }
+    if let (Some(ratings), Some(lineup)) = (&ratings, &lineup) {
+        ratings.write_preamble(&mut output, lineup, &baseline)?;
     }
     if options.trace {
         game_trace::write(&log, &mut output)?;
