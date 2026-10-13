@@ -58,6 +58,7 @@ fn fixture(half: Half, outs: u8, mask: u8, advancing: u8, passed: bool) -> (Game
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
         single_delivery: Some(SingleDeliveryFacts {

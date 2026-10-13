@@ -62,6 +62,7 @@ fn blank(before: &GameState) -> Event {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
     }
 }

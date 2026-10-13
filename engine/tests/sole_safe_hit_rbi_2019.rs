@@ -105,6 +105,7 @@ fn hit(before: &GameState, value: usize, cause: bool, review: FieldingReview) ->
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: cause.then_some(SoleSafeHitFacts { batter_id: id }),
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
     }
 }

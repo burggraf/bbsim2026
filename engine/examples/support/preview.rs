@@ -368,6 +368,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         protected_award,
         sole_home_run,
         sole_safe_hit,
+        ordinary_air_catch: None,
         muffed_ground_ball,
     })
 }

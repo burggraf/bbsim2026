@@ -88,6 +88,7 @@ fn hit(before: &GameState, to: Destination, class: Option<CreditKind>) -> Event 
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
         delta: Delta {
@@ -278,6 +279,7 @@ fn strikeout(before: &GameState) -> Event {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
         delta: Delta {
@@ -830,6 +832,7 @@ fn unclassified_hit_unknown_is_irreversible_and_local_to_actor_and_actual_pitche
             protected_award: None,
             sole_home_run: None,
             sole_safe_hit: None,
+            ordinary_air_catch: None,
             muffed_ground_ball: None,
             ordinary_ground_throw: None,
             delta: Delta {

@@ -318,6 +318,7 @@ fn clean_play(before: &GameState, event: &Event) -> bool {
             // Whole-chance review excludes erased misplays in both cases.
             // Credits/endpoints alone never supply these methods.
             event.ordinary_ground_throw.is_some()
+                || event.ordinary_air_catch.is_some()
                 || event.caught_strikeout.is_some()
                 || event.sole_safe_hit.is_some()
                 || clean_station_hit(before, event)

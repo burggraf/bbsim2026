@@ -81,6 +81,7 @@ fn wild_pitch_event(before: &GameState) -> Event {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     }
@@ -178,6 +179,7 @@ fn strikeout_and_steal_share_a_single_pa_transition() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -221,6 +223,7 @@ fn third_out_retains_play_outs_but_normalizes_next_half() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -286,6 +289,7 @@ fn continuity_uses_complete_snapshots() {
             protected_award: None,
             sole_home_run: None,
             sole_safe_hit: None,
+            ordinary_air_catch: None,
             muffed_ground_ball: None,
             ordinary_ground_throw: None,
         },
@@ -371,6 +375,7 @@ fn substitution_preserves_batting_cursor_and_roundtrips() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -441,6 +446,7 @@ fn strikeout_passed_ball_can_reach_without_an_out() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -502,6 +508,7 @@ fn substitution_records_lineup_and_pinch_runner_responsibility() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -582,6 +589,7 @@ fn simultaneous_out_and_score_reconciles_both_deltas() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };

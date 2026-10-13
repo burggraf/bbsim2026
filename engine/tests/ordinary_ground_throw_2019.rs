@@ -113,6 +113,7 @@ fn play(before: &GameState, holds: bool, pitcher_throws: bool, pitcher_receives:
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: Some(OrdinaryGroundThrowFacts {
             batter_id: batter,

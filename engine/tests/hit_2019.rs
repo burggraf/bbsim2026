@@ -98,6 +98,7 @@ fn force_event(before: &GameState, out_base: usize, reverse: bool) -> Event {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     }
@@ -306,6 +307,7 @@ fn supplied_hits_with_other_retirements_are_not_inferred_as_force_outs() {
                 protected_award: None,
                 sole_home_run: None,
                 sole_safe_hit: None,
+                ordinary_air_catch: None,
                 muffed_ground_ball: None,
                 ordinary_ground_throw: None,
             };

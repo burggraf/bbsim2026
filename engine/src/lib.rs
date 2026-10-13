@@ -2,6 +2,7 @@
 //! The reducer, statistical accounting and era rules are later work packages.
 
 pub mod accounting;
+mod air;
 mod balk;
 mod caught;
 mod codec;
@@ -433,7 +434,21 @@ pub struct MuffedGroundBallFacts {
     pub batter_id: String,
     pub fielder_id: String,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AirContact {
+    Fly,
+    LineDrive,
+    PopUp,
+}
+/// One ordinary non-bunt direct legal catch retiring the batter before legal
+/// First acquisition; before runners hold. Not an automatic penalty or tag.
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrdinaryAirCatchFacts {
+    pub batter_id: String,
+    pub fielder_id: String,
+    pub contact: AirContact,
+}
+#[derive(Clone, PartialEq, Eq)]
 pub struct Event {
     pub kind: EventKind,
     pub participants: Participants,
@@ -448,6 +463,31 @@ pub struct Event {
     pub sole_home_run: Option<SoleHomeRunFacts>,
     pub sole_safe_hit: Option<SoleSafeHitFacts>,
     pub muffed_ground_ball: Option<MuffedGroundBallFacts>,
+    pub ordinary_air_catch: Option<OrdinaryAirCatchFacts>,
+}
+
+impl std::fmt::Debug for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut event = f.debug_struct("Event");
+        event
+            .field("kind", &self.kind)
+            .field("participants", &self.participants)
+            .field("fielding_review", &self.fielding_review)
+            .field("delta", &self.delta)
+            .field("two_out_contact", &self.two_out_contact)
+            .field("single_delivery", &self.single_delivery)
+            .field("balk", &self.balk)
+            .field("ordinary_ground_throw", &self.ordinary_ground_throw)
+            .field("caught_strikeout", &self.caught_strikeout)
+            .field("protected_award", &self.protected_award)
+            .field("sole_home_run", &self.sole_home_run)
+            .field("sole_safe_hit", &self.sole_safe_hit)
+            .field("muffed_ground_ball", &self.muffed_ground_ball);
+        if self.ordinary_air_catch.is_some() {
+            event.field("ordinary_air_catch", &self.ordinary_air_catch);
+        }
+        event.finish()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -471,6 +511,18 @@ pub struct EventTransition {
 }
 
 impl EventTransition {
+    /// Named direct-catch PO/A, only with whole-chance review; not a full box.
+    pub fn ordinary_air_fielding(&self) -> Option<accounting::FieldingContribution> {
+        if self.event.fielding_review != FieldingReview::NoMisplay {
+            return None;
+        }
+        let facts = self.event.ordinary_air_catch.as_ref()?;
+        Some(accounting::FieldingContribution {
+            putouts: [(facts.fielder_id.clone(), 1)].into(),
+            assists: Default::default(),
+        })
+    }
+
     /// Event-local safe-hit causal proof, not complete segment/box coverage.
     pub fn sole_safe_hit_rbi(&self) -> Option<accounting::RbiContribution> {
         let facts = self.event.sole_safe_hit.as_ref()?;
@@ -574,6 +626,7 @@ impl EventTransition {
     /// Union of qualified event-local PO/A proofs, not whole-game coverage.
     pub fn fielding_contribution(&self) -> Option<accounting::FieldingContribution> {
         self.ordinary_ground_fielding()
+            .or_else(|| self.ordinary_air_fielding())
             .or_else(|| self.caught_strikeout_fielding())
             .or_else(|| self.sole_safe_hit_fielding())
             .or_else(|| self.protected_award_fielding())

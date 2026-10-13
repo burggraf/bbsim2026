@@ -92,6 +92,7 @@ fn fixture(half: Half, outs: u8, mask: u8, reach: u8) -> (GameState, Event) {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
         balk: Some(BalkFacts {

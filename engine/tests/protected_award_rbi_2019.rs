@@ -121,6 +121,7 @@ fn award(
         protected_award: Some(ProtectedAwardFacts { batter_id: batter }),
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
     }
 }

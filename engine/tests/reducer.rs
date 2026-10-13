@@ -83,6 +83,7 @@ fn derives_f02_runner_only_wild_pitch_without_advancing_batter() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -134,6 +135,7 @@ fn pa(
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     }
@@ -209,6 +211,7 @@ fn caught_stealing_third_out_clears_stranded_runners() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -346,6 +349,7 @@ fn substitution_changes_pitcher_and_inherits_pinch_runner_responsibility() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -388,6 +392,7 @@ fn illegal_collision_does_not_mutate_caller_state() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };
@@ -523,6 +528,7 @@ fn pickoff_follows_prior_event_without_plate_appearance() {
         protected_award: None,
         sole_home_run: None,
         sole_safe_hit: None,
+        ordinary_air_catch: None,
         muffed_ground_ball: None,
         ordinary_ground_throw: None,
     };

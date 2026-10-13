@@ -1,4 +1,4 @@
-//! Version 24 canonical binary event record. Little-endian integers, length-prefixed UTF-8;
+//! Versions 25 (legacy) and 26 (explicit air catch). Little-endian, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
 
@@ -146,6 +146,7 @@ binary_enum!(CreditKind { PlateAppearance = 0, Strikeout = 1, Walk = 2, Hit = 3,
 binary_enum!(ThirdOutKind { BatterBeforeFirst = 0, Force = 1, Timing = 2, PrecedingRunnerAppeal = 3, BatterAfterFirstTiming = 4 });
 binary_enum!(FieldingReview { Unknown = 0, NoMisplay = 1, SoleGroundMuff = 2 });
 binary_enum!(ContactClass { Grounded = 0, NotGrounded = 1 });
+binary_enum!(AirContact { Fly = 0, LineDrive = 1, PopUp = 2 });
 binary_enum!(ContactContinuity { Continuous = 0, Discontinuous = 1, Unknown = 2 });
 binary_enum!(ForceLoss { RemovedByFirstOut = 0, PreviouslyRemoved = 1, NeverForced = 2, Unknown = 3 });
 binary_enum!(DeliveryContext { RunnerOnly = 0, UncaughtThirdStrike = 1, DeliveredFourthBall = 2 });
@@ -290,11 +291,11 @@ impl Binary for EventKind {
     }
 }
 macro_rules! binary_struct {
-    ($name:ident { $($field:ident),+ $(,)? }) => {
+    ($name:ident { $($field:ident),+ $(,)? } $(; $($default_field:ident = $default:expr),+ )?) => {
         impl Binary for $name {
             fn encode(&self, out: &mut Vec<u8>) { $(self.$field.encode(out);)+ }
             fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
-                Ok(Self { $($field: Binary::decode(reader)?,)+ })
+                Ok(Self { $($field: Binary::decode(reader)?,)+ $($($default_field: $default,)+)? })
             }
         }
     };
@@ -437,6 +438,11 @@ binary_struct!(CaughtStrikeoutFacts {
     batter_id,
     catcher_id
 });
+binary_struct!(OrdinaryAirCatchFacts {
+    batter_id,
+    fielder_id,
+    contact
+});
 binary_struct!(ProtectedAwardFacts { batter_id });
 binary_struct!(SoleHomeRunFacts { batter_id });
 binary_struct!(SoleSafeHitFacts { batter_id });
@@ -458,25 +464,42 @@ binary_struct!(Event {
     sole_home_run,
     sole_safe_hit,
     muffed_ground_ball
-});
+}; ordinary_air_catch = None);
 
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = b"BBE25".to_vec();
+        let mut out = if self.event.ordinary_air_catch.is_some() {
+            b"BBE26".to_vec()
+        } else {
+            b"BBE25".to_vec()
+        };
         self.before.encode(&mut out);
         self.event.encode(&mut out);
         self.after.encode(&mut out);
+        if let Some(facts) = &self.event.ordinary_air_catch {
+            facts.encode(&mut out);
+        }
         out
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
-        let payload = bytes
-            .strip_prefix(b"BBE25")
-            .ok_or(TransitionError::InvalidEncoding)?;
+        let (payload, air) = if let Some(payload) = bytes.strip_prefix(b"BBE26") {
+            (payload, true)
+        } else {
+            (
+                bytes
+                    .strip_prefix(b"BBE25")
+                    .ok_or(TransitionError::InvalidEncoding)?,
+                false,
+            )
+        };
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;
-        let event = Event::decode(&mut reader)?;
+        let mut event = Event::decode(&mut reader)?;
         let after = GameState::decode(&mut reader)?;
+        if air {
+            event.ordinary_air_catch = Some(OrdinaryAirCatchFacts::decode(&mut reader)?);
+        }
         if !reader.0.is_empty() {
             return Err(TransitionError::InvalidEncoding);
         }
