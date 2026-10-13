@@ -199,3 +199,16 @@ python3 -Werror -m audits.bullpen_readiness \
 
 Exact independent SQL/helper/raw checks/full logs are retained under
 `/tmp/bbsim-bullpen-readiness/`; they are local, unbundled and may expire.
+
+## 2026-10-13 proposal supersession — D-19
+
+Maintainer correctly questions the arbitrary sixth-inning hook: it was only an
+unimplemented substitution-plumbing test, not a realistic manager. The recommended
+path is now [pitcher-specific workload management](../modeling/pitcher-workload-preview.md),
+confirmed in interview `b3ec6a67-afb5-41ae-b739-2d71de84007c`: start/relief-separated
+observed mean PA outings, deterministic between-PA hooks, all four/six recorded
+nonstarters explicitly assumed available, longer-average relief outings first,
+then verification and stop for testing. Current offline schemas contain no pitch
+totals/sequences; no invented pitch counts or measured-fatigue claim. The historical
+audit findings and original proposal remain above unchanged; D-19 supersedes the
+proposal's implementation policy, not its source/eligibility limitations.
