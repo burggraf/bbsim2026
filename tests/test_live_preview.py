@@ -18,8 +18,9 @@ BINARY = ROOT / "engine/target/debug/examples/generated_game"
 
 
 @contextmanager
-def running(binary, baseline):
-    server = make_server(binary, baseline)
+def running(binary, baseline, contact_counts=None):
+    server = (make_server(binary, baseline) if contact_counts is None else
+              make_server(binary, baseline, contact_counts=contact_counts))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -32,7 +33,128 @@ def running(binary, baseline):
             raise RuntimeError("Preview test server did not stop")
 
 
+def joint_inputs(root):
+    """Self-contained accepted logical fixture; no external dataset required."""
+    rust = (ROOT / 'engine/tests/joint_contact_preview.rs').read_text()
+    joint = re.search(r'const JOINT_CSV: &str = r#"(.*?)"#;', rust, re.DOTALL).group(1)
+    fields = dict(line.split(',', 1) for line in joint.splitlines()[1:])
+    categories = ['strikeout', 'walk', 'hbp', 'single', 'double', 'triple', 'home_run', 'roe', 'contact_out']
+    baseline = ('key,value\nformat,preview-counts-v1\ncatalog_sha256,' + fields['catalog_sha256']
+                + '\nquery_version,preview-baseline-v1\nselected_pa,186517\n'
+                + 'excluded_ibb,753\nexcluded_interference,61\n'
+                + ''.join(key + ',' + fields[key] + '\n' for key in categories))
+    paths = root/'baseline.csv', root/'joint.csv'
+    paths[0].write_text(baseline)
+    paths[1].write_text(joint)
+    return paths
+
+
 class LivePreviewTests(unittest.TestCase):
+    def test_configured_selector_uses_loaded_native_model_and_preserves_default_api(self):
+        from test_visible_viewer import RECORD, joint_record
+        plain = build_live_viewer(RECORD, 1)
+        self.assertNotIn('id="model"', plain)
+        page = build_live_viewer(RECORD, 1, joint_available=True)
+        self.assertIn('<select id="model" name="model">', page)
+        self.assertIn('<label for="model">Model</label>', page)
+        self.assertIn('<option value="default" selected>', page)
+        self.assertIn('<option value="joint">', page)
+        joint = build_live_viewer(joint_record(), 1, joint_available=True)
+        self.assertIn('<option value="joint" selected>', joint)
+        self.assertNotIn('<option value="default" selected>', joint)
+        self.assertIn('form.requestSubmit()', joint)
+        self.assertIn('18446744073709551615n', joint)
+        self.assertEqual(build_live_viewer(RECORD, 1), plain)
+
+    def test_real_joint_http_matches_independent_cli_and_keeps_default_opt_in(self):
+        with tempfile.TemporaryDirectory() as directory:
+            baseline, counts = joint_inputs(Path(directory))
+            def native(seed, joint=False):
+                args = [str(BINARY), '--baseline', str(baseline), '--seed', str(seed), '--autoplay', '--trace']
+                if joint:
+                    args += ['--contact-counts', str(counts)]
+                return subprocess.check_output(args, encoding='utf-8', timeout=30)
+            expected_default = native(1)
+            expected_joint = {seed: native(seed, True) for seed in [1, 2, 18446744073709551615, 0]}
+            self.assertNotEqual(expected_joint[1], expected_default)
+            self.assertNotEqual(expected_joint[1], expected_joint[2])
+            with running(BINARY, baseline, counts) as url:
+                def get(query):
+                    try:
+                        response = urlopen(url + '/' + query, timeout=30)
+                    except HTTPError as error:
+                        with error:
+                            self.fail(f'Expected200 for {query}, got {error.code}: {error.read().decode()}')
+                    with response:
+                        self.assertEqual(response.headers['Cache-Control'], 'no-store')
+                        return response.read().decode()
+                default_page = build_live_viewer(expected_default, 1, joint_available=True)
+                self.assertEqual(get('?seed=1'), default_page)
+                self.assertEqual(get('?seed=1&model=default'), default_page)
+                for seed, source in expected_joint.items():
+                    self.assertEqual(get(f'?seed={seed}&model=joint'),
+                                     build_live_viewer(source, seed, joint_available=True))
+                self.assertEqual(get('?seed=1&model=joint'), get('?seed=1&model=joint'))
+                self.assertEqual(get('?seed=1'), default_page)
+
+    def test_configured_bad_model_queries_fail_before_running_missing_engine(self):
+        with running(Path('/missing/binary'), Path('/missing/baseline'), Path('/missing/contact')) as url:
+            routes = ['/?model=', '/?model=unknown', '/?model=joint&model=default',
+                      '/?model=joint&model=joint', '/?model=/tmp/counts.csv',
+                      '/?model=--contact-counts', '/?contact-counts=/tmp/counts.csv',
+                      '/?model=joint&seed=-1', '/?model=joint&seed=1&seed=2',
+                      '/?model=joint&other=1']
+            for route in routes:
+                with self.subTest(route=route), self.assertRaises(HTTPError) as error:
+                    urlopen(url + route, timeout=5)
+                with error.exception as response:
+                    self.assertEqual(response.code, 400)
+            with self.assertRaises(HTTPError) as error:
+                urlopen(Request(url + '/?model=joint', headers={'Host': 'foreign.example'}), timeout=5)
+            with error.exception as response:
+                self.assertEqual(response.code, 421)
+            with self.assertRaises(HTTPError) as error:
+                urlopen(url + '/secret?model=joint', timeout=5)
+            with error.exception as response:
+                self.assertEqual(response.code, 404)
+
+    def test_unconfigured_server_still_rejects_model_query(self):
+        with running(Path('/missing/binary'), Path('/missing/baseline')) as url:
+            for mode in ['default', 'joint']:
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(url + '/?model=' + mode, timeout=5)
+                with error.exception as response:
+                    self.assertEqual(response.code, 400)
+
+    def test_bad_joint_csv_is_visible_failure_not_silent_default_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            baseline, counts = joint_inputs(Path(directory))
+            counts.write_text(counts.read_text().replace('residual,39614', 'residual,39613'))
+            with running(BINARY, baseline, counts) as url:
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(url + '/?seed=1&model=joint', timeout=30)
+                with error.exception as response:
+                    self.assertEqual(response.code, 500)
+                    body = response.read().decode()
+                    self.assertIn('Could not generate game', body)
+                    self.assertNotIn('id="frame', body)
+                with urlopen(url + '/?seed=1', timeout=30) as response:
+                    self.assertEqual(response.code, 200)
+                    self.assertIn('pooled-jeffreys-preview-v1', response.read().decode())
+
+    def test_startup_help_exposes_opt_in_and_missing_contact_file_prevents_bind(self):
+        help_result = subprocess.run(['python3', '-Werror', '-m', 'preview.serve', '--help'], capture_output=True)
+        self.assertEqual(help_result.returncode, 0)
+        self.assertIn(b'--contact-counts', help_result.stdout)
+        with tempfile.TemporaryDirectory() as directory:
+            baseline, _ = joint_inputs(Path(directory))
+            result = subprocess.run(['python3', '-Werror', '-m', 'preview.serve',
+                '--binary', str(BINARY), '--baseline', str(baseline), '--contact-counts',
+                str(Path(directory)/'missing.csv'), '--port', '0'], capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(b'existing local contact-counts CSV', result.stderr)
+            self.assertNotIn(b'Ready:', result.stdout)
+
     def test_exact_seed_domain_is_not_float_or_modulo_coercion(self):
         for text in ["0", "1", "42", "18446744073709551615"]:
             self.assertEqual(seed_value(text), int(text))

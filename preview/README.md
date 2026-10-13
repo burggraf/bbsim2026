@@ -20,6 +20,36 @@ Use `--port 8766` if the port is occupied. The baseline is not bundled or silent
 downloaded; [baseline reproduction](../docs/modeling/run-generated-preview.md)
 describes the existing internal data path.
 
+### Optional joint-contact experiment
+
+First reproduce the accepted external26-field CSV using the
+[joint sampler instructions](../docs/modeling/joint-contact-preview.md). Then:
+
+```sh
+cargo build --offline --locked --manifest-path engine/Cargo.toml --example generated_game
+python3 -m preview.serve --baseline /tmp/bbsim-preview-2019-counts.csv \
+  --contact-counts /tmp/bbsim-joint-preview/counts.csv --port 8765
+```
+
+The **Model** selector appears only with that startup setting. Default pooled
+ground policy remains the default; choose **Joint source-shape experiment** and
+Generate game to opt in. Generate/New game use the selected mode; Restart replays
+it without a new draw. Executable/baseline/contact paths are startup settings,
+never browser inputs. Requests accept only the seed and, when configured, one
+`model=default` or `model=joint`; bad/missing joint data shows a generation error,
+never a silent default fallback. No dataset download or additional dependencies.
+
+Joint games prominently disclose source-shape mixture/synthetic held retirements
+and partial residual coverage; expand **Joint-contact assumptions and supplied
+provenance** for the verbatim Rust preamble, versions, counts and Retrosheet notice.
+Radio calls identify fly balls, line drives and pop-ups **only** from explicit
+named native catch facts. Unknown residual outs retain generic calls; no catch,
+throw, position, range/arm or historical certainty is inferred from endpoints or
+putout counts. All calls/recaps/full snapshots still originate in Rust. The
+[bounded integration contract](../docs/modeling/joint-contact-viewer.md) fixes
+acceptance; [PROGRESS](../docs/PROGRESS.md) records current verification status.
+This does not authorize real-player fitting or complete-box/accuracy/gate claims.
+
 - **Generate game:** uses the entered decimal seed. Same seed + same baseline/
   engine/model versions reproduces the same game. Supports the exact full
   unsigned 64-bit range, including seeds above JavaScript's safe Number range.
@@ -44,10 +74,10 @@ describes the existing internal data path.
 Manual navigation stops autoplay. Playback stops at game end and pauses when
 its tab is hidden. New generation resets playback. Errors are displayed instead
 of fabricated games. The standard-library server binds only to loopback, serves
-no arbitrary files, rejects foreign Host headers and accepts only a seed from
-browser requests. The executable/baseline paths are startup settings, not browser
-inputs. This is a development prototype, not a production web server or release.
-No new dependencies or simulation-core/model changes.
+no arbitrary files, rejects foreign Host headers and accepts only a seed plus the
+fixed optional model enum when explicitly configured. Input paths are startup
+settings, not browser inputs. This is a development prototype, not a production web server or release.
+No new dependencies or simulation-core/sampler changes.
 
 ## Optional server-free playback
 
@@ -70,7 +100,7 @@ cargo fmt --manifest-path engine/Cargo.toml --check
 cargo build --manifest-path engine/Cargo.toml --example generated_game
 cargo test --manifest-path engine/Cargo.toml
 cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
-python3 -m unittest discover -s tests -v
+python3 -Werror -m unittest discover -s tests -v
 ```
 
 HTTP integration tests run the real compiled Rust generator using the repository's

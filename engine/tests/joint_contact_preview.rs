@@ -1,4 +1,6 @@
 //! Experimental joint source-shape sampling; not historical contact certificates.
+#[path = "../examples/support/game_trace.rs"]
+mod game_trace;
 #[path = "../examples/support/joint_contact.rs"]
 mod joint;
 #[path = "../examples/support/preview.rs"]
@@ -738,6 +740,110 @@ fn generated_cli_optin_uses_native_joint_events_and_preserves_default_mode() {
     ]);
     assert_eq!(repeated.status.code(), Some(2));
     assert!(repeated.stdout.is_empty());
+}
+
+#[test]
+fn viewer_air_calls_name_bound_types_actors_and_held_runners_without_mutation() {
+    let initial = preview::game(1, &baseline()).unwrap()[0].before().clone();
+    for half in [Half::Top, Half::Bottom] {
+        for outs in 0..3 {
+            for mask in 0..8 {
+                let mut before = initial.clone();
+                before.half = half;
+                before.outs = outs;
+                for (i, base) in before.bases.iter_mut().enumerate() {
+                    *base = (mask & (1 << i) != 0).then(|| Runner {
+                        player_id: before.teams[half.offense()].batting_order[i + 5].clone(),
+                        responsible_pitcher: before.teams[1 - half.offense()].pitcher.clone(),
+                    });
+                }
+                for (index, label, actor_slot) in
+                    [(9, "fly ball", 6), (10, "line drive", 7), (11, "pop-up", 2)]
+                {
+                    let t = apply(&before, joint::event_for(&before, selected(index)).unwrap())
+                        .unwrap();
+                    let frozen = t.to_bytes();
+                    let mut output = Vec::new();
+                    game_trace::write_commentary(std::slice::from_ref(&t), &mut output).unwrap();
+                    let text = String::from_utf8(output).unwrap();
+                    let offense = &before.teams[half.offense()];
+                    let defense = &before.teams[1 - half.offense()];
+                    let batter = &offense.batting_order[offense.next_batter as usize];
+                    let fielder = &defense.batting_order[actor_slot];
+                    assert!(
+                        text.contains(&format!(
+                            "{} to {batter}: {label} caught by {fielder} — {batter} is out!",
+                            defense.pitcher
+                        )),
+                        "{half:?}/{outs}/{mask}/{label}: {text}"
+                    );
+                    assert!(
+                        !text.contains("Fielders:"),
+                        "bound catcher is already named"
+                    );
+                    assert!(!text.contains("throw") && !text.contains("out at first"));
+                    for (i, runner) in before.bases.iter().enumerate() {
+                        if let Some(runner) = runner {
+                            assert!(text.contains(&format!(
+                                "{} holds at {}.",
+                                runner.player_id,
+                                ["first", "second", "third"][i]
+                            )));
+                        }
+                    }
+                    assert_eq!(text.contains("Side retired."), outs == 2);
+                    assert_eq!(text.contains("The game is over."), t.after().over);
+                    assert_eq!(t.to_bytes(), frozen);
+                    let mut debug = Vec::new();
+                    game_trace::write(std::slice::from_ref(&t), &mut debug).unwrap();
+                    assert!(String::from_utf8(debug)
+                        .unwrap()
+                        .contains("ordinary_air_catch: Some"));
+                    assert_eq!(t.to_bytes(), frozen);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn viewer_missing_catch_facts_and_unknown_residual_do_not_invent_a_type() {
+    let initial = preview::game(1, &baseline()).unwrap()[0].before().clone();
+    for index in 9..13 {
+        let mut event = joint::event_for(&initial, selected(index)).unwrap();
+        event.ordinary_air_catch = None;
+        let t = apply(&initial, event).unwrap();
+        let mut output = Vec::new();
+        game_trace::write_commentary(std::slice::from_ref(&t), &mut output).unwrap();
+        let text = String::from_utf8(output).unwrap();
+        assert!(text.contains("recorded play; see full event facts for the result."));
+        for invented in ["fly ball", "line drive", "pop-up", "caught by", "throw"] {
+            assert!(!text.contains(invented), "{index}: {text}");
+        }
+        assert_eq!(text.contains("(putout)"), index < 12);
+        if index == 12 {
+            assert!(!text.contains("Fielders:"));
+            assert_eq!(t.event().fielding_review, FieldingReview::Unknown);
+            assert!(t.ordinary_air_fielding().is_none());
+        }
+    }
+}
+
+#[test]
+fn viewer_terminal_catch_keeps_final_state_and_game_over_call() {
+    let mut before = preview::game(1, &baseline()).unwrap()[0].before().clone();
+    before.inning = 9;
+    before.half = Half::Top;
+    before.outs = 2;
+    before.score = [0, 1];
+    let t = apply(&before, joint::event_for(&before, selected(11)).unwrap()).unwrap();
+    assert!(t.after().over);
+    let mut output = Vec::new();
+    game_trace::write_commentary(std::slice::from_ref(&t), &mut output).unwrap();
+    let text = String::from_utf8(output).unwrap();
+    assert!(text.contains("pop-up caught by Home-3 — Away-1 is out!"));
+    assert!(text.contains("Side retired. The game is over."));
+    assert!(text.contains("After: Final · Away 0–Home 1"));
 }
 
 const JOINT_CSV: &str = r#"key,value

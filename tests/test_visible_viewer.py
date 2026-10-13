@@ -1,4 +1,5 @@
 """The viewer must display supplied engine records, not invent outcomes."""
+import html
 import unittest
 from preview.build_viewer import build_viewer
 
@@ -35,7 +36,40 @@ def announced_record():
     return commentary + traced_record()
 
 
+def joint_record():
+    prefix = ('EXPERIMENTAL GENERATED GAME — fictional equal teams, pooled 2019 baseline; not calibrated.\n'
+              'Seed: 1 | Model: pooled-jeffreys-joint-proxy-preview-v1 | Policy: station-held-joint-proxy-preview-v1 | RNG: splitmix64-v1\n'
+              'OPT-IN EXPERIMENT — source-shape mixture; synthetic held retirements; residual partial coverage, not calibration.\n'
+              'The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org".\n'
+              'Supplied note: <inspect & escape>\n')
+    source = announced_record()
+    native, summary = source.split('EXPERIMENTAL GENERATED GAME', 1)
+    plays = summary[summary.index('Play 01 |'):]
+    return prefix + native + plays
+
+
 class VisibleViewerTests(unittest.TestCase):
+    def test_joint_assumptions_and_verbatim_preamble_are_visible_and_escaped(self):
+        source = joint_record()
+        page = build_viewer(source)
+        self.assertIn('Joint-contact experiment', page)
+        self.assertIn('synthetic held retirements', page)
+        self.assertIn('residual partial coverage, not calibration', page)
+        self.assertIn('Retrosheet', page)
+        prefix = source[:source.index('COMMENTARY FORMAT:')]
+        self.assertIn('<pre>' + html.escape(prefix) + '</pre>', page)
+        self.assertNotIn('<inspect & escape>', page)
+        self.assertNotIn('complete official box score', page)
+        self.assertIn('class="game-log-entry"', page)
+
+    def test_joint_static_page_keeps_recorded_calls_states_and_statistics(self):
+        page = build_viewer(joint_record())
+        self.assertIn('id="frame3" data-away="0" data-home="1"', page)
+        self.assertIn('Home-pitcher to Away-2: a single!', page)
+        self.assertIn('FINAL: Away 0 - Home 1', page)
+        self.assertIn('id="game-log"', page)
+        self.assertNotIn('<script', page)
+
     def test_radio_calls_and_compact_recaps_are_visible_outside_technical_details(self):
         page = build_viewer(announced_record())
         for i in range(1, 4):

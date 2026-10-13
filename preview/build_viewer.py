@@ -4,6 +4,14 @@ import argparse
 import html
 import re
 
+JOINT_MODEL = 'pooled-jeffreys-joint-proxy-preview-v1'
+
+
+def is_joint_record(source):
+    metadata = next((line for line in source.splitlines() if line.startswith('Seed:')), '')
+    return f'Model: {JOINT_MODEL}' in metadata.split(' | ')
+
+
 CSS = """
 *{box-sizing:border-box}body{margin:0;background:#101c25;color:#e9f0f2;font:16px system-ui,sans-serif}
 main{max-width:1060px;margin:auto;padding:30px 24px}header{display:flex;justify-content:space-between;align-items:center;gap:20px}
@@ -50,6 +58,15 @@ def build_viewer(source: str) -> str:
         raise ValueError("Final score must match the terminal play")
     metadata = next((line for line in source.splitlines() if line.startswith("Seed:")), "Seed not supplied")
     escape = html.escape
+    experiment = ''
+    if is_joint_record(source):
+        start = re.search(r'^(?:TRACE FORMAT:|COMMENTARY FORMAT:|Play [0-9]+ \|)', source, re.MULTILINE)
+        preamble = source[:start.start()]
+        experiment = ('<p class="intro">Joint-contact experiment: source-shape mixture with synthetic '
+                      'named catches and held runners; residual coverage remains partial. '
+                      'Not calibrated player matchups or a fielding-skill model.</p>'
+                      '<details id="model-details"><summary>Joint-contact assumptions and supplied provenance</summary>'
+                      f'<pre>{escape(preamble)}</pre></details>')
     count = len(records)
     trace = list(re.finditer(r'^TRACE PLAY (\d+) BEGIN\n(.*?)^TRACE PLAY \1 END\n',
                              source, re.MULTILINE | re.DOTALL))
@@ -145,7 +162,7 @@ def build_viewer(source: str) -> str:
 <body><main><header><div><div class="eyebrow">2019 BASEBALL · ENGINE PREVIEW</div>
 <h1>Baseball Simulator</h1></div><div class="badge">Offline · Rust-engine replay</div></header>
 <p class="intro">Fictional equal teams, using the pooled 2019 league baseline. This is a visual simulation replay, not yet realistic team matchups or managerial gameplay.</p>
-<p class="intro">{escape(metadata)}</p>{body}{game_log}
+<p class="intro">{escape(metadata)}</p>{experiment}{body}{game_log}
 <footer>Read-only playback: the browser does not generate outcomes. Statistics are supplied-credit totals, not a complete official box. No accuracy or finished-product claim.</footer>
 </main></body></html>'''
 

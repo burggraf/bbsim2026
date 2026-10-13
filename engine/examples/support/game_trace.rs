@@ -1,5 +1,7 @@
 //! Opt-in human inspection; immutable native snapshots, not a canonical wire codec.
-use bbsim_engine::{Base, CreditKind, Destination, EventKind, EventTransition, GameState};
+use bbsim_engine::{
+    AirContact, Base, CreditKind, Destination, EventKind, EventTransition, GameState,
+};
 use std::io::{self, Write};
 
 fn summary(state: &GameState) -> String {
@@ -82,6 +84,13 @@ fn call(t: &EventTransition) -> String {
             "ground ball to {}, the throw to {} — {batter} is out at first!",
             f.thrower_id, f.receiver_id
         )
+    } else if let Some(f) = &e.ordinary_air_catch {
+        let contact = match f.contact {
+            AirContact::Fly => "fly ball",
+            AirContact::LineDrive => "line drive",
+            AirContact::PopUp => "pop-up",
+        };
+        format!("{contact} caught by {} — {batter} is out!", f.fielder_id)
     } else if let Some(f) = &e.caught_strikeout {
         format!(
             "strike three! {batter} is out; {} receives the strike.",
@@ -110,6 +119,7 @@ fn call(t: &EventTransition) -> String {
     let mut text = format!("{} to {batter}: {result}", e.participants.pitcher);
     // Unknown causal sequences remain unknown; supplied credits can still name fielders.
     if e.ordinary_ground_throw.is_none()
+        && e.ordinary_air_catch.is_none()
         && e.caught_strikeout.is_none()
         && e.muffed_ground_ball.is_none()
     {
