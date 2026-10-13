@@ -374,6 +374,16 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
 }
 
 pub fn game(seed: u64, baseline: &Baseline) -> Result<Vec<EventTransition>, String> {
+    game_with(seed, |state, rng| {
+        let outcome = baseline.sample(rng);
+        Ok((outcome, event_for(state, outcome)?))
+    })
+}
+/// Shared fictional initialization/engine loop; the producer owns one modeled PA draw.
+pub fn game_with<F>(seed: u64, mut produce: F) -> Result<Vec<EventTransition>, String>
+where
+    F: FnMut(&GameState, &mut Rng) -> Result<(Outcome, Event), String>,
+{
     let team = |name: &str| TeamState {
         batting_order: std::array::from_fn(|i| format!("{name}-{}", i + 1)),
         next_batter: 0,
@@ -400,8 +410,7 @@ pub fn game(seed: u64, baseline: &Baseline) -> Result<Vec<EventTransition>, Stri
                 "seed {seed}: resource ceiling reached, no winner fabricated"
             ));
         }
-        let outcome = baseline.sample(&mut rng);
-        let event = event_for(&state, outcome)?;
+        let (outcome, event) = produce(&state, &mut rng)?;
         let transition = apply(&state, event)
             .map_err(|e| format!("seed {seed}, play {}, {outcome:?}: {e:?}", log.len() + 1))?;
         state = transition.after().clone();

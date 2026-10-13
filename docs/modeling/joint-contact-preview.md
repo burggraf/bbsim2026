@@ -198,6 +198,176 @@ throw facts merely to complete its fielding/ER coverage.
    claim. Viewer/radio expansion, if needed, requires its own bounded scope and
    browser evidence; it is not included in the initial count/sampler slice.
 
+## Opt-in sampler/policy preregistration (after count checkpoint `c7093c2`)
+
+This next slice has **six** owned paths only: this document, PROGRESS,
+`engine/examples/support/joint_contact.rs` (new),
+`engine/tests/joint_contact_preview.rs` (new),
+`engine/examples/support/preview.rs` (shared game-loop extraction only), and
+`engine/examples/generated_game.rs` (explicit opt-in dispatch only). No canonical
+engine, count recipe, old tests, CLI parser, diagnostics, commentary or viewer
+edits. Preregister first; no behavior is implemented by this section.
+
+Input: a small external `key,value` CSV projected from the accepted JSON, not
+another dataset transfer. Exact metadata keys: `format=joint-proxy-counts-v1`,
+`cohort_format=2019-joint-contact-proxies-v1`, `catalog_sha256`, `source_commit`,
+`snapshot_sha256`, `supplement_sha256`, `recipe_sha256`, `artifact_sha256`,
+`included_pa`, `excluded_ibb`, `excluded_interference`, `attribution`.
+Pin catalog/source/snapshot/supplement/artifact digests to the count artifact
+above and recipe SHA `174e9b959f59359f9fa86c7881dbbf9aefd5981f9376d08b60b975126ff4afc3`;
+retain the exact Retrosheet attribution. Include original nine
+counts, `included_pa=185703`, exclusions753/61 and five bins in
+Ground/Fly/LineDrive/PopUp/Residual order. Version1's CLI loader accepts exactly
+this audited pilot vector/provenance, rejects missing/extra/duplicate/malformed
+fields or changed counts, and verifies agreement with the supplied legacy
+baseline. Numeric CSV values must be nonempty ASCII decimal digits, not signs,
+whitespace, floats or exponent notation. Synthetic unit-test constructors may use other nonnegative vectors
+whose five-bin sum equals their baseline contact-out count; checked arithmetic
+and the existing baseline's numerical support limit apply. No dependencies or
+handwritten general JSON parser. Projection must check the JSON digest before
+exclusive creation and verify the resulting CSV/roundtrip; keep it outside Git.
+
+Fix versions `pooled-jeffreys-joint-proxy-preview-v1` and
+`station-held-joint-proxy-preview-v1`; RNG remains splitmix64-v1. Opt in only via
+`--contact-counts PATH` on the generated CLI, with the existing baseline still
+required. A wrapper strips that one new option before calling the unchanged
+old CLI parser; duplicates/missing values fail. With the flag absent, all old
+help/errors/banner, versions, event/wire/debug/trace bodies and RNG use stay
+unchanged. The opt-in banner explicitly says source-shape mixture/synthetic
+held retirements, residual partial coverage, not calibration. Keep Next/autoplay/
+trace behavior; no preview restart or browser-owned outcome code.
+
+**Binary64 construction fixed before new sampler tests/code:** copy the old
+nine probability array unchanged. Add its first eight probabilities left-to-
+right exactly as the old sampler does; call this last prefix `s`. Compute
+`q_j=(m_j+0.5)/(n_contact_out+2.5)` and their first four cumulative sums in fixed
+bin order. Append edges `s+(1-s)*cumulative_q`, using multiply then add (no FMA),
+then exact1. Compare one `u=(next_u64()>>11)/2^53` with edges using strict `<`;
+edge equality belongs to the next bin. No second draw, normalization loop,
+retry or conversion of a selected hit. The reported mathematical joint masses
+remain `p_contact_out*q`; actual tail width is the legacy sampler's `1-s`,
+whose last-bin rounding fallback is preserved. Never perturb the first eight
+intervals. Reject nonfinite/out-of-domain explicit test draws and unsupported
+vectors with collapsed/non-increasing boundaries, rather than invent an epsilon
+or silently drop a legal bin. Probability/interval positivity is strictly `>0`.
+Fixed numerical assertion tolerance is32 binary64 epsilons for sums/marginal
+mass, not a probability floor.
+
+Independent arithmetic vectors were recorded before implementation in
+`/tmp/bbsim-joint-preview/preregistered-boundaries.json`. Audited13 CDF edges,
+in order (hex binary64 bits):
+
+```text
+3fcd842faa8b150b 3fd3fa095bd4e642 3fd4a91e5c6cd28e 3fdd9a54a2f15f90
+3fe0458294e445f7 3fe068290d556a82 3fe193168140df9b 3fe1d3f485c334cd
+3fe4ca29925f5f41 3fe827970f269a30 3fe914e30924145f 3fe92c8d7590da2c
+3ff0000000000000
+```
+
+At each edge test predecessor/exact/successor binary64 values and0/largest
+representable value below1. Test the all-zero conditional prior (a nonempty
+baseline with zero observed contact outs), single concentrated bins and extreme
+unsupported vectors. For seeds1/2/3/99, the selected original category and next
+RNG word must agree with the old sampler, including contact's rounding tail.
+
+**Synthetic policy:** first eight categories reuse the existing event producer
+unchanged. Ground candidate reuses its explicit ground throw. Fly/LineDrive/
+PopUp reuse contact-out geometry but remove ground facts/Assist and bind explicit
+air facts, exact PO to an eligible named before-defense actor and NoMisplay.
+Choose deterministic eligible defender ordinals6/7/2 respectively from before
+batting-order fielders excluding DH, then pitcher once (de-duplicate); these are
+fictional actor assignments, **not positions/range/arm estimates or inferred
+historical actors**. No actor RNG or separate fielding conversion. Residual
+keeps the modeled one batter-before-First retirement/held-runner geometry and
+PA/AB/NoHit, but removes ground/air facts and PO/Assist and uses Unknown review.
+Do not invent qualified defense or ER to fill its box. All types conserve the
+same physical score/base/out/batting cursor, including third-out/terminal frames.
+
+Extract the old initialized-state/apply/10,000-event resource-ceiling loop once
+into a shared example helper accepting one producer callback; the legacy game
+calls its existing sampler/producer, the opt-in game its joint sampler/policy.
+Do not replay an already sampled legacy game with another RNG pass, duplicate
+the full-game implementation, add retries or weaken the ceiling. Retain old
+seed/error behavior and exact parent/default trace/wire controls.
+
+Acceptance: genuine interface/semantic reds before behavior; pinned CSV/header/
+provenance/cohort rejection; exact boundary/RNG vectors; all5×8×3×2 policy frames
+plus DH/no-DH/actor/malformed-state controls; independent fielding/ER unknowns
+and no repaired prior actor uncertainty. At least2,000 paired seeded full games
+must terminate/deterministically repeat, codec-roundtrip/continue and conserve
+available statistics while matching legacy physics; confirm all five types
+actually occur.100,000 joint draws must satisfy the already fixed six-sigma+one
+count diagnostic against joint expectations, without retuning seeds/thresholds.
+Run full project/native/audit checks and exact six-path staged/frozen/parent
+compatibility/prose-link acceptance. No predictive, production, G1/G2 or rights
+claim; counts remain proxies and coarse runner outcomes remain synthetic.
+
+## Reproduce the opt-in experiment locally
+
+Internal offline pilot only; this is not a physical contact model or an MLB
+matchup. The default command stays unchanged. The new flag uses an independently
+validated logical projection of the accepted aggregate JSON, **not** a hash
+claim for arbitrary CSV bytes. The loader pins all26 fields/values and checks
+the legacy marginal vector; reordered rows are equivalent. Attribution's site
+quotes are literal in this flat key/value grammar (no general CSV escaping).
+
+Given the accepted artifact, make a **new** external file:
+
+```python
+from pathlib import Path
+import hashlib, json
+source = Path('/tmp/bbsim-joint-contact/counts-first.json')
+raw = source.read_bytes()
+sha = '1573fb845ac24d644ac722cc267b3729b2174fc114ff9f6748e2435502fe29ca'
+assert hashlib.sha256(raw).hexdigest() == sha
+report = json.loads(raw)
+provenance = report['provenance']
+fields = dict(format='joint-proxy-counts-v1', cohort_format=report['format'])
+for key in ('catalog_sha256', 'source_commit', 'snapshot_sha256',
+            'supplement_sha256', 'recipe_sha256'):
+    fields[key] = provenance[key]
+fields.update(artifact_sha256=sha, included_pa=sum(report['counts'].values()),
+              **report['exclusions'], attribution=provenance['attribution'],
+              **report['counts'], **report['contact_bins'])
+assert len(fields) == 26
+assert report['format'] == '2019-joint-contact-proxies-v1'
+assert sum(report['contact_bins'].values()) == report['counts']['contact_out'] == 82245
+assert all(',' not in str(v) and '\n' not in str(v) and '\r' not in str(v)
+           for v in fields.values())
+text = 'key,value\n' + ''.join(f'{k},{v}\n' for k, v in fields.items())
+assert dict(line.split(',', 1) for line in text.splitlines()[1:]) == {
+    k: str(v) for k, v in fields.items()}
+assert source.read_bytes() == raw
+output = Path('/tmp/joint-contact-counts-new.csv')
+with output.open('x') as stream:
+    stream.write(text)
+assert output.read_text() == text
+```
+
+```sh
+cargo run --offline --locked --manifest-path engine/Cargo.toml \
+  --example generated_game -- --baseline /tmp/bbsim-preview-2019-counts.csv \
+  --contact-counts /tmp/joint-contact-counts-new.csv --seed 1 --autoplay --trace
+cargo test --offline --locked --manifest-path engine/Cargo.toml \
+  --test joint_contact_preview -- --nocapture
+```
+
+Model/policy versions and explicit limitations appear in opt-in output; the
+existing nine probabilities remain unchanged and five conditional proxy
+probabilities/13 CDF edges are reported separately. Generic narration is not
+catch-specific; inspect native trace's explicit air facts/Unknown residual
+review. Residual PO/A/E/PB and relevant ER coverage remain unknown rather than
+being filled from the modeled physical out. No tag-up, sacrifice, multi-out,
+real-player, catch-opportunity or range/arm support is added. Browser/server
+integration remains out of this slice and previews remain stopped.
+
+Focused parent checks already cover boundary/RNG preservation,480 contact
+frames, all DH slots/no-DH pitcher catch, malformed/terminal state rejection,
+pinned loader/option boundaries and irreversible uncertainty. The preregistered
+2000 paired games and100000 draws are diagnostics of this synthetic experiment,
+not held-out accuracy. Fresh full/native/default-byte acceptance and the live
+status are recorded only in PROGRESS; do not infer signoff from this contract.
+
 ## Initial implementation boundary
 
 Start with the count recipe and tests, not the sampler. Its owned source paths
