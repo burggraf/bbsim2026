@@ -18,9 +18,12 @@ BINARY = ROOT / "engine/target/debug/examples/generated_game"
 
 
 @contextmanager
-def running(binary, baseline, contact_counts=None):
-    server = (make_server(binary, baseline) if contact_counts is None else
-              make_server(binary, baseline, contact_counts=contact_counts))
+def running(binary, baseline, contact_counts=None, lineup=None):
+    if lineup is not None:
+        server=make_server(binary,baseline,contact_counts=contact_counts,lineup=lineup)
+    else:
+        server = (make_server(binary, baseline) if contact_counts is None else
+                  make_server(binary, baseline, contact_counts=contact_counts))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -50,6 +53,70 @@ def joint_inputs(root):
 
 
 class LivePreviewTests(unittest.TestCase):
+    def test_real_selector_requires_configuration_and_uses_native_policy(self):
+        from test_visible_viewer import RECORD, joint_record, real_record
+        for source,selected in [(RECORD,'default'),(joint_record(),'joint'),(real_record(),'real')]:
+            page=build_live_viewer(source,1,joint_available=True,real_available=True)
+            self.assertIn(f'<option value="{selected}" selected>',page)
+            self.assertEqual(page.count(' selected>'),1)
+            self.assertIn('<option value="real"',page)
+        self.assertNotIn('<option value="real"',build_live_viewer(RECORD,1,joint_available=True))
+        with self.assertRaises(ValueError):build_live_viewer(RECORD,1,real_available=True)
+        with self.assertRaises(ValueError):make_server('/missing','/missing',lineup='/missing')
+
+    def test_real_lineup_http_full_page_matches_independent_native_all_models(self):
+        from preview.real_lineup import encode_witness
+        from test_real_lineup import witness
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);baseline,counts=joint_inputs(root);lineup=root/'lineup.tsv';lineup.write_text(encode_witness(witness()))
+            with running(BINARY,baseline,counts,lineup) as url:
+                for mode in ['default','joint','real']:
+                    for seed in [1,2,18446744073709551615,0]:
+                        args=[str(BINARY),'--baseline',str(baseline),'--seed',str(seed),'--autoplay','--trace']
+                        if mode!='default':args+=['--contact-counts',str(counts)]
+                        if mode=='real':args+=['--lineup',str(lineup)]
+                        native=subprocess.check_output(args,encoding='utf-8',timeout=30)
+                        try:
+                            response=urlopen(url+f'/?seed={seed}&model={mode}',timeout=30)
+                        except HTTPError as error:
+                            with error:self.fail(f'Expected200 for {mode}/{seed}, got {error.code}: {error.read().decode()}')
+                        with response:
+                            self.assertEqual(response.headers['Cache-Control'],'no-store')
+                            self.assertEqual(response.read().decode(),build_live_viewer(native,seed,joint_available=True,real_available=True))
+                default=build_live_viewer(subprocess.check_output([str(BINARY),'--baseline',str(baseline),'--seed','1','--autoplay','--trace'],encoding='utf-8',timeout=30),1,joint_available=True,real_available=True)
+                with urlopen(url+'/?seed=1',timeout=30) as response:self.assertEqual(response.read().decode(),default)
+
+    def test_real_queries_reject_paths_duplicates_and_extra_fields_before_engine(self):
+        with running('/missing','/missing','/missing','/missing') as url:
+            for route in ['/?model=real&model=real','/?model=/tmp/lineup.tsv','/?model=real&lineup=/tmp/file','/?model=real&seed=-1','/?model=unknown']:
+                with self.subTest(route=route),self.assertRaises(HTTPError) as error:urlopen(url+route,timeout=5)
+                with error.exception as response:self.assertEqual(response.code,400)
+        with running('/missing','/missing','/missing') as url:
+            with self.assertRaises(HTTPError) as error:urlopen(url+'/?model=real',timeout=5)
+            with error.exception as response:self.assertEqual(response.code,400)
+
+    def test_bad_real_lineup_returns_500_without_affecting_joint_or_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);baseline,counts=joint_inputs(root);lineup=root/'bad.tsv';lineup.write_text('bad')
+            with running(BINARY,baseline,counts,lineup) as url:
+                with self.assertRaises(HTTPError) as error:urlopen(url+'/?model=real',timeout=30)
+                with error.exception as response:
+                    self.assertEqual(response.code,500);self.assertIn('Could not generate game',response.read().decode())
+                for mode in ['joint','default']:
+                    with urlopen(url+'/?model='+mode,timeout=30) as response:
+                        self.assertEqual(response.code,200)
+                        self.assertIn(b'id="frame0"',response.read())
+
+    def test_real_startup_help_requires_joint_and_existing_lineup_before_bind(self):
+        help_result=subprocess.run(['python3','-Werror','-m','preview.serve','--help'],capture_output=True,timeout=5)
+        self.assertEqual(help_result.returncode,0);self.assertIn(b'--lineup',help_result.stdout)
+        with tempfile.TemporaryDirectory() as directory:
+            baseline,counts=joint_inputs(Path(directory))
+            command=['python3','-Werror','-m','preview.serve','--binary',str(BINARY),'--baseline',str(baseline),'--lineup',str(Path(directory)/'missing.tsv'),'--port','0']
+            for suffix,error in [([],b'requires --contact-counts'),(['--contact-counts',str(counts)],b'existing local lineup TSV')]:
+                result=subprocess.run(command+suffix,capture_output=True,timeout=5)
+                self.assertEqual(result.returncode,2);self.assertIn(error,result.stderr);self.assertNotIn(b'Ready:',result.stdout)
+
     def test_configured_selector_uses_loaded_native_model_and_preserves_default_api(self):
         from test_visible_viewer import RECORD, joint_record
         plain = build_live_viewer(RECORD, 1)

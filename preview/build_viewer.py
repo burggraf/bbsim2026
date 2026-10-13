@@ -12,6 +12,37 @@ def is_joint_record(source):
     return f'Model: {JOINT_MODEL}' in metadata.split(' | ')
 
 
+REAL_POLICY = 'station-held-positional-starting-preview-v1'
+
+
+def real_metadata(source):
+    metadata = next((line for line in source.splitlines() if line.startswith('Seed:')), '')
+    if f'Policy: {REAL_POLICY}' not in metadata.split(' | '):
+        return None
+    if not is_joint_record(source):
+        raise ValueError('Real lineup requires the joint model')
+    start = re.search(r'^(?:TRACE FORMAT:|COMMENTARY FORMAT:|Play [0-9]+ \|)', source, re.MULTILINE)
+    preamble = source[:start.start()] if start else source
+    if (re.findall(r'^LINEUP FORMAT: (.+)$', preamble, re.MULTILINE) != ['closed-starting-lineup-v1']
+            or re.findall(r'^Matchup: (.+)$', preamble, re.MULTILINE) != ['OAK201903200 | 2019-03-20 | TOK01']):
+        raise ValueError('Unsupported real-lineup metadata')
+    teams = re.findall(r'^TEAM (Away|Home): ([^\n]+)$', preamble, re.MULTILINE)
+    players = re.findall(r'^PLAYER (Away|Home) ([0-9]) (10|[1-9]) ([a-z0-9]+): ([^\n]+)$', preamble, re.MULTILINE)
+    if (len(teams) != 2 or dict(teams) != {'Away':'Seattle Mariners','Home':'Oakland Athletics'}
+            or len(re.findall(r'^TEAM ',preamble,re.MULTILINE)) != 2
+            or len(players) != 20 or len(re.findall(r'^PLAYER ',preamble,re.MULTILINE)) != 20
+            or len({p[3] for p in players}) != 20):
+        raise ValueError('Missing/invalid real starting records')
+    for side in ['Away','Home']:
+        rows = [p for p in players if p[0] == side]
+        if (len(rows) != 10 or {int(p[1]) for p in rows} != set(range(10))
+                or {int(p[2]) for p in rows} != set(range(1,11))
+                or any((p[1]=='0') != (p[2]=='1') or not p[4].strip()
+                       or any(ord(c)<32 or 127<=ord(c)<=159 for c in p[4]) for p in rows)):
+            raise ValueError('Invalid starting slot/position/name grain')
+    return dict(teams), players
+
+
 CSS = """
 *{box-sizing:border-box}body{margin:0;background:#101c25;color:#e9f0f2;font:16px system-ui,sans-serif}
 main{max-width:1060px;margin:auto;padding:30px 24px}header{display:flex;justify-content:space-between;align-items:center;gap:20px}
@@ -58,6 +89,10 @@ def build_viewer(source: str) -> str:
         raise ValueError("Final score must match the terminal play")
     metadata = next((line for line in source.splitlines() if line.startswith("Seed:")), "Seed not supplied")
     escape = html.escape
+    real = real_metadata(source)
+    labels = ('AWAY', 'HOME') if real is None else (real[0]['Away'], real[0]['Home'])
+    intro = ('Fictional equal teams, using the pooled 2019 league baseline. This is a visual simulation replay, '
+             'not yet realistic team matchups or managerial gameplay.')
     experiment = ''
     if is_joint_record(source):
         start = re.search(r'^(?:TRACE FORMAT:|COMMENTARY FORMAT:|Play [0-9]+ \|)', source, re.MULTILINE)
@@ -67,6 +102,24 @@ def build_viewer(source: str) -> str:
                       'Not calibrated player matchups or a fielding-skill model.</p>'
                       '<details id="model-details"><summary>Joint-contact assumptions and supplied provenance</summary>'
                       f'<pre>{escape(preamble)}</pre></details>')
+    if real is not None:
+        intro = ('Recorded Seattle–Oakland starting personnel, 2019-03-20 (TOK01). Generated exhibition, '
+                 'not the historical result. All players use identical pooled probabilities, '
+                 'not fitted player abilities or effective matchup hands. Closed starting roster: '
+                 'no substitutions or eligible bench/bullpen claim; starting pitchers stay all game. '
+                 'Coarse positional assignments are not historical ball locations or fielding skill.')
+        positions = ['','P','C','1B','2B','3B','SS','LF','CF','RF','DH']
+        tables = []
+        for side in ['Away','Home']:
+            rows = sorted((p for p in real[1] if p[0] == side),key=lambda p:int(p[1]))
+            cells = ''.join('<tr class="starting-player">'
+                + ''.join(f'<td>{escape(v)}</td>' for v in [p[1] if p[1]!='0' else 'Pitcher',
+                           positions[int(p[2])],p[4],p[3]])+'</tr>' for p in rows)
+            tables.append(f'<h3>{escape(real[0][side])} — {side}</h3><table><thead><tr>'
+                          '<th>Batting slot</th><th>Position</th><th>Name</th><th>Source ID</th>'
+                          f'</tr></thead><tbody>{cells}</tbody></table>')
+        experiment += ('<details id="starting-lineups"><summary>Recorded starting lineups and positions</summary>'
+                       + ''.join(tables) + '</details>')
     count = len(records)
     trace = list(re.finditer(r'^TRACE PLAY (\d+) BEGIN\n(.*?)^TRACE PLAY \1 END\n',
                              source, re.MULTILINE | re.DOTALL))
@@ -112,6 +165,9 @@ def build_viewer(source: str) -> str:
                        'boundaries; the event retains outs, runs, runner moves and credits. '
                        'Expand an entry for full lineups, pitchers, runner charges and all supplied facts.</p>'
                        + ''.join(entries))
+        if real is not None:
+            log_content = log_content.replace('fictional player IDs are shown.',
+                'supplied player names and source IDs are shown; raw native states keep source IDs.')
     else:
         log_content = ('<p>Detailed native before/after snapshots are unavailable in this older record. '
                        'This is the complete supplied summary; no missing states are inferred.</p>'
@@ -139,9 +195,9 @@ def build_viewer(source: str) -> str:
         stats = ('<details open><summary>Final line score and supplied-credit statistics</summary>'
                  f'<pre>{escape(source[final.start():])}</pre></details>') if index == count else ""
         return f'''<section class="frame" id="frame{index}" data-away="{away}" data-home="{home}">
-<div class="score"><div><div class="team">AWAY</div><div class="runs">{away}</div></div>
+<div class="score"><div><div class="team">{escape(labels[0])}</div><div class="runs">{away}</div></div>
 <div class="status">{escape(status)}<br><small>Play {index} / {count}</small></div>
-<div><div class="team">HOME</div><div class="runs">{home}</div></div></div>
+<div><div class="team">{escape(labels[1])}</div><div class="runs">{home}</div></div></div>
 <div class="layout"><div class="field"><svg viewBox="0 0 400 400" aria-label="Baseball field">
 <path d="M200 355L40 195Q200 -15 360 195Z" fill="#2c674c"/>
 <path d="M200 355L85 240L200 125L315 240Z" fill="#b18a5f"/>
@@ -161,7 +217,7 @@ def build_viewer(source: str) -> str:
 <title>Baseball Simulator — visible engine preview</title><style>{CSS}</style></head>
 <body><main><header><div><div class="eyebrow">2019 BASEBALL · ENGINE PREVIEW</div>
 <h1>Baseball Simulator</h1></div><div class="badge">Offline · Rust-engine replay</div></header>
-<p class="intro">Fictional equal teams, using the pooled 2019 league baseline. This is a visual simulation replay, not yet realistic team matchups or managerial gameplay.</p>
+<p class="intro">{escape(intro)}</p>
 <p class="intro">{escape(metadata)}</p>{experiment}{body}{game_log}
 <footer>Read-only playback: the browser does not generate outcomes. Statistics are supplied-credit totals, not a complete official box. No accuracy or finished-product claim.</footer>
 </main></body></html>'''

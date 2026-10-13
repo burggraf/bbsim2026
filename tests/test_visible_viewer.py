@@ -48,7 +48,52 @@ def joint_record():
     return prefix + native + plays
 
 
+def real_record():
+    from test_real_lineup import witness
+    source=joint_record().replace('Policy: station-held-joint-proxy-preview-v1','Policy: station-held-positional-starting-preview-v1')
+    w=witness();metadata='LINEUP FORMAT: closed-starting-lineup-v1\nMatchup: OAK201903200 | 2019-03-20 | TOK01\n'
+    for team in w['teams']:
+        metadata+=f"TEAM {team['side']}: {team['team_name']}\n"
+        field={p['player_id']:p for p in team['fielding']}
+        pitcher=field[team['pitcher_id']]
+        metadata+=f"PLAYER {team['side']} 0 1 {pitcher['player_id']}: {pitcher['name']}\n"
+        for p in team['batting_order']:
+            metadata+=f"PLAYER {team['side']} {p['slot']} {field[p['player_id']]['position']} {p['player_id']}: {p['name']}\n"
+    return source.replace('COMMENTARY FORMAT:',metadata+'COMMENTARY FORMAT:',1)
+
+
 class VisibleViewerTests(unittest.TestCase):
+    def test_real_policy_shows_bound_teams_roster_and_limits_not_fictional_claims(self):
+        page=build_viewer(real_record())
+        self.assertIn('Seattle Mariners',page)
+        self.assertIn('Oakland Athletics',page)
+        self.assertIn('id="starting-lineups"',page)
+        self.assertIn('Player a4',page)
+        self.assertIn('a4',page)
+        self.assertIn('DH',page)
+        self.assertIn('Closed starting roster',page)
+        self.assertIn('no substitutions',page)
+        self.assertIn('pooled probabilities',page)
+        self.assertNotIn('Fictional equal teams',page)
+        self.assertNotIn('fictional player IDs are shown',page)
+        self.assertEqual(page.count('class="starting-player"'),20)
+        self.assertIn('id="frame3" data-away="0" data-home="1"',page)
+        self.assertIn('<pre>'+html.escape(real_record().split('COMMENTARY FORMAT:',1)[0])+'</pre>',page)
+
+    def test_real_roster_c1_control_is_rejected(self):
+        with self.assertRaises(ValueError):build_viewer(real_record().replace('Player a1','Player'+chr(133)+'a1'))
+
+    def test_real_roster_is_escaped_and_missing_duplicate_or_unknown_metadata_fails(self):
+        source=real_record()
+        page=build_viewer(source.replace('Player a1','<Player & a1>'))
+        self.assertIn('&lt;Player &amp; a1&gt;',page)
+        self.assertNotIn('<Player & a1>',page)
+        for bad in [source.replace('PLAYER Away 1 7 a1: Player a1\n',''),
+                    source.replace('PLAYER Home 1 7 h1','PLAYER Home 1 7 a1'),
+                    source.replace('PLAYER Away 4 10 a4','PLAYER Away 4 9 a4'),
+                    source.replace('LINEUP FORMAT: closed-starting-lineup-v1','LINEUP FORMAT: unknown')]:
+            with self.subTest(bad=bad),self.assertRaises(ValueError):build_viewer(bad)
+
     def test_joint_assumptions_and_verbatim_preamble_are_visible_and_escaped(self):
         source = joint_record()
         page = build_viewer(source)

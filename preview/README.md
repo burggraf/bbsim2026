@@ -2,9 +2,10 @@
 
 A small local simulation interface, not the finished desktop game. The existing
 Rust generator creates each whole game; the browser displays its recorded plays,
-score, inning/outs, runners and final supplied-credit statistics. Fictional equal
-teams use the experimental pooled 2019 baseline. No real-player ratings,
-managerial choices or accuracy claim yet.
+score, inning/outs, runners and final supplied-credit statistics. By default,
+fictional equal teams use the experimental pooled 2019 baseline. The separate
+Seattle–Oakland starting-lineup opt-in below retains pooled probabilities, not
+real-player ratings. No managerial choices or accuracy claim yet.
 
 ## Run the interactive preview
 
@@ -92,6 +93,67 @@ cargo run --manifest-path engine/Cargo.toml --example generated_game -- \
 python3 preview/build_viewer.py /tmp/bbsim-game-record.txt /tmp/bbsim-game-preview.html
 open /tmp/bbsim-game-preview.html
 ```
+
+## Optional recorded Seattle–Oakland starting lineup
+
+This bounded experiment uses the [audited2019-03-20 starting witness](../docs/data-audits/2019-lineup-readiness.md),
+not that game's recorded outcomes. Source player IDs/order/pitchers/DH/positions
+initialize Rust **before** simulation; this is not renaming fictional players
+after a game. All20 players still use the same pooled joint probabilities.
+No player fitting, effective matchup hands, park effects or availability model.
+Closed starting roster: no substitutions or eligible bench/bullpen inference;
+starting pitchers stay all game, an explicitly unrealistic limitation.
+
+First reproduce the accepted audit report and joint counts outside Git. The
+exporter accepts only the pinned audit report, retains provenance/attribution,
+checks input drift and exclusively publishes complete bytes; existing outputs
+and repository outputs are refused. No new source query or download:
+
+```sh
+lineup_dir=$(mktemp -d /tmp/bbsim-seattle-oakland.XXXXXX)
+python3 -Werror -m preview.real_lineup \
+  /tmp/bbsim-lineup-readiness/report-first.json "$lineup_dir/starting.tsv"
+cargo build --offline --locked --manifest-path engine/Cargo.toml --example generated_game
+python3 -Werror -m preview.serve --baseline /tmp/bbsim-preview-2019-counts.csv \
+  --contact-counts /tmp/bbsim-joint-preview/counts.csv \
+  --lineup "$lineup_dir/starting.tsv" --port 8765
+```
+
+The configured-only **Seattle–Oakland starting-lineup experiment** selector adds
+`model=real`; no query still selects the default. Generate/New game preserve the
+selected mode and seed semantics. Expand **Recorded starting lineups and
+positions** for batting slots, positions, names and source IDs. Native radio
+calls show supplied names with `[source_id]`; raw states/statistic keys retain
+IDs. Expand the assumptions/provenance panel for the complete Rust preamble.
+Field markers retain short source IDs, linked by that roster panel.
+
+Deterministic coarse actors: catcher2 receives K; shortstop6 throws to first
+baseman3 on ground outs and receives ROE; center8/right9/third5 take held
+fly/line/pop catches. These are **modeled assignments**, not historical locations,
+throw histories, range/arm or fielding skills. Residual outs keep Unknown review
+and never invent a fielder/contact type. No player-probability/accuracy/complete
+box or production manager/gate claim; default and fictional joint modes remain.
+Input paths are operator startup settings, never request fields. `--lineup`
+requires joint counts; malformed runtime inputs fail visibly, never fall back.
+
+Server-free native inspection uses the same producer:
+
+```sh
+engine/target/debug/examples/generated_game \
+  --baseline /tmp/bbsim-preview-2019-counts.csv \
+  --contact-counts /tmp/bbsim-joint-preview/counts.csv \
+  --lineup "$lineup_dir/starting.tsv" --seed 1 --autoplay --trace \
+  > "$lineup_dir/game.txt"
+python3 preview/build_viewer.py "$lineup_dir/game.txt" "$lineup_dir/game.html"
+```
+
+A supplied report digest in a manually edited TSV does not authenticate its
+rows. The pinned exporter plus frozen artifacts/source reconciliation bind this
+local experiment to the audit. Do not present arbitrary edited inputs as audited
+lineups. Data/exports/pages stay outside Git and must not be redistributed.
+[Bounded contract](../docs/modeling/real-lineup-preview.md) fixes the checks;
+[live status](../docs/PROGRESS.md) distinguishes pending versus verified work.
+Stop the temporary server with Ctrl-C when finished.
 
 ## Verification
 

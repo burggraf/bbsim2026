@@ -222,24 +222,18 @@ pub fn event_for(state: &GameState, sample: Sample) -> Result<Event, String> {
     if (sample.outcome == Outcome::ContactOut) != sample.contact.is_some() {
         return Err("inconsistent outcome/contact pair".into());
     }
-    let mut event = preview::event_for(state, sample.outcome)?;
+    let event = preview::event_for(state, sample.outcome)?;
     let Some(kind) = sample.contact else {
         return Ok(event);
     };
     if kind == ContactKind::Ground {
         return Ok(event);
     }
-    event.ordinary_ground_throw = None;
-    event
-        .delta
-        .credits
-        .retain(|c| !matches!(c.kind, CreditKind::Assist | CreditKind::Putout));
-    event.fielding_review = FieldingReview::Unknown;
-    let (ordinal, contact) = match kind {
-        ContactKind::Fly => (6, AirContact::Fly),
-        ContactKind::LineDrive => (7, AirContact::LineDrive),
-        ContactKind::PopUp => (2, AirContact::PopUp),
-        ContactKind::Residual => return Ok(event),
+    let ordinal = match kind {
+        ContactKind::Fly => 6,
+        ContactKind::LineDrive => 7,
+        ContactKind::PopUp => 2,
+        ContactKind::Residual => return apply_contact(event, kind, None),
         ContactKind::Ground => unreachable!("ground path returned above"),
     };
     let defense = &state.teams[1 - state.half.offense()];
@@ -257,6 +251,32 @@ pub fn event_for(state: &GameState, sample: Sample) -> Result<Event, String> {
         .get(ordinal)
         .ok_or("no eligible synthetic defender")?
         .clone();
+    apply_contact(event, kind, Some(&fielder_id))
+}
+
+/// Shared held-catch/residual transformation; the producer supplies its actor.
+pub fn apply_contact(
+    mut event: Event,
+    kind: ContactKind,
+    fielder: Option<&str>,
+) -> Result<Event, String> {
+    if kind == ContactKind::Ground {
+        return Ok(event);
+    }
+    event.ordinary_ground_throw = None;
+    event
+        .delta
+        .credits
+        .retain(|c| !matches!(c.kind, CreditKind::Assist | CreditKind::Putout));
+    event.fielding_review = FieldingReview::Unknown;
+    let contact = match kind {
+        ContactKind::Fly => AirContact::Fly,
+        ContactKind::LineDrive => AirContact::LineDrive,
+        ContactKind::PopUp => AirContact::PopUp,
+        ContactKind::Residual => return Ok(event),
+        ContactKind::Ground => unreachable!("ground path returned above"),
+    };
+    let fielder_id = fielder.ok_or("missing supplied air fielder")?.to_string();
     event.delta.credits.push(Credit {
         player_id: fielder_id.clone(),
         kind: CreditKind::Putout,

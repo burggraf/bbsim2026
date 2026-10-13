@@ -160,6 +160,26 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 }
 
 pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
+    let defense = &state.teams[1 - state.half.offense()];
+    event_for_with_fielders(
+        state,
+        outcome,
+        [
+            &defense.batting_order[0],
+            &defense.batting_order[3],
+            &defense.batting_order[1],
+        ],
+    )
+}
+
+/// Producer-selected catcher, ground thrower/muff actor and first-base receiver.
+/// Physical rules/eligibility remain the pure engine's responsibility.
+pub fn event_for_with_fielders(
+    state: &GameState,
+    outcome: Outcome,
+    fielders: [&str; 3],
+) -> Result<Event, String> {
+    let [catcher, thrower, receiver] = fielders;
     if state.over {
         return Err("cannot generate after game end".into());
     }
@@ -229,14 +249,14 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
         if outcome == Outcome::Strikeout {
             credits.extend([
                 credit(&batter, CreditKind::Strikeout),
-                credit(&defense.batting_order[0], CreditKind::Putout),
+                credit(catcher, CreditKind::Putout),
             ]);
         } else {
             credits.extend([
                 credit(&batter, CreditKind::AtBat),
                 credit(&batter, CreditKind::NoHit),
-                credit(&defense.batting_order[3], CreditKind::Assist),
-                credit(&defense.batting_order[1], CreditKind::Putout),
+                credit(thrower, CreditKind::Assist),
+                credit(receiver, CreditKind::Putout),
             ]);
         }
     } else {
@@ -249,7 +269,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
             Outcome::Roe => credits.extend([
                 credit(&batter, CreditKind::AtBat),
                 credit(&batter, CreditKind::NoHit),
-                credit(&defense.batting_order[3], CreditKind::Error),
+                credit(thrower, CreditKind::Error),
             ]),
             _ => {
                 credits.push(credit(&batter, CreditKind::Hit));
@@ -316,13 +336,13 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
     let ordinary_ground_throw =
         (outcome == Outcome::ContactOut).then(|| bbsim_engine::OrdinaryGroundThrowFacts {
             batter_id: batter.clone(),
-            thrower_id: defense.batting_order[3].clone(),
-            receiver_id: defense.batting_order[1].clone(),
+            thrower_id: thrower.into(),
+            receiver_id: receiver.into(),
         });
     let caught_strikeout =
         (outcome == Outcome::Strikeout).then(|| bbsim_engine::CaughtStrikeoutFacts {
             batter_id: batter.clone(),
-            catcher_id: defense.batting_order[0].clone(),
+            catcher_id: catcher.into(),
         });
     let protected_award = matches!(outcome, Outcome::Walk | Outcome::Hbp).then(|| {
         bbsim_engine::ProtectedAwardFacts {
@@ -339,7 +359,7 @@ pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
     let muffed_ground_ball =
         (outcome == Outcome::Roe).then(|| bbsim_engine::MuffedGroundBallFacts {
             batter_id: batter.clone(),
-            fielder_id: defense.batting_order[3].clone(),
+            fielder_id: thrower.into(),
         });
     Ok(Event {
         kind,
@@ -380,7 +400,7 @@ pub fn game(seed: u64, baseline: &Baseline) -> Result<Vec<EventTransition>, Stri
     })
 }
 /// Shared fictional initialization/engine loop; the producer owns one modeled PA draw.
-pub fn game_with<F>(seed: u64, mut produce: F) -> Result<Vec<EventTransition>, String>
+pub fn game_with<F>(seed: u64, produce: F) -> Result<Vec<EventTransition>, String>
 where
     F: FnMut(&GameState, &mut Rng) -> Result<(Outcome, Event), String>,
 {
@@ -393,7 +413,7 @@ where
         bench: vec![],
         removed: vec![],
     };
-    let mut state = GameState {
+    let state = GameState {
         inning: 1,
         half: Half::Top,
         outs: 0,
@@ -402,6 +422,18 @@ where
         bases: [None, None, None],
         over: false,
     };
+    game_from(seed, state, produce)
+}
+
+/// One shared seeded loop for explicitly supplied initial personnel/state.
+pub fn game_from<F>(
+    seed: u64,
+    mut state: GameState,
+    mut produce: F,
+) -> Result<Vec<EventTransition>, String>
+where
+    F: FnMut(&GameState, &mut Rng) -> Result<(Outcome, Event), String>,
+{
     let mut rng = Rng::new(seed);
     let mut log = Vec::new();
     while !state.over {

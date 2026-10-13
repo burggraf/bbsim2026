@@ -8,6 +8,8 @@ mod joint;
 mod presentation;
 #[path = "support/preview.rs"]
 mod preview;
+#[path = "support/real_lineup.rs"]
+mod real;
 use std::io::{self, Write};
 fn option_error(error: String) -> ! {
     eprintln!(
@@ -17,8 +19,13 @@ fn option_error(error: String) -> ! {
 }
 fn main() -> io::Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (args, lineup_path) =
+        real::split_options(&args).unwrap_or_else(|error| option_error(error));
     let (args, contact_path) =
         joint::split_options(&args).unwrap_or_else(|error| option_error(error));
+    if lineup_path.is_some() && contact_path.is_none() {
+        option_error("--lineup requires --contact-counts".into());
+    }
     let options = match cli::parse(&args) {
         Ok(Some(options)) => options,
         Ok(None) => {
@@ -35,12 +42,25 @@ fn main() -> io::Result<()> {
                 .map_err(io::Error::other)
         })
         .transpose()?;
+    let lineup = lineup_path
+        .map(|path| {
+            real::Lineup::read_tsv(&std::fs::read_to_string(path)?).map_err(io::Error::other)
+        })
+        .transpose()?;
     let (log, model_version, policy_version) = if let Some(model) = &joint {
-        (
-            joint::game(options.seed, model),
-            joint::MODEL_VERSION,
-            joint::POLICY_VERSION,
-        )
+        if let Some(lineup) = &lineup {
+            (
+                lineup.game(options.seed, model),
+                joint::MODEL_VERSION,
+                real::POLICY_VERSION,
+            )
+        } else {
+            (
+                joint::game(options.seed, model),
+                joint::MODEL_VERSION,
+                joint::POLICY_VERSION,
+            )
+        }
     } else {
         (
             preview::game(options.seed, &baseline),
@@ -50,7 +70,11 @@ fn main() -> io::Result<()> {
     };
     let log = log.map_err(io::Error::other)?;
     let mut output = io::stdout().lock();
-    writeln!(output,"EXPERIMENTAL GENERATED GAME — fictional equal teams, pooled 2019 baseline; not calibrated.")?;
+    if lineup.is_some() {
+        writeln!(output,"EXPERIMENTAL GENERATED GAME — recorded Seattle/Oakland starting personnel, pooled 2019 probabilities; not calibrated or the historical result.")?;
+    } else {
+        writeln!(output,"EXPERIMENTAL GENERATED GAME — fictional equal teams, pooled 2019 baseline; not calibrated.")?;
+    }
     writeln!(
         output,
         "Seed: {} | Model: {} | Policy: {} | RNG: {}",
@@ -84,9 +108,16 @@ fn main() -> io::Result<()> {
     } else {
         writeln!(output,"Coarse ground/contact outs and station advancement; no player ratings, fatigue, DP, tactics or runner-only mechanisms yet.\n")?;
     }
+    if let Some(lineup) = &lineup {
+        lineup.write_preamble(&mut output)?;
+    }
     if options.trace {
         game_trace::write(&log, &mut output)?;
-        game_trace::write_commentary(&log, &mut output)?;
+        if let Some(lineup) = &lineup {
+            game_trace::write_commentary_named(&log, &mut output, &lineup.names())?;
+        } else {
+            game_trace::write_commentary(&log, &mut output)?;
+        }
     }
     presentation::present(&log, &mut io::stdin().lock(), &mut output, options.autoplay)
 }

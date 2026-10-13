@@ -183,15 +183,43 @@ fn call(t: &EventTransition) -> String {
 
 /// Concise native presentation alongside (not replacing) the immutable debug snapshots.
 pub fn write_commentary(log: &[EventTransition], output: &mut dyn Write) -> io::Result<()> {
+    write_commentary_named(log, output, &std::collections::BTreeMap::new())
+}
+
+/// Optional token-exact display lookup; snapshots retain canonical identities.
+pub fn write_commentary_named(
+    log: &[EventTransition],
+    output: &mut dyn Write,
+    names: &std::collections::BTreeMap<String, String>,
+) -> io::Result<()> {
+    let display = |text: &str| {
+        if names.is_empty() {
+            return text.to_string();
+        }
+        let mut result = String::new();
+        for part in
+            text.split_inclusive(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        {
+            let token = part
+                .trim_end_matches(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+            if let Some(name) = names.get(token) {
+                result.push_str(&format!("{name} [{token}]"));
+            } else {
+                result.push_str(token);
+            }
+            result.push_str(&part[token.len()..]);
+        }
+        result
+    };
     writeln!(output, "COMMENTARY FORMAT: radio-v1")?;
     for (i, t) in log.iter().enumerate() {
-        writeln!(output, "CALL PLAY {}: {}", i + 1, call(t))?;
+        writeln!(output, "CALL PLAY {}: {}", i + 1, display(&call(t)))?;
         writeln!(
             output,
             "RECAP PLAY {}: Before: {} → After: {}",
             i + 1,
-            compact(t.before()),
-            compact(t.after())
+            display(&compact(t.before())),
+            display(&compact(t.after()))
         )?;
     }
     Ok(())
