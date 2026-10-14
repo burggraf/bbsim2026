@@ -402,3 +402,29 @@ is pending; no push or public release. Retained reproduction recipes:
 `v2/final/full-checks.sh`, `v2/final/compatibility.py`; all frozen before v2
 measurement. Outputs are exclusive: reproduction requires new output names, not
 overwriting evidence. Temporary artifact availability remains a reproduction risk.
+
+## Verified local code checkpoint — 2026-10-14
+
+`proc_e293` exit0/23s checks the documentation-only acceptance update, all219
+index-work blobs/217 non-doc reviewed bytes/137 frozen sources/133 prior/213
+protected/eleven inputs/eight recipes/all completed-full pins/prefix/521 links and
+cached whitespace. All21 acceptance-only fragments actually consumed. Accepted
+full-index diff1,471 lines/115,809 bytes, SHA256
+`b49ef80975598360b95d745cb7f3cbfcfcd61dea4a3858479ee1a3d3d9b159e6`,
+tree `407846b68f001c0a8e5590a71c9382357796d82d`.
+
+`proc_9a5c` exit0/21s, `python3 -Werror /tmp/bbsim-hit-training-counts/v2/checkpoint.py`:
+fresh exact precommit/local commit/postverification succeeds. Code
+`8a0d3254433c77bb7743e5d6dfd9050c75aecc0d`, parent
+`2759d98454d50ce8972c2f5d997577c8da26602a`, six paths/1,404 insertions/five deletions.
+Commit tree/full-index diff/all219 committed-index-work blobs/frozen source and
+completed evidence exactly equal the accepted stage. Clean main ahead12, origin
+unchanged, no push. Complete short stdout consumed, stderr empty;12 completed
+checkpoint artifacts pinned outside Git. Source/test freeze137 remains intact.
+
+The bounded prerequisite is **done**; this two-document handoff records its code
+checkpoint, not a new model or integration approval. Handoff stage/commit/postcheck
+is separate and pending. Next inspect actual generated-hit callers and separately
+preregister a bounded common-mechanism prerequisite before implementation. Keep
+all three variants and terminal refusal; no default choice, calibration, manager,
+playable-mode integration, G1–G3 signoff, transfer or public release is inferred.
