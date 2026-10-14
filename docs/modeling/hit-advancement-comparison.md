@@ -287,8 +287,9 @@ only external artifact routing/current protected pins/new Python compilation and
 added four-mode compatibility; no inherited check removed or replaced.
 
 `bash /tmp/bbsim-hit-comparison/final/full-checks.sh`, `proc_a7f2` exit0/280s.
-All raw1,810 stdout/544 stderr lines inspected through complete nontruncating
-bounded ranges, not a grep-only review. Offline locked build/test, fmt and
+Raw1,810 stdout/544 stderr lines retained SHA-pinned. Earlier large tool views
+were truncated and alone did not establish complete inspection; the local handoff
+below records the later complete nontruncating reread, not a grep-only review. Offline locked build/test, fmt and
 all-target Clippy `-D warnings` pass;35 full unfiltered Rust summaries total609
 passing tests. Werror Python discovery356 methods (`29.172s`), compilation,
 native1,350 individual cases, source69 metrics/five transition fixtures/54 metric
@@ -322,3 +323,32 @@ Only Markdown handoff/acceptance observations follow frozen verification. Renew
 exact staged diff/tree/completed stage pins before local commit; verify parent/
 committed-index-work/tested/protected/input/evidence equality and clean main afterward.
 No push, data publication or routine approval pause authorized by this checkpoint.
+
+## Verified local checkpoint and inspection clarification — 2026-10-13
+
+`proc_a434` doc-only accepted snapshot preparation exit0/1s; exact211 work-index
+blobs/131 tested/129 prior/207 protected/ten inputs/512 links and12 completed
+stage/acceptance pins. Inspected85-line Markdown delta equals retained acceptance
+patch; both executable/test diff sections remain byte-identical. Fresh precommit,
+local commit and postcheck `proc_0853` exit0/2s establish code
+**`f3a11d7391350b714e27c1028473cb2946af6b54`**, parent `95150b6`, exact four paths,
+accepted1,160-line/105,272-byte full-index diff/tree and all211 committed-index-work
+blobs; tested/protected/input/evidence pins unchanged, clean main ahead8/no push.
+All six short stdout/stderr logs consumed; stderrs empty. This handoff changes only
+the two Markdown paths; no executable/test/input/query mutation or remeasurement.
+
+Earlier large source/log/diff tool responses were truncated; requesting ranges
+was not proof of complete visible inspection. During this handoff, all1,131 staged
+diff lines are re-read in15 genuinely nontruncating chunks (maximum8,723 bytes),
+and all1,810 stdout/544 stderr lines in17 chunks (maximum10,999 bytes). Complete
+Rust609/Python356/native/source/compatibility evidence and expected negative-control
+HTTP/generation failures inspected, not suppressed. This later inspection establishes
+complete current evidence consumption; it does not retroactively certify the earlier
+truncated views or expand parent/author acceptance into independent review.
+
+Bounded comparison is done. Production generator/model selection and managerial
+integration remain NO-GO. Next concrete action is separately preregister the bounded
+native joint-hit projection/sampling prerequisite, including explicit modeled causal
+facts, terminal hit-value/run restrictions and preservation of legacy modes, before
+any new sampler test/code/measurement; this comparison authorizes none of those
+changes by score ranking. No consequential maintainer-input blocker identified.
