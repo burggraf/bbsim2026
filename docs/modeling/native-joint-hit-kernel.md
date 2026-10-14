@@ -242,3 +242,26 @@ Acceptance-only delta is confined to the two owned Markdown paths; original
 preregistration prefix, frozen executable/test bytes and staged code sections remain
 exact. Receipt `/tmp/bbsim-native-joint-hit-kernel/acceptance.json` binds the reviewed
 diff/tree. Fresh precommit/local commit/postcheck still required; no push.
+
+## Verified local code checkpoint and documentation handoff
+
+`proc_b905` exit0/1s confirms exact acceptance-only two-doc delta/all214 work-index
+blobs/preserved frozen/protected/input/233 stage/15 completed checkpoint pins/prefix/
+516 links, source/test staged sections byte-identical. All10 lossless acceptance-
+delta parts actually consumed. Diff check caught `native-joint-hit-kernel.md:245:
+new blank line at EOF`; removed only the extra newline before fresh checks. Original
+failure/delta retained; no warning/test suppression or source/test mutation.
+
+`proc_8275` exit0/2s fresh precommit/local commit/postcheck passes; code
+`d417b7f2061bc3e6851d7c7277ea7b8682a75f12`, parent `e1ccd7cf98ee3b4811997fc8d964838d55e22df9`,
+exact four paths/tree/all214 committed-index-work blobs/133 tested/131 prior/210
+protected/ten inputs/78+233+15 completed pins/prefix/516 links/clean main ahead10;
+no push. All four short commit/post stdout/stderr logs actually consumed, stderrs
+empty. Source/tests unchanged from diagnostic/full verification through author
+acceptance/commit. This establishes only the standalone synthetic prerequisite.
+
+This two-doc handoff records the verified code checkpoint; its separate exact
+stage/commit/postcheck must verify documentation-only scope. Next is a separately preregistered training-
+count export/native loader, not automatic real-data fitting, model selection or
+producer/manager integration. Original protocol prefix remains byte-exact. External
+`/tmp` evidence can expire; no data/large caches/logs/helpers committed or published.
