@@ -267,3 +267,22 @@ duplicate disclaimer are corrected in the final documentary delta. Exact final
 reading/stage/links/pins/tree and verified local checkpoint remain pending.
 Bounded parent-author acceptance is conditional on those checks; no independent
 review, calibration, producer integration, E-03/G1/G2/G3/full-box or release signoff.
+
+## Verified local functional checkpoint — 2026-10-15
+
+`proc_fa3a` exit0/35s verifies commit
+`63410b4ed75d3de458f06592cd3a4dc1d2457802`,parent4b2ab88,
+tree8f4aa5ec1de38a64447166b7c7fa65cc74838aef;8 files/1609 insertions/33 deletions.
+Exact accepted diffSHA7ef685a2425887d4871ad7d3439921479a4340c6830cc3668b8db2a86fcfc41f;
+246 HEAD/index/work blobs;238 protected/154 tested sources/13 inputs/all183
+closed artifacts unchanged. Full681 Rust/424 Werror Python plus inherited suites
+are the fresh precommit execution; postcommit hash checks certify identical
+executable bytes, not an invented rerun. 557 prose links and both exact final
+documentary substitutions reconstructed; all7 final small views actually read.
+`code-post-v1.json`, `author-acceptance-v1.json`, `final-doc-delta-v1/read.json`
+under the task evidence root are the scoped authorities. Clean main ahead11;
+origin804a72d unchanged; no push. Parent author accepts only this preregistered
+supplied-facts nonterminal slice. No independent review, producer integration,
+manager approval, calibration, E-03/G1/G2/G3/full-box or release completion.
+The separate two-document handoff records this verified functional checkpoint;
+its own reading/stage/checkpoint proof is separate from the full suite above.
