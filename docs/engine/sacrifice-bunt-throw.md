@@ -406,3 +406,32 @@ No local commit/push claim before native completion and `code-post.json`.
 After that checkpoint,inspect the existing ordinary GIDP canonical/fielding path
 and preregister its next bounded direct force/relay prerequisite before any new
 test/code/measurement. Do not reinterpret this bunt or integrate manager policy.
+
+## Verified local checkpoint and documentary handoff — 2026-10-15
+
+`proc_cf32` observed exit0/21s. Exact two-document acceptance delta22082 bytes,
+SHA`ae7f736346e32b64fd3cc296eb14d6dcb8a5ec4d6b3a7b21b34f363e92aaf0d4`,
+actually read through five complete grouped views/all23 fragment contents. Final
+tree proved by temporary index,not a standalone reread of the composed final diff:
+`760d9a933cd5b578cf3693c07fd39a5022af3d0a`;115573-byte diff SHA
+`c6b4ff2d10948f7ec5498275d7290ac4298aba912aecf9e980f5a478b47671a2`.
+21 closed acceptance artifacts pinned;all scope/source/input/evidence/recipe/
+protected/prefix/link/index/work/HEAD/origin/whitespace checks pass.
+
+`proc_06f6` observed exit0/26s. Verified local commit
+`6f367c0928b2b28df2522e87cc4d83a16a9fd703`,parenta3e7f39,subject
+`Validate explicit nonterminal sacrifice-bunt throw facts`. All243 committed/index/
+work blobs exact,234 protected,clean main ahead8/origin804a72d unchanged/no push.
+Complete short acceptance/commit/postreceipt outputs read;external authority
+`/tmp/bbsim-sacrifice-bunt-throw/code-post.json`. Full-v2 application's152 sources
+remain exact;no test/behavior changes after verification. No source data committed.
+
+This final two-document handoff records actual postreceipt and marks the bounded
+task done;only source-equality/documentary checks are newly applicable. Historical
+HEAD-specific freeze helpers intentionally binda3e7f39:do not blindly rerun them
+at6f367c0,waive assertions or invent a new full-test pass. Verify preserved raw
+manifests plus the actual code-post tree/blob proof and exact documentary delta.
+The next ready task is E-03-ground-force-double-play inspection/preregistration;
+no implementation or new measurement yet. Existing qualified GIDP/contact facts
+and causal/fielding unknowns must be read before choosing scope. Parent-author
+acceptance remains bounded;manager NO-GO and E-03/G1/G2/G3/release status unchanged.
