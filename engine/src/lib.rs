@@ -8,6 +8,7 @@ mod caught;
 mod codec;
 mod contact;
 mod ground;
+mod ground_force_double_play;
 mod ground_muff;
 mod pitch;
 mod protected_award;
@@ -18,6 +19,9 @@ mod sacrifice_fly;
 mod sole_home_run;
 mod sole_safe_hit;
 mod walkoff_hit;
+pub use ground_force_double_play::{
+    apply_with_ground_force_double_play_facts, GroundForceDoublePlayFacts,
+};
 pub use reducer::{
     apply, apply_with_caught_sacrifice_fly_facts, apply_with_sacrifice_bunt_throw_facts,
     apply_with_walkoff_hit_facts,
@@ -537,6 +541,7 @@ pub struct EventTransition {
     walkoff_hit: Option<WalkoffHitFacts>,
     caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
     sacrifice_bunt_throw: Option<SacrificeBuntThrowFacts>,
+    ground_force_double_play: Option<GroundForceDoublePlayFacts>,
 }
 
 impl std::fmt::Debug for EventTransition {
@@ -554,6 +559,9 @@ impl std::fmt::Debug for EventTransition {
         }
         if let Some(facts) = &self.sacrifice_bunt_throw {
             transition.field("sacrifice_bunt_throw", facts);
+        }
+        if let Some(facts) = &self.ground_force_double_play {
+            transition.field("ground_force_double_play", facts);
         }
         transition.finish()
     }
@@ -697,6 +705,7 @@ impl EventTransition {
             .or_else(|| self.sole_home_run_fielding())
             .or_else(|| self.muffed_ground_fielding())
             .or_else(|| self.sacrifice_bunt_throw_fielding())
+            .or_else(|| self.ground_force_double_play_fielding())
     }
 
     /// Event-local protected-award PO/A; missing cause/review stays unknown.
@@ -797,6 +806,26 @@ impl EventTransition {
         caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
         sacrifice_bunt_throw: Option<SacrificeBuntThrowFacts>,
     ) -> Result<Self, TransitionError> {
+        Self::try_new_with_ground_force_inner(
+            before,
+            event,
+            after,
+            walkoff_hit,
+            caught_sacrifice_fly,
+            sacrifice_bunt_throw,
+            None,
+        )
+    }
+
+    fn try_new_with_ground_force_inner(
+        before: GameState,
+        event: Event,
+        after: GameState,
+        walkoff_hit: Option<WalkoffHitFacts>,
+        caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
+        sacrifice_bunt_throw: Option<SacrificeBuntThrowFacts>,
+        ground_force_double_play: Option<GroundForceDoublePlayFacts>,
+    ) -> Result<Self, TransitionError> {
         rules::validate_snapshot(&before)?;
         rules::validate_snapshot(&after)?;
         if before.over {
@@ -811,6 +840,7 @@ impl EventTransition {
             walkoff_hit.as_ref(),
             caught_sacrifice_fly.as_ref(),
             sacrifice_bunt_throw.as_ref(),
+            ground_force_double_play.as_ref(),
         )?;
         rules::validate_fielding_review(&event)?;
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
@@ -1014,6 +1044,7 @@ impl EventTransition {
             walkoff_hit,
             caught_sacrifice_fly,
             sacrifice_bunt_throw,
+            ground_force_double_play,
         })
     }
     pub fn before(&self) -> &GameState {

@@ -468,6 +468,13 @@ binary_struct!(SacrificeBuntThrowFacts {
     receiver_id,
     judgment
 });
+binary_struct!(GroundForceDoublePlayFacts {
+    batter_id,
+    forced_runner_id,
+    initial_fielder_id,
+    pivot_id,
+    first_receiver_id
+});
 binary_struct!(ProtectedAwardFacts { batter_id });
 binary_struct!(SoleHomeRunFacts { batter_id });
 binary_struct!(SoleSafeHitFacts { batter_id });
@@ -494,7 +501,9 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = if self.sacrifice_bunt_throw.is_some() {
+        let mut out = if self.ground_force_double_play.is_some() {
+            b"BBE30".to_vec()
+        } else if self.sacrifice_bunt_throw.is_some() {
             b"BBE29".to_vec()
         } else if self.caught_sacrifice_fly.is_some() {
             b"BBE28".to_vec()
@@ -520,10 +529,15 @@ impl EventTransition {
         if let Some(facts) = &self.sacrifice_bunt_throw {
             facts.encode(&mut out);
         }
+        if let Some(facts) = &self.ground_force_double_play {
+            facts.encode(&mut out);
+        }
         out
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
-        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE29") {
+        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE30") {
+            (payload, 30)
+        } else if let Some(payload) = bytes.strip_prefix(b"BBE29") {
             (payload, 29)
         } else if let Some(payload) = bytes.strip_prefix(b"BBE28") {
             (payload, 28)
@@ -561,16 +575,22 @@ impl EventTransition {
         } else {
             None
         };
+        let ground_force_double_play = if version == 30 {
+            Some(GroundForceDoublePlayFacts::decode(&mut reader)?)
+        } else {
+            None
+        };
         if !reader.0.is_empty() {
             return Err(TransitionError::InvalidEncoding);
         }
-        Self::try_new_with_bunt_inner(
+        Self::try_new_with_ground_force_inner(
             before,
             event,
             after,
             walkoff_hit,
             caught_sacrifice_fly,
             sacrifice_bunt_throw,
+            ground_force_double_play,
         )
     }
 }

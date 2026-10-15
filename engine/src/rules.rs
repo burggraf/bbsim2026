@@ -395,7 +395,15 @@ pub(crate) fn batter_charge<'a>(
     walkoff_hit: Option<&super::WalkoffHitFacts>,
     caught_sacrifice_fly: Option<&super::CaughtSacrificeFlyFacts>,
     sacrifice_bunt_throw: Option<&super::SacrificeBuntThrowFacts>,
+    ground_force_double_play: Option<&super::GroundForceDoublePlayFacts>,
 ) -> Result<&'a str, TransitionError> {
+    if let Some(facts) = ground_force_double_play {
+        if walkoff_hit.is_some() || caught_sacrifice_fly.is_some() || sacrifice_bunt_throw.is_some()
+        {
+            return Err(TransitionError::UnsupportedRule);
+        }
+        super::ground_force_double_play::validate(before, event, facts)?;
+    }
     if let Some(facts) = sacrifice_bunt_throw {
         if walkoff_hit.is_some() || caught_sacrifice_fly.is_some() {
             return Err(TransitionError::UnsupportedRule);
