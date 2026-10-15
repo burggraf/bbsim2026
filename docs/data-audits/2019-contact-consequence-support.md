@@ -234,8 +234,9 @@ occurrence fit,producer integration or gate acceptance at this checkpoint.
   `proc_f40a` exit0/2s:45 methods pass in1.600s under `python3 -Werror -m unittest
   discover -s tests -p 'test_contact_consequence_support.py' -v`.
   The initial display was truncated:the earlier complete50-line reading claim
-  is withdrawn. Later bounded reads1–20/21–40/41–51 actually cover the complete
-  51-line stream. Larger historical red/full logs were not all human-read.
+  is withdrawn. The replacement complete51-line claim is also withdrawn:some
+  later bounded displays remained truncated. Receipts do not establish complete
+  human reading. Larger historical red/full logs were not all human-read.
 - `proc_7875` exit0/2s:separate accepted-input native-failure and private copied-
   export corruption controls each pass. First uses injected subprocess exit23,
   executes no query,retains partial subordinate evidence and leaves final audit
@@ -369,11 +370,13 @@ skip/project executable change. `proc_3348` exit0/2s reconciles full execution,
 fff884f30824773efdbbde29caf65f37e27078df7683fcb218cf94d3aea8a1b8;
 stderr109930/SHAff7889a4e33784a4994b0d855db287ef137e17c091aa16d745e62350bb9f5a40.
 
-All61 bounded views of complete122657-byte private five-path diff were actually
-read (SHA2756879b1d9d95d1eebb996322a4cb265c9f70c4edd2730cf209791e6a64934f).
-Actual index unchanged;private whitespace gate passed. No substantive executable
-issue identified. Eight exact bounded raw views and complete51-line historical
-core stream read;0.014s/0.015s earlier focused timings checked against raw tails.
+The122657-byte private five-path diff has61 views
+(SHA2756879b1d9d95d1eebb996322a4cb265c9f70c4edd2730cf209791e6a64934f).
+The claim that all61 were completely read is withdrawn:long-line displays were
+truncated. Actual index unchanged;private whitespace gate passed. No substantive
+executable issue was identified in bounded author inspection;this is not proof of
+complete textual inspection. Eight bounded raw views were inspected;the complete
+51-line core-reading claim is withdrawn.0.014s/0.015s timings were checked in tails.
 Receipts: `inspection-consumed-v1.json`,`raw-reading-consumed-v1.json` and three
 bounded original records in `literal-samples-v1.json`. This does not claim every
 historical raw log was read completely. Final documentary delta and actual-index/
@@ -394,9 +397,10 @@ all source/input/closed evidence/21 historical bindings,563 prose links and exac
 253 HEAD/index/work blobs. Code checkpoint **`d27d81e2c625906601f91b47bab969a4454e75c9`**,
 parent0d8fbbe90e8241db62880cb856a03460567175f5,tree555e9ca072c2922755bccd5993c9eb78b7bf8407;
 five-path full-index diffSHA47c59151cece6efe3a69a6369f3b5ae0a035a7339d670e76cf0b98ad8e3d6acd.
-All14 exact final-document delta views were actually read (38299 bytes,
-SHA25f647dde301795c57f68315fab7ea155426e8af877ef9ace77cf7f596c5e7cd),in addition
-to61 original scope views and8 bounded raw views.159 tested/156 prior sources,
+The final-document delta is38299 bytes/14 views,
+SHA25f647dde301795c57f68315fab7ea155426e8af877ef9ace77cf7f596c5e7cd.
+Its complete-reading claim is withdrawn:some long-line displays were truncated.
+159 tested/156 prior sources,
 248 protected paths,13 input rows/37 recipes/311 closed artifacts unchanged.
 Authority `code-post-v1.json` and `author-acceptance-v1.json` under evidence root.
 Clean main ahead15,origin804a72d unchanged;no push.
@@ -406,5 +410,33 @@ report and fail-closed pipeline. The zero-literal-vector result remains unchange
 no canonical causal evidence is fabricated. Separate F-01-contact-endpoint-semantics
 is ready for preregistration/authentication;it may explain source representations
 using cached definitions but must not silently reclassify these measurements.
-This two-doc handoff has not yet passed its own postcommit identity gates. No
+The two-doc handoff passed its identity gates as53532d0 (`proc_5203`0/30s),but
+its all11-views-completely-read receipt is also withdrawn:views001/002 had truncated
+displays. Original receipts and committed bytes remain preserved,not rewritten.
+
+### Reading-claim correction — 2026-10-15
+
+Hashes/receipts establish byte identity,not complete human reading. Withdraw the
+complete61-scope/14-final-doc/11-handoff-view and51-core-line claims above. This
+qualifies prior parent-author acceptance:full-reading acceptance is pending bounded
+remediation;code/measurement/checkpoint identities and687 Rust/470 Python execution
+results are unchanged. No new suite run or independent review is claimed. Complete
+missing changed text must be inspected without truncation before continuing to
+endpoint-semantics tests/counts. This is a separate two-document correction,not a
+new audit predicate,source/test/code/input edit,transfer or gate waiver. No
 independent review,occurrence fit,producer/manager integration or gate signoff.
+
+Subsequent remediation actually read all14 pages of91 unique literal fragments,
+each at most1000 characters. Exact concatenation reconstructs all80458 original
+bytes across13 paths:scope views017/018/019/021,final-doc views001/002/004,
+handoff views000/001/002/003/004,and core-v5.stderr. Identical fragments were
+read once;this is not a claim each original view was separately redisplayed in
+full. Page000 was consumed as lines1–80 and81–101;all other pages were complete.
+`reading-correction-v1/{manifest.json,pages.json,consumed.json}` under evidence
+root records exact source/object hashes,reconstruction and the limited reading
+claim. Core-v5 is45 historical tests/1.600s,not the later46-method execution.
+No substantive issue was found in this reinspection. Original complete-reading
+claims remain withdrawn;subsequent reading cannot make them historically true.
+The remaining scoped text was inspected earlier;this remediation addresses known
+truncated displays,not a new independent review or full historical-log reading.
+Complete-reading remediation is inspected;its two-doc checkpoint is pending.
