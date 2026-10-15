@@ -324,7 +324,56 @@ legacy records.116 closed full artifacts pinned in `completed-v1.sha256`;
 `full-result-v1.json` SHA256
 `188298018bb18452d9acb61444061a33e849687fcf1ce7aa719453131470ba8b`.
 This is a fresh full source execution,not a postcommit/identity-check substitute.
-Source/input/protected bytes remain unchanged. Final documentary inspection,
-exact tree/index/whitespace/link gates and local code checkpoint remain pending.
-Parent-author descriptive scope only;no independent review,fitting,producer
-integration,manager or broader engine/model/release gate acceptance.
+Source/input/protected bytes remain unchanged. Subsequent final documentary
+inspection and code checkpoint evidence follow. Parent-author descriptive scope
+only;no independent review,fitting,producer integration,manager or broader
+engine/model/release gate acceptance.
+
+## Verified local code checkpoint and handoff
+
+Code commit `d59ea44627c3b5e80e29e967569da9337a13ea9d`,parentfa5c6e6,
+tree`0e7530e86e2007007d843fd37737056a1e505db8`:four owned files only,726
+insertions/11 deletions. SQL51/report draft288 lines plus subsequent changes
+inspected;12 initial ledger and10 final two-doc delta views displayed individually
+at <=900 characters. The latter cover8859 changed-text characters/45 spans.
+The original inspection-consumed-v1.json claim of complete test reading is
+withdrawn:145–168/169–192 displays truncated. Original receipt stays unchanged.
+AFTER code commit and handoff-prepare-v1,145–192 genuinely reread in six complete
+eight-line spans;inspection-qualification-v2.json records subsequent reading,
+not retroactive precommit truth. Tested source bytes never changed. Unchanged
+full-index context and entire historical raw logs are NOT claimed as read.
+
+Two checkpoint-helper defects and their original raw failures remain separate
+from tested SQL/source behavior:
+
+1. `proc_9113`1/3s refuses before staging/commit because its naïve link parser
+   treats a code-block regex `[1-9]+` as a local prose target. Existing protected
+   documentation was not edited. Two-method tiny regression `proc_716b` has one
+   failing assertion and an already-green real broken-link refusal. Corrected
+   helper reuses predecessor fenced/inline-code exclusions;`proc_6654` passes both.
+2. `proc_4d55`1/4s creates the correct code commit,then fails final link-count
+   equality because its file list appends the now-tracked report twice. No retry,
+   amend or rollback of that commit. `proc_6041` reproduces two failing tracked-
+   identity subtests in one method;pretracking control already green. Identity-
+   only recovery deduplicates document identities. `proc_bbef` passes the unchanged
+   one-method tracking and two-method prose/refusal tests in0.006/0.007s.
+
+`proc_ced6`0/2s verifies the EXISTING commit with no Git/repository mutation:
+256 exact HEAD/index/work blobs,252 protected paths,161 sources/all159 exact
+prior rows,21 task inputs,6 definitions,46 recipes/all37 original rows,116 full
+and79 measurement artifacts,21 original historical bindings and568 unique local
+prose links. Clean main ahead18,origin804a72d unchanged,no push. Authoritative
+`/tmp/bbsim-contact-endpoint-semantics/code-post-v3.json` binds
+`author-acceptance-v2.json` and fresh full-result-v1 evidence. Its recovery recipe
+separately authenticates failed-checkpoint-v1.sha256/failed-postcommit-v2.sha256;
+original failures are preserved,not directly hash-bound in that post JSON.
+Postcommit verification is identity evidence,NOT another suite execution.
+
+**Bounded parent-author descriptive acceptance GO.** No independent review or
+causal/occurrence-rate certificate. Canonical Rust remains sole mechanics and
+after-state authority;manager/E-03/G1/G2/G3/full-box/season/desktop/release gates
+are unchanged. Next separate scope is F-01-contact-proxy-qualification:preregister
+source geometry/opportunity descriptors with explicit observed/inferred/unavailable
+limits before any new tests/counts. Do not rewrite the predecessor literal
+findings,fill missing source children or silently treat compatible geometry as
+clean named causal episodes. No fitting or producer integration authorized here.
