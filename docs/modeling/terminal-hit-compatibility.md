@@ -201,3 +201,29 @@ and completion handoff; all138 executable/test bytes remain the fully tested fre
 Local code commit/postcheck and completion handoff are the remaining checkpoint
 steps. Next scope direction only: source terminal coverage/unknown-facts inspection
 before separately preregistering any terminal resolver; no guard removal authorized.
+
+## Verified local checkpoint and completion handoff — 2026-10-14
+
+Accepted stage `proc_f288` exits0: four bounded doc edits/two fragments actually
+read,534 links/222 exact blobs/138 tested sources unchanged. Accepted639-line/
+57,687-byte diff SHA `441b76a5d34595b509343dc82fbaad9724334546eb0edd369d5b4e781104d9af`,
+tree `2ee9c7680c06ba39e27356dee4626c0873186186`.
+
+`proc_3696` exits0/19s and verifies local code
+**`ff793aca4d0c784d54fa574a25259043a40d6993`**, parent
+`d2b91c402e8a3507a7ea31a3e0a0ceb0e7d9fa80`, message
+`Characterize terminal joint-hit compatibility without changing producers`.
+Three files/598 insertions/two deletions; exact accepted tree/full diff and all222
+committed-index-work blobs,138 frozen executable/test sources/protected/input/
+completed evidence; clean main ahead3, unchanged origin `c1266ef`, not pushed.
+`code-post.json` is the actual postcheck receipt; complete short commit stdout
+read and stderr empty.23 completed checkpoint artifacts pinned only after the
+writer finished, never active self-logs.
+
+This two-doc completion handoff records the actual code receipt/done status/next
+action; it changes none of the fully tested138 executable/test bytes. Its own
+actual commit and clean-state postcheck belong in external `handoff-post.json`,
+not an infinite self-referential extra docs commit. No independent review or gate
+signoff. Both Bottom>=9 refusals and manager NO-GO stay unchanged. Next direction
+only: inspect source terminal coverage/unknown crossing and stop-time facts,
+then separately preregister the next prerequisite; none is implemented yet.
