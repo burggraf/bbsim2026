@@ -113,7 +113,7 @@ sampled-versus-credited hit-value distinction.
 ## Test-first observations
 
 `proc_dacd` exits1: missing query FileNotFoundError; initial interface trace
-retained externally (only first95 lines inspected so far, no full-read claim).
+retained externally (only first95 lines inspected at that checkpoint).
 `proc_ef7a` exits1 after1s: minimal literal SELECT interface runs;14 assertion
 failures across six methods expose absent ordering/filtering/join/context/score
 guards. Four methods already pass, not regression credit. Complete semantic log
@@ -190,7 +190,7 @@ not a correct substitute for richer terminal facts. Any future seam must keep
 counted runs, winning-runner advance, authorized natural-course batter touches,
 and physical continuation/stop facts distinct; this audit selects no such policy.
 
-## Fresh verification; acceptance still pending
+## Fresh verification at publication (historical acceptance-pending checkpoint)
 
 Final140 executable/query/test sources frozen after staged new-file whitespace;
 all138 prior sources and221 protected paths unchanged. `proc_2921` exits0/270s:
@@ -240,3 +240,48 @@ natural-course batter-touch evidence before changing canonical hit validation;
 inspect payload/codec/callers first. Keep physical continuation, counted runs,
 scorer credit and sampled hit type separate. The audit cannot supply a clock or
 select an automatic terminal policy; both kernel/dispatcher refusals stay.
+
+## Completion inspection and bounded acceptance — 2026-10-14
+
+Published code checkpoint `804a72d7b08d02daaa66bee1669cb8d925916d18` is verified
+on origin/main with clean225-blob committed/index/work equality in external
+`publication-post.json`. It was deliberately published incomplete; the
+acceptance-pending descriptions above record that historical checkpoint.
+
+Continuation consumed **178 lossless approximately1,800-character fragments**:
+58 full stdout,47 full stderr,31 missing-interface stderr,9 semantic stderr and
+33 complete published-diff fragments. Exact reassembly/hashes verified in
+`continuation-inspection/manifest.json`; actual consumption ranges in
+`continuation-inspection/consumed.json`. This is actual reading, not credit for
+fragment creation, hashes or an extracted status index. Inherited diagnostic
+stdout393 lines/stderr2 lines were already fully consumed. All expected generation
+failures/HTTP500/400 controls and the stale219-count echo are accounted for.
+The missing-query run has32 interface/subtest errors, distinct from the14
+semantic assertions across six methods; four methods were already green.
+No assertion, validator, executable, query or evidence recipe changed.
+
+`continuation-guard-probe.json` additionally records native synthetic duplicate/
+orphan refusals with **no hit candidates**, plus a Single duplicate control;
+all refuse with the intended join error. Already-green characterization, not a
+new regression claim. Full query/tests and the external measurement caller were
+read; complete consumption of every inherited source file is **not** certified
+by this acceptance. In particular, the original protocol's blanket complete-read
+wording cannot be substantiated by truncated historical responses; preserve its
+exact bytes but qualify that inspection claim here. Frozen inherited validators
+and authenticated/reconciled exports provide the separately stated evidence.
+
+All140 tested sources,138 prior sources,221 original protected blobs,eleven
+inputs,six recipes,38 completed measurement pins and52 completed-full pins
+rechecked unchanged after publication. Only this document and PROGRESS change
+for completion; continuation protects all223 other blobs. Original preregistration
+prefix remains exact. Full executable verification is the unchanged `proc_2921`
+run above; publication also reran10 focused tests/1.823s and Werror compilation.
+No replacement smoke suite, regenerated outcomes or claim of independent review.
+
+**Parent-author acceptance: GO for this descriptive F-01 source-audit deliverable
+only.** No observed query/test defect; dataset timing/stop-position/cause gaps
+remain reported. No model selection, terminal policy, canonical expansion,
+producer integration, source transfer, release or G1/G2/G3/manager approval.
+Completion doc commit/exact tree/225 committed-index-work blobs/clean-state
+postverification are recorded in external `completion-post.json`; do not infer
+a further push. Next scope requires its own preregistration before tests/code.
