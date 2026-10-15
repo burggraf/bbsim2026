@@ -15,7 +15,8 @@ mod reducer;
 mod rules;
 mod sole_home_run;
 mod sole_safe_hit;
-pub use reducer::apply;
+mod walkoff_hit;
+pub use reducer::{apply, apply_with_walkoff_hit_facts};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TeamSide {
@@ -371,6 +372,21 @@ pub struct NamedBaseTouch {
     pub runner_id: String,
     pub base: Destination,
 }
+/// Explicit same-play natural-course timing, never inferred from endpoint order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NaturalCourseTouchTiming {
+    Unknown,
+    ByWinningRun,
+    AfterWinningRun,
+}
+/// Supplied ordinary safe-hit winning-run and legitimate batter-touch facts.
+/// Not a source certificate, sampled hit value or full physical movement history.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WalkoffHitFacts {
+    pub winning_runner_id: String,
+    pub batter_touch: NamedBaseTouch,
+    pub timing: NaturalCourseTouchTiming,
+}
 /// Qualification-threshold assertions, not a complete movement/touch history.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BalkProgressFacts {
@@ -503,14 +519,43 @@ pub enum TransitionError {
 }
 
 /// Construct once; only immutable access is exposed to consumers.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct EventTransition {
     before: GameState,
     event: Event,
     after: GameState,
+    walkoff_hit: Option<WalkoffHitFacts>,
+}
+
+impl std::fmt::Debug for EventTransition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut transition = f.debug_struct("EventTransition");
+        transition
+            .field("before", &self.before)
+            .field("event", &self.event)
+            .field("after", &self.after);
+        if let Some(facts) = &self.walkoff_hit {
+            transition.field("walkoff_hit", facts);
+        }
+        transition.finish()
+    }
 }
 
 impl EventTransition {
+    /// Explicit supplied terminal facts; None is unknown, not inferred chronology.
+    pub fn walkoff_hit_facts(&self) -> Option<&WalkoffHitFacts> {
+        self.walkoff_hit.as_ref()
+    }
+
+    pub fn try_new_with_walkoff_hit_facts(
+        before: GameState,
+        event: Event,
+        after: GameState,
+        facts: WalkoffHitFacts,
+    ) -> Result<Self, TransitionError> {
+        Self::try_new_inner(before, event, after, Some(facts))
+    }
+
     /// Named direct-catch PO/A, only with whole-chance review; not a full box.
     pub fn ordinary_air_fielding(&self) -> Option<accounting::FieldingContribution> {
         if self.event.fielding_review != FieldingReview::NoMisplay {
@@ -704,6 +749,15 @@ impl EventTransition {
         event: Event,
         after: GameState,
     ) -> Result<Self, TransitionError> {
+        Self::try_new_inner(before, event, after, None)
+    }
+
+    fn try_new_inner(
+        before: GameState,
+        event: Event,
+        after: GameState,
+        walkoff_hit: Option<WalkoffHitFacts>,
+    ) -> Result<Self, TransitionError> {
         rules::validate_snapshot(&before)?;
         rules::validate_snapshot(&after)?;
         if before.over {
@@ -712,7 +766,7 @@ impl EventTransition {
         let offense = before.half.offense();
         rules::validate_participants(&before, &event)?;
         let is_pa = event.kind.is_pa();
-        let batter_charge = rules::batter_charge(&before, &event)?;
+        let batter_charge = rules::batter_charge(&before, &event, walkoff_hit.as_ref())?;
         rules::validate_fielding_review(&event)?;
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
         rules::validate_event_shape(&event)?;
@@ -859,7 +913,7 @@ impl EventTransition {
         {
             return Err(TransitionError::IllegalCredit);
         }
-        rules::validate_hit_value(&before, &event)?;
+        rules::validate_hit_value_with_walkoff(&before, &event, walkoff_hit.as_ref())?;
         rules::validate_strikeout_eligibility(&before, &event)?;
         if count(CreditKind::Walk)
             + count(CreditKind::HitByPitch)
@@ -912,6 +966,7 @@ impl EventTransition {
             before,
             event,
             after,
+            walkoff_hit,
         })
     }
     pub fn before(&self) -> &GameState {

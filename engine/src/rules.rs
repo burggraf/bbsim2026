@@ -392,11 +392,15 @@ pub(crate) fn validate_held_batter_before_first(
 pub(crate) fn batter_charge<'a>(
     before: &'a GameState,
     event: &Event,
+    walkoff_hit: Option<&super::WalkoffHitFacts>,
 ) -> Result<&'a str, TransitionError> {
+    if walkoff_hit.is_some() && event.sole_safe_hit.is_none() {
+        return Err(TransitionError::UnsupportedRule);
+    }
     // Known bound causal facts precede unrelated occurrence/charge uncertainty.
     super::air::validate(before, event)?;
     super::ground_muff::validate(before, event)?;
-    super::sole_safe_hit::validate(before, event)?;
+    super::sole_safe_hit::validate_with_walkoff(before, event, walkoff_hit)?;
     super::sole_home_run::validate(before, event)?;
     super::protected_award::validate(before, event)?;
     super::caught::validate(before, event)?;
@@ -868,8 +872,20 @@ pub(crate) fn walk_classification(
 /// Rule 9.06: supplied scorer value is not inferred from final advancement.
 /// This first subset lacks retirement location/touch and misplay-cause facts.
 pub(crate) fn validate_hit_value(before: &GameState, event: &Event) -> Result<(), TransitionError> {
+    validate_hit_value_with_walkoff(before, event, None)
+}
+
+pub(crate) fn validate_hit_value_with_walkoff(
+    before: &GameState,
+    event: &Event,
+    walkoff_hit: Option<&super::WalkoffHitFacts>,
+) -> Result<(), TransitionError> {
     let Some(value) = hit_value_credit(event)? else {
-        return Ok(());
+        return if walkoff_hit.is_some() {
+            Err(TransitionError::UnsupportedRule)
+        } else {
+            Ok(())
+        };
     };
     let batter = event
         .delta
@@ -887,9 +903,15 @@ pub(crate) fn validate_hit_value(before: &GameState, event: &Event) -> Result<()
     if value > destination {
         return Err(TransitionError::IllegalCredit);
     }
+    // Explicit facts narrow only the supported ordinary sole-safe-hit family.
+    // None retains the exact conservative legacy ceiling partition below.
+    if let Some(facts) = walkoff_hit {
+        super::walkoff_hit::validate(before, event, batter, value, facts)?;
+    }
     // Ordinary walk-off value cannot exceed the winning runner's advance.
     // Without order facts, test every possible winner rather than Vec order.
-    if before.inning >= 9
+    if walkoff_hit.is_none()
+        && before.inning >= 9
         && before.half == Half::Bottom
         && before.score[1] <= before.score[0]
         && before.score[1]

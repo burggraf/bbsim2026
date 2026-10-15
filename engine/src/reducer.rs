@@ -2,13 +2,31 @@
 //! canonical validator; no partial update is returned on failure.
 use super::*;
 
+/// Apply a fully specified ordinary safe-hit ending with supplied chronology facts.
+/// Does not choose a winner, clip movements or reclassify a sampled hit.
+pub fn apply_with_walkoff_hit_facts(
+    before: &GameState,
+    event: Event,
+    facts: WalkoffHitFacts,
+) -> Result<EventTransition, TransitionError> {
+    apply_inner(before, event, Some(facts))
+}
+
 /// Derive the after-state from a before-state and explicit event effects.
 /// This does not sample outcomes or infer missing decisions.
 pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, TransitionError> {
+    apply_inner(before, event, None)
+}
+
+fn apply_inner(
+    before: &GameState,
+    event: Event,
+    walkoff_hit: Option<WalkoffHitFacts>,
+) -> Result<EventTransition, TransitionError> {
     if before.teams.iter().any(|team| !rules::valid_team(team)) {
         return Err(TransitionError::InvalidState);
     }
-    rules::batter_charge(before, &event)?;
+    rules::batter_charge(before, &event, walkoff_hit.as_ref())?;
     let mut after = before.clone();
     let offense = before.half.offense();
     if event.kind.is_pa() {
@@ -133,7 +151,7 @@ pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, Transi
         }
         rules::Ending::Continue => after.outs = outs,
     }
-    EventTransition::try_new(before.clone(), event, after)
+    EventTransition::try_new_inner(before.clone(), event, after, walkoff_hit)
 }
 
 fn base_index(base: Base) -> usize {

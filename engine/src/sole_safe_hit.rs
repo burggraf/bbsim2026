@@ -2,6 +2,14 @@
 use super::*;
 
 pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), TransitionError> {
+    validate_with_walkoff(before, event, None)
+}
+
+pub(crate) fn validate_with_walkoff(
+    before: &GameState,
+    event: &Event,
+    walkoff_hit: Option<&WalkoffHitFacts>,
+) -> Result<(), TransitionError> {
     let Some(facts) = &event.sole_safe_hit else {
         return Ok(());
     };
@@ -84,7 +92,7 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
     super::balk::preflight(before, event)?;
     super::pitch::preflight(before, event)?;
     super::contact::validate(before, event)?;
-    rules::validate_hit_value(before, event)?;
+    rules::validate_hit_value_with_walkoff(before, event, walkoff_hit)?;
     if event.two_out_contact.is_some() || event.single_delivery.is_some() || event.balk.is_some() {
         return Err(TransitionError::UnsupportedRule);
     }

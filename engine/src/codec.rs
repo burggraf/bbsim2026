@@ -1,4 +1,5 @@
-//! Versions 25 (legacy) and 26 (explicit air catch). Little-endian, length-prefixed UTF-8;
+//! Versions 25 (legacy), 26 (air catch) and 27 (ordinary walk-off hit facts).
+//! Little-endian, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
 
@@ -420,6 +421,12 @@ binary_struct!(SingleDeliveryFacts {
     recovery
 });
 binary_struct!(NamedBaseTouch { runner_id, base });
+binary_enum!(NaturalCourseTouchTiming { Unknown = 0, ByWinningRun = 1, AfterWinningRun = 2 });
+binary_struct!(WalkoffHitFacts {
+    winning_runner_id,
+    batter_touch,
+    timing
+});
 binary_struct!(BalkProgressFacts {
     batter_first_touch,
     runner_next_touches
@@ -469,7 +476,9 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = if self.event.ordinary_air_catch.is_some() {
+        let mut out = if self.walkoff_hit.is_some() {
+            b"BBE27".to_vec()
+        } else if self.event.ordinary_air_catch.is_some() {
             b"BBE26".to_vec()
         } else {
             b"BBE25".to_vec()
@@ -480,29 +489,39 @@ impl EventTransition {
         if let Some(facts) = &self.event.ordinary_air_catch {
             facts.encode(&mut out);
         }
+        if let Some(facts) = &self.walkoff_hit {
+            facts.encode(&mut out);
+        }
         out
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
-        let (payload, air) = if let Some(payload) = bytes.strip_prefix(b"BBE26") {
-            (payload, true)
+        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE27") {
+            (payload, 27)
+        } else if let Some(payload) = bytes.strip_prefix(b"BBE26") {
+            (payload, 26)
         } else {
             (
                 bytes
                     .strip_prefix(b"BBE25")
                     .ok_or(TransitionError::InvalidEncoding)?,
-                false,
+                25,
             )
         };
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;
         let mut event = Event::decode(&mut reader)?;
         let after = GameState::decode(&mut reader)?;
-        if air {
+        if version == 26 {
             event.ordinary_air_catch = Some(OrdinaryAirCatchFacts::decode(&mut reader)?);
         }
+        let walkoff_hit = if version == 27 {
+            Some(WalkoffHitFacts::decode(&mut reader)?)
+        } else {
+            None
+        };
         if !reader.0.is_empty() {
             return Err(TransitionError::InvalidEncoding);
         }
-        Self::try_new(before, event, after)
+        Self::try_new_inner(before, event, after, walkoff_hit)
     }
 }
