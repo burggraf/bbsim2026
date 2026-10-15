@@ -404,3 +404,33 @@ unchanged; the earlier test-file identity is preserved, not rebaselined.
 inspection and verified local checkpoints. This does not certify causal mechanisms,
 fit/select a model, integrate a producer, satisfy independent review, waive any
 E-03/G1/G2/G3/manager/season/desktop/release/licensing gate, or authorize a push.
+
+## Verified local code checkpoint and handoff boundary
+
+`proc_0150` exits 0/8s and creates/inspects existing commit
+**`c00886492ed9eb994f55cf86769886cbfecd0593`**, parent
+`b118b5f173d17e7598dbc34e18b86e28c511ba92`, tree
+`4253910a60ba412f90d6e3bbb6b7a73da688a712`. Exactly the four owned paths changed:
+259 exact HEAD/index/work blobs, 255 protected prior paths, 163 sources, 75 recipes,
+574 prose links and clean main ahead 20; origin `804a72d` unchanged, no push.
+Native commit/postcheck streams and `code-created-v4.json`, `code-post-v4.json`
+are retained under the work root. Postchecks are **identity gates, not new suites**.
+
+All **63 baseline document views plus two exact live-status correction views**
+were actually displayed before staging, and full current document bytes reconstruct
+exactly. `final-inspection-v4.json` binds candidate/source hashes, qualified current
+source reading, native full-v3 evidence and actual 65-view composite reading.
+Earlier superseded candidates/reading claims and all original failures remain
+intact. The completed bounded audit is **parent-author descriptive GO only**;
+there is no independent review, source repair, fitted model, producer integration
+or broader gate approval. Documentation-only handoff protects the other 257 paths;
+its eventual authority is `handoff-v1/post.json`. These artifacts/commits are local,
+not a claim of remote publication or durable public evidence distribution.
+
+The next ready task is **F-01-contact-proxy-joint-cohort**: inspect actual existing
+joint classifiers and producer callers, then preregister a read-only same-source
+family-membership/category/context reconciliation before new tests or counts.
+This is not already an accepted contract or permission to fit/integrate a model;
+it must retain original source units, splits, guards and unknowns and must not
+promote PA frames into tactical opportunities/rates. No new measurement has been
+performed for that task. See PROGRESS for the single live resume action.
