@@ -394,7 +394,14 @@ pub(crate) fn batter_charge<'a>(
     event: &Event,
     walkoff_hit: Option<&super::WalkoffHitFacts>,
     caught_sacrifice_fly: Option<&super::CaughtSacrificeFlyFacts>,
+    sacrifice_bunt_throw: Option<&super::SacrificeBuntThrowFacts>,
 ) -> Result<&'a str, TransitionError> {
+    if let Some(facts) = sacrifice_bunt_throw {
+        if walkoff_hit.is_some() || caught_sacrifice_fly.is_some() {
+            return Err(TransitionError::UnsupportedRule);
+        }
+        super::sacrifice_bunt::validate(before, event, facts)?;
+    }
     if walkoff_hit.is_some() && (event.sole_safe_hit.is_none() || caught_sacrifice_fly.is_some()) {
         return Err(TransitionError::UnsupportedRule);
     }
