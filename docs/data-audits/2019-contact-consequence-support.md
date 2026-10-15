@@ -386,3 +386,25 @@ preregistered read-only endpoint/absent-batter representation-semantics audit us
 already cached source definitions,not occurrence fitting or invented retirement
 facts. Source semantics/inferences must be labeled explicitly before modeling;
 this task does not authorize transfer,production integration or a gate waiver.
+
+### Verified local checkpoint and bounded acceptance
+
+`proc_677f` exit0/31s completes private AND actual-index whitespace/scope gates,
+all source/input/closed evidence/21 historical bindings,563 prose links and exact
+253 HEAD/index/work blobs. Code checkpoint **`d27d81e2c625906601f91b47bab969a4454e75c9`**,
+parent0d8fbbe90e8241db62880cb856a03460567175f5,tree555e9ca072c2922755bccd5993c9eb78b7bf8407;
+five-path full-index diffSHA47c59151cece6efe3a69a6369f3b5ae0a035a7339d670e76cf0b98ad8e3d6acd.
+All14 exact final-document delta views were actually read (38299 bytes,
+SHA25f647dde301795c57f68315fab7ea155426e8af877ef9ace77cf7f596c5e7cd),in addition
+to61 original scope views and8 bounded raw views.159 tested/156 prior sources,
+248 protected paths,13 input rows/37 recipes/311 closed artifacts unchanged.
+Authority `code-post-v1.json` and `author-acceptance-v1.json` under evidence root.
+Clean main ahead15,origin804a72d unchanged;no push.
+
+Parent-author accepts only this reproducible read-only label/representation-gap
+report and fail-closed pipeline. The zero-literal-vector result remains unchanged;
+no canonical causal evidence is fabricated. Separate F-01-contact-endpoint-semantics
+is ready for preregistration/authentication;it may explain source representations
+using cached definitions but must not silently reclassify these measurements.
+This two-doc handoff has not yet passed its own postcommit identity gates. No
+independent review,occurrence fit,producer/manager integration or gate signoff.
