@@ -866,3 +866,345 @@ fn conditional_dispatch_refuses_bad_draws_samples_states_and_terminal_boundaries
         }
     }
 }
+
+// Preregistered existing-behavior diagnostic; no terminal producer or policy.
+fn terminal_fixture(mask: u8, outs: u8, inning: u16, deficit: u8) -> GameState {
+    let mut state = initial();
+    state.half = Half::Bottom;
+    state = occupied(state, usize::from(mask));
+    state.inning = inning;
+    state.outs = outs;
+    state.score = [u16::from(deficit), 0];
+    for (i, runner) in state.bases.iter_mut().enumerate() {
+        if let Some(runner) = runner {
+            runner.responsible_pitcher = format!("prior-pitcher-{i}");
+        }
+    }
+    state
+}
+fn terminal_candidate(before: &GameState, value: u8, vector: &[u8]) -> bbsim_engine::Event {
+    use bbsim_engine::{Delta, Event, FieldingReview, Participants, SoleSafeHitFacts};
+    let batter = before.teams[1].batting_order[0].clone();
+    let pitcher = before.teams[0].pitcher.clone();
+    let credit = |player: &str, kind| Credit {
+        player_id: player.to_owned(),
+        kind,
+    };
+    let destinations = [
+        Destination::First,
+        Destination::Second,
+        Destination::Third,
+        Destination::Home,
+    ];
+    let mut moves = vec![RunnerMove {
+        runner: Runner {
+            player_id: batter.clone(),
+            responsible_pitcher: pitcher.clone(),
+        },
+        from: Base::Plate,
+        to: destinations[usize::from(vector[0] - 1)],
+    }];
+    let mut credits = vec![
+        credit(&batter, CreditKind::PlateAppearance),
+        credit(&batter, CreditKind::Hit),
+        credit(
+            &batter,
+            if value == 1 {
+                CreditKind::Single
+            } else {
+                CreditKind::Double
+            },
+        ),
+    ];
+    let mut runs = 0;
+    let mut position = 1;
+    for (i, origin) in [Base::First, Base::Second, Base::Third]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(runner) = &before.bases[i] {
+            let target = destinations[usize::from(vector[position] - 1)];
+            moves.push(RunnerMove {
+                runner: runner.clone(),
+                from: origin,
+                to: target,
+            });
+            if target == Destination::Home {
+                runs += 1;
+                credits.extend([
+                    credit(&runner.player_id, CreditKind::Run),
+                    credit(&batter, CreditKind::Rbi),
+                ]);
+            }
+            position += 1;
+        }
+    }
+    Event {
+        kind: EventKind::PlateAppearance,
+        participants: Participants {
+            batter: Some(batter.clone()),
+            pitcher,
+        },
+        delta: Delta {
+            moves,
+            outs: 0,
+            runs,
+            credits,
+            changes: vec![],
+            third_out: None,
+        },
+        fielding_review: FieldingReview::NoMisplay,
+        sole_safe_hit: Some(SoleSafeHitFacts { batter_id: batter }),
+        two_out_contact: None,
+        single_delivery: None,
+        balk: None,
+        ordinary_ground_throw: None,
+        caught_strikeout: None,
+        protected_award: None,
+        sole_home_run: None,
+        muffed_ground_ball: None,
+        ordinary_air_catch: None,
+    }
+}
+fn check_terminal_positive(transition: &bbsim_engine::EventTransition, walkoff: bool) {
+    let before = transition.before();
+    let event = transition.event();
+    let after = transition.after();
+    assert_eq!(after.over, walkoff);
+    assert_eq!(after.inning, before.inning);
+    assert_eq!(after.half, before.half);
+    assert_eq!(after.outs, before.outs);
+    assert_eq!(after.score, [before.score[0], u16::from(event.delta.runs)]);
+    assert_eq!(after.teams[1].next_batter, 1);
+    assert_eq!(apply(before, event.clone()).unwrap(), *transition);
+    assert_eq!(
+        bbsim_engine::EventTransition::from_bytes(&transition.to_bytes()).unwrap(),
+        *transition
+    );
+    let stats =
+        bbsim_engine::accounting::derive_accounting(std::slice::from_ref(transition)).unwrap();
+    let batter = &stats.batters[1]["Home-1"];
+    assert_eq!(
+        (
+            batter.plate_appearances,
+            batter.credited_hits,
+            batter.credited_rbi
+        ),
+        (1, 1, u32::from(event.delta.runs))
+    );
+    assert_eq!(batter.classified_rbi, Some(u32::from(event.delta.runs)));
+    assert_eq!(batter.credited_hit_breakdown.as_ref().unwrap().hits(), 1);
+    let value = event
+        .delta
+        .moves
+        .iter()
+        .find(|movement| movement.from == Base::Plate)
+        .unwrap()
+        .to;
+    assert_eq!(
+        batter
+            .credited_hit_breakdown
+            .as_ref()
+            .unwrap()
+            .total_bases(),
+        if value == Destination::First { 1 } else { 2 }
+    );
+    assert_eq!(stats.pitchers[0]["Away-pitcher"].batters_faced, 1);
+    assert_eq!(stats.pitchers[0]["Away-pitcher"].runs_allowed, 0);
+    for movement in &event.delta.moves {
+        if movement.from != Base::Plate && movement.to == Destination::Home {
+            assert_eq!(
+                stats.batters[1][&movement.runner.player_id].credited_runs,
+                1
+            );
+            assert_eq!(
+                stats.pitchers[0][&movement.runner.responsible_pitcher].runs_allowed,
+                1
+            );
+        }
+        if let Some(index) = [Destination::First, Destination::Second, Destination::Third]
+            .iter()
+            .position(|target| *target == movement.to)
+        {
+            assert_eq!(after.bases[index].as_ref(), Some(&movement.runner));
+        }
+    }
+}
+#[test]
+fn terminal_compatibility_full_vectors_have_exact_canonical_partition_and_order_invariance() {
+    use bbsim_engine::TransitionError;
+    let mut logical = 0;
+    let mut attempts = 0;
+    let mut rows = 0;
+    for value in [1, 2] {
+        for mask in 0..8 {
+            let origins: Vec<u8> = (1..=3)
+                .filter(|origin| mask & (1 << (origin - 1)) != 0)
+                .collect();
+            let vectors = dispatch_support(value, mask);
+            for outs in 0..3 {
+                for inning in [9, 10] {
+                    for deficit in 0..4 {
+                        let before = terminal_fixture(mask, outs, inning, deficit);
+                        let original = before.clone();
+                        // continue, walkoff, IllegalCredit, UnsupportedRule; overlapping reasons.
+                        let mut counts = [0_u64; 7];
+                        for vector in &vectors {
+                            let event = terminal_candidate(&before, value, vector);
+                            let runs = event.delta.runs;
+                            let winning = runs > deficit;
+                            let ceilings: Vec<u8> = origins
+                                .iter()
+                                .zip(&vector[1..])
+                                .filter_map(|(origin, target)| (*target == 4).then_some(4 - origin))
+                                .collect();
+                            let definite =
+                                winning && ceilings.iter().all(|ceiling| value > *ceiling);
+                            let ambiguous = winning
+                                && !definite
+                                && ceilings.iter().any(|ceiling| value > *ceiling);
+                            let excess = winning && runs != deficit + 1;
+                            let expected = if !winning {
+                                0
+                            } else if definite {
+                                2
+                            } else if ambiguous || excess {
+                                3
+                            } else {
+                                1
+                            };
+                            counts[expected] += 1;
+                            counts[4] += u64::from(definite);
+                            counts[5] += u64::from(ambiguous);
+                            counts[6] += u64::from(excess);
+                            for reverse in [false, true] {
+                                let mut candidate = event.clone();
+                                if reverse {
+                                    candidate.delta.moves.reverse();
+                                    candidate.delta.credits.reverse();
+                                }
+                                match (expected, apply(&before, candidate)) {
+                                    (0 | 1, Ok(transition)) => check_terminal_positive(&transition, expected == 1),
+                                    (2, Err(TransitionError::IllegalCredit)) | (3, Err(TransitionError::UnsupportedRule)) => {},
+                                    (_, actual) => panic!("value={value} mask={mask} outs={outs} inning={inning} deficit={deficit} vector={vector:?} reverse={reverse} expected={expected} actual={actual:?}"),
+                                }
+                                assert_eq!(before, original);
+                                attempts += 1;
+                            }
+                            logical += 1;
+                        }
+                        assert_eq!(counts[..4].iter().sum::<u64>() as usize, vectors.len());
+                        println!("TERMINAL_COMPAT {value} {mask} {outs} {inning} {deficit} {} {} {} {} {} {} {}",
+                            counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6]);
+                        rows += 1;
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!((logical, attempts, rows), (960, 1920, 384));
+    println!("TERMINAL_TOTAL {logical} {attempts} {rows}");
+}
+#[test]
+fn terminal_compatibility_literal_stopping_and_hit_ceiling_counterexamples() {
+    use bbsim_engine::TransitionError;
+    for (mask, value, deficit, vector, error) in [
+        (
+            6,
+            1,
+            0,
+            vec![1, 4, 4],
+            Some(TransitionError::UnsupportedRule),
+        ),
+        (4, 2, 0, vec![2, 4], Some(TransitionError::IllegalCredit)),
+        (2, 2, 0, vec![2, 4], None),
+        // Exactly two needed runs, but supplied movement order cannot certify which wins.
+        (
+            6,
+            2,
+            1,
+            vec![2, 4, 4],
+            Some(TransitionError::UnsupportedRule),
+        ),
+    ] {
+        for inning in [9, 10] {
+            for outs in 0..3 {
+                let before = terminal_fixture(mask, outs, inning, deficit);
+                let event = terminal_candidate(&before, value, &vector);
+                for reverse in [false, true] {
+                    let mut candidate = event.clone();
+                    if reverse {
+                        candidate.delta.moves.reverse();
+                        candidate.delta.credits.reverse();
+                    }
+                    match error {
+                        Some(ref expected) => {
+                            assert_eq!(apply(&before, candidate), Err(expected.clone()))
+                        }
+                        None => check_terminal_positive(&apply(&before, candidate).unwrap(), true),
+                    }
+                }
+            }
+        }
+    }
+}
+#[test]
+fn terminal_compatibility_retains_all_model_boundaries_and_top_extra_controls() {
+    use joint_hit::{Context, Kernel, Model, ModeledCause};
+    let cells = dispatch_cells();
+    let mut boundaries = 0;
+    let mut top_controls = 0;
+    for model in [Model::UniformLegal, Model::PooledMask, Model::BaseOut] {
+        let policy = conditional_hit::ConditionalHits::new(&cells, model).unwrap();
+        for value in [1, 2] {
+            for mask in 0..8 {
+                for outs in 0..3 {
+                    let kernel = Kernel::fit(&cells, Context { value, mask, outs }, model).unwrap();
+                    for inning in [9, 10, u16::MAX] {
+                        for deficit in 0..4 {
+                            let state = terminal_fixture(mask, outs, inning, deficit);
+                            let original = state.clone();
+                            for word in [0, u64::MAX] {
+                                assert!(kernel
+                                    .project(&state, word, ModeledCause::UnaidedNoMisplay)
+                                    .is_err());
+                                assert!(policy
+                                    .transition(
+                                        &state,
+                                        sample(if value == 1 { 3 } else { 4 }),
+                                        hit_draw(word)
+                                    )
+                                    .is_err());
+                                assert_eq!(state, original);
+                                boundaries += 1;
+                            }
+                        }
+                    }
+                    for inning in [9, 10] {
+                        let mut state = terminal_fixture(mask, outs, inning, 0);
+                        state.half = Half::Top;
+                        state = occupied(state, usize::from(mask));
+                        for word in [0, u64::MAX] {
+                            let expected = kernel
+                                .project(&state, word, ModeledCause::UnaidedNoMisplay)
+                                .unwrap();
+                            assert!(!expected.after().over);
+                            assert_eq!(
+                                policy
+                                    .transition(
+                                        &state,
+                                        sample(if value == 1 { 3 } else { 4 }),
+                                        hit_draw(word)
+                                    )
+                                    .unwrap(),
+                                expected
+                            );
+                            top_controls += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!((boundaries, top_controls), (3456, 576));
+}
