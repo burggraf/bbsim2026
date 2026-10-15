@@ -197,3 +197,17 @@ reclassification, selected model, guard removal, manager or gate approval.
 E-03/G1/full boxes and production/season/desktop/release gates remain incomplete.
 Actual local commit/tree/clean-state receipt must be recorded after checkpoint;
 no push authorized. External evidence may expire; synthetic tests are committed.
+
+
+### Actual local checkpoint
+
+`proc_ee3b` exits0/24s: code `efc81ae4fccf836c043e35e8e1b9ef2df088883c`,
+tree `0561deea824a639c9409eb16e1763f4bbfc53612`, complete accepted/committed diff
+SHA `5db3b3d19c7e38ec8b257b23e4b28cbf6f994a8d8649217a8b828c152529ab1b`.
+Exact nine-path scope, all228 HEAD/index/work blobs,219 protected, clean main,
+origin804a72d unchanged; no push. Author acceptance binds earlier whole stage
+inspection plus wholly read documentary delta; executable bytes remain frozen.
+Actual external authority `v2/code-post.json`, not a prospective receipt. This
+subsequent two-doc handoff records the observed result; no test/code change.
+Next inspect/preregister a common runner-only corrective prerequisite, keeping
+terminal dispatch refused and manager NO-GO rather than inventing a clock/model.
