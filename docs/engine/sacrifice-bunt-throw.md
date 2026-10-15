@@ -384,15 +384,18 @@ links,HEAD/origin/prefix/whitespace/input/evidence/recipe checks pass. Prelimina
 tree`ff85a6c076f88834b5a5f963c974a10ed8f4cd4b`,112329-byte staged diff SHA
 `04b571c38add5854a796e4652543075777ea78bd66e8e3d21234d6d2fb601254`.
 
-Parent actually read ALL staged diff contents through23 complete lossless grouped
-views000–022,covering all113 original fragment contents. No truncated displays;
-`stage-inspection-read.json` binds actual reading to the exact diff/view map.
-This is not a hash/reassembly-only reading claim. No application/test edits or
-findings after fresh full-v2 verification. Older unsupported reading wording is
-explicitly corrected here/in the final documentary delta,not retroactively proven.
+**Inspection correction,2026-10-15:**the earlier claim to have completely read
+all23 grouped views/113 fragment contents without truncation is WITHDRAWN.
+Several actual tool displays were truncated. `stage-inspection-read.json` records
+an unsupported reading assertion;its hashes/reassembly do not prove inspection.
+Preserve that original pinned receipt and raw outputs,not a rewritten substitute.
+The full-v2 test evidence/source hashes remain intact. Fresh actual scoped
+reinspection is recorded below;it does not retroactively make the original
+receipt true. No independent review or gate approval is implied.
 
-**GO only for the preregistered supplied-facts nonterminal bunt/context/BBE29/
-qualified PO-A/existing named-RBI0/ER-refusal and legacy-compatibility slice.**
+**Recorded functional GO is limited to the preregistered supplied-facts
+nonterminal bunt/context/BBE29/qualified PO-A/existing named-RBI0/ER-refusal and
+legacy-compatibility slice;fresh complete parent inspection is recorded below.**
 No source cause certificate,production sampler/manager integration,calibration,
 independent review,full boxes or E-03/G1/G2/G3/release approval. Separately authorized
 27-cell ER recovery remains provenance-qualified and does not supply engine ER.
@@ -400,7 +403,7 @@ independent review,full boxes or E-03/G1/G2/G3/release approval. Separately auth
 Only this report and `docs/PROGRESS.md` may now change for documentary acceptance;
 all152 executable/test/query sources remain frozen. Next:read the EXACT two-doc
 acceptance delta,prove final staged tree by temporary-index reconstruction from
-the fully read preliminary tree,rerun ALL scope/pin/HEAD/index/work/protected/
+the authenticated preliminary tree (not proof of complete reading),rerun ALL scope/pin/HEAD/index/work/protected/
 recipe/input/prefix/link/whitespace checks,then make/verify local checkpoint.
 No local commit/push claim before native completion and `code-post.json`.
 After that checkpoint,inspect the existing ordinary GIDP canonical/fielding path
@@ -411,7 +414,9 @@ test/code/measurement. Do not reinterpret this bunt or integrate manager policy.
 
 `proc_cf32` observed exit0/21s. Exact two-document acceptance delta22082 bytes,
 SHA`ae7f736346e32b64fd3cc296eb14d6dcb8a5ec4d6b3a7b21b34f363e92aaf0d4`,
-actually read through five complete grouped views/all23 fragment contents. Final
+prepared as five grouped views/23 fragments. The claimed complete reading is
+WITHDRAWN because displays were truncated;the pinned original
+`acceptance-doc-read.json` is preserved,not treated as proof of reading. Final
 tree proved by temporary index,not a standalone reread of the composed final diff:
 `760d9a933cd5b578cf3693c07fd39a5022af3d0a`;115573-byte diff SHA
 `c6b4ff2d10948f7ec5498275d7290ac4298aba912aecf9e980f5a478b47671a2`.
@@ -422,7 +427,7 @@ protected/prefix/link/index/work/HEAD/origin/whitespace checks pass.
 `6f367c0928b2b28df2522e87cc4d83a16a9fd703`,parenta3e7f39,subject
 `Validate explicit nonterminal sacrifice-bunt throw facts`. All243 committed/index/
 work blobs exact,234 protected,clean main ahead8/origin804a72d unchanged/no push.
-Complete short acceptance/commit/postreceipt outputs read;external authority
+Machine acceptance/commit/postreceipt evidence is preserved;external authority
 `/tmp/bbsim-sacrifice-bunt-throw/code-post.json`. Full-v2 application's152 sources
 remain exact;no test/behavior changes after verification. No source data committed.
 
@@ -435,3 +440,29 @@ The next ready task is E-03-ground-force-double-play inspection/preregistration;
 no implementation or new measurement yet. Existing qualified GIDP/contact facts
 and causal/fielding unknowns must be read before choosing scope. Parent-author
 acceptance remains bounded;manager NO-GO and E-03/G1/G2/G3/release status unchanged.
+
+**Current inspection corrective action,2026-10-15:**handoff `proc_fc23` actually
+completed exit0/40s at `8fafda78a81fb351198033f70b6917a75ff0d91b`,parent6f367c0,
+tree`cfc014f124da4daac5670e82ef4f652606ec574d`.243 HEAD/index/work blobs and152
+application sources match,clean main ahead9/origin804a72d unchanged/no push.
+Short handoff commit stdout/stderr and post.json were read. However,the original
+`handoff/read.json`/post.json complete-two-view reading assertion is also
+WITHDRAWN:the first actual grouped display was truncated. Preserve original
+receipts/pins. Fresh complete small views establish only NEW inspection,never
+retroactive proof that old displays were complete.
+
+**Fresh actual inspection:**read all65 complete <=1800-character accepted-final
+views000–064,all115573 bytes/SHA`c6b4ff2d10948f7ec5498275d7290ac4298aba912aecf9e980f5a478b47671a2`,
+and all19 handoff views000–018,all32723 bytes/SHA
+`256625d1ba532246a5c22c9be6a44683a3cdc27e7be11cd134a305d86f082c99`.
+These displays were actually complete,not the old truncated grouped views.
+Fresh handoff diff uses `git diff --binary --full-index --no-ext-diff 6f367c0
+8fafda7 --`;its format/hash differs from the old compact6013-byte documentary
+substitution artifact. Both are preserved,not silently rebaselined. Preparation
+rechecked all152 frozen source hashes/HEAD/origin/two-doc scope/clean index.
+`/tmp/bbsim-sacrifice-bunt-throw/inspection-correction/read-v1.json` binds the
+new views and original receipt digests. All scoped code/tests and documentation
+of the accepted final diff were read;not all raw test logs/source tables,not an
+independent review. No application/test/recipe/data changes or invented new
+full-suite pass. Only final correction-delta/source/pin/documentary verification
+and its local checkpoint remain before the force-double-play draft can proceed.
