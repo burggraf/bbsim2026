@@ -351,3 +351,518 @@ fn activate_existing_entries(
     assert!(text.contains("RATINGS FORMAT: player-proxy-counts-v1"));
     assert!(text.contains("not calibrated or predictive"));
 }
+
+// Separately preregistered standalone dispatch; all original controls above unchanged.
+#[path = "../examples/support/conditional_hit.rs"]
+mod conditional_hit;
+#[path = "../examples/support/hit_training_counts.rs"]
+mod hit_training_counts;
+#[path = "../examples/support/joint_hit.rs"]
+mod joint_hit;
+use conditional_hit::{ConditionalHits, HitDraw};
+use joint_hit::{Context, Kernel, Model, ModeledCause, TrainingCell};
+
+fn dispatch_support(value: u8, mask: u8) -> Vec<Vec<u8>> {
+    let mut result = Vec::new();
+    for code in 0..64 {
+        let targets = [code % 4 + 1, (code / 4) % 4 + 1, code / 16 + 1];
+        let mut vector = vec![value];
+        let mut valid = true;
+        for (i, target) in targets.into_iter().enumerate() {
+            if mask & (1 << i) == 0 {
+                valid &= target == 1;
+            } else {
+                valid &= target > i as u8;
+                vector.push(target);
+            }
+        }
+        for i in 0..vector.len() {
+            for j in i + 1..vector.len() {
+                valid &= vector[i] < vector[j] || (vector[i] == 4 && vector[j] == 4);
+            }
+        }
+        if valid {
+            result.push(vector);
+        }
+    }
+    result.sort();
+    result
+}
+
+fn dispatch_cells() -> Vec<TrainingCell> {
+    let mut text = format!("joint-hit-training-counts-v1\nproxy_endpoints_not_certified_causes\ttrue\nqualification_sha256\t{}\ntraining_events\t24\nvalue\tbase_mask\touts_before\tcounts\n", "0".repeat(64));
+    for value in [1, 2] {
+        for mask in 0..8 {
+            for outs in 0..3 {
+                let counts = match (value, mask, outs) {
+                    (1, 2, 0) => vec![8, 0, 0],
+                    (1, 2, 1) => vec![0, 16, 0],
+                    _ => vec![0; dispatch_support(value, mask).len()],
+                };
+                text.push_str(&format!(
+                    "{value}\t{mask}\t{outs}\t{}\n",
+                    counts
+                        .iter()
+                        .map(u64::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ));
+            }
+        }
+    }
+    let artifact = hit_training_counts::parse(text.as_bytes()).unwrap();
+    assert_eq!(artifact.training_events, 24);
+    assert_eq!(artifact.qualification_sha256, "0".repeat(64)); // metadata only
+    artifact.cells
+}
+
+fn hit_draw(word: u64) -> Option<HitDraw> {
+    Some(HitDraw {
+        word,
+        cause: ModeledCause::UnaidedNoMisplay,
+    })
+}
+
+#[test]
+fn conditional_dispatch_requires_an_explicit_model_and_preserves_literal_contextual_advances() {
+    let cells = dispatch_cells();
+    let mut before = occupied(initial(), 2);
+    before.bases[1].as_mut().unwrap().responsible_pitcher = "prior-pitcher".into();
+    let untouched = before.clone();
+    for (model, destination, runs) in [
+        (Model::UniformLegal, Destination::Home, 1),
+        (Model::PooledMask, Destination::Third, 0),
+        (Model::BaseOut, Destination::Second, 0),
+    ] {
+        let policy = ConditionalHits::new(&cells, model).unwrap();
+        let result = policy.transition(&before, sample(3), hit_draw(3 << 62));
+        assert!(
+            result.is_ok(),
+            "valid single dispatch refused: {:?}",
+            result.err()
+        );
+        let transition = result.unwrap();
+        assert_eq!(transition.event().delta.moves[1].to, destination);
+        assert_eq!(transition.event().delta.runs, runs);
+        assert_eq!(transition.event().delta.outs, 0);
+        assert_eq!(transition.after().teams[0].next_batter, 1);
+        assert_eq!(transition.after().score, [u16::from(runs), 0]);
+        let stats = bbsim_engine::accounting::derive_accounting(&[transition]).unwrap();
+        assert_eq!(stats.batters[0]["Away-1"].plate_appearances, 1);
+        assert_eq!(stats.batters[0]["Away-1"].credited_hits, 1);
+        assert_eq!(stats.batters[0]["Away-1"].credited_rbi, u32::from(runs));
+        assert_eq!(stats.pitchers[1]["Home-pitcher"].batters_faced, 1);
+        assert_eq!(stats.pitchers[1]["Home-pitcher"].runs_allowed, 0);
+        assert_eq!(
+            stats.pitchers[1]
+                .get("prior-pitcher")
+                .map_or(0, |p| p.runs_allowed),
+            u32::from(runs)
+        );
+    }
+    assert_eq!(before, untouched);
+}
+
+#[test]
+fn conditional_dispatch_constructor_refuses_bad_or_latently_collapsed_contexts() {
+    let good = dispatch_cells();
+    let mut cases = vec![vec![], good[..47].to_vec()];
+    let mut duplicate = good.clone();
+    duplicate[47] = duplicate[0].clone();
+    cases.push(duplicate);
+    let mut shape = good.clone();
+    shape[47].counts.push(0);
+    cases.push(shape);
+    let mut context = good.clone();
+    context[47].context.outs = 3;
+    cases.push(context);
+    let mut overflow = good.clone();
+    overflow[0].counts[0] = u64::MAX;
+    cases.push(overflow);
+    for cells in cases {
+        for model in [Model::UniformLegal, Model::PooledMask, Model::BaseOut] {
+            assert!(
+                ConditionalHits::new(&cells, model).is_err(),
+                "invalid training table accepted"
+            );
+        }
+    }
+    let mut collapsed = good;
+    for cell in &mut collapsed {
+        cell.counts.fill(0);
+    }
+    // A late, non-requested context still has to be representable at construction.
+    let c = Context {
+        value: 2,
+        mask: 7,
+        outs: 2,
+    };
+    let cell = collapsed.iter_mut().find(|cell| cell.context == c).unwrap();
+    cell.counts[0] = u64::MAX;
+    assert!(Kernel::fit(
+        &collapsed,
+        Context {
+            value: 1,
+            mask: 0,
+            outs: 0
+        },
+        Model::BaseOut
+    )
+    .is_ok());
+    assert!(ConditionalHits::new(&collapsed, Model::BaseOut).is_err());
+    assert!(ConditionalHits::new(&collapsed, Model::UniformLegal).is_ok());
+}
+
+#[test]
+fn conditional_dispatch_has_exact_finite_taxonomy_and_canonical_accounting() {
+    let cells = dispatch_cells();
+    let mut frames = 0;
+    for model in [Model::UniformLegal, Model::PooledMask, Model::BaseOut] {
+        let policy = ConditionalHits::new(&cells, model).unwrap();
+        for half in [Half::Top, Half::Bottom] {
+            for mask in 0..8 {
+                for outs in 0..3 {
+                    let mut before = initial();
+                    before.half = half;
+                    before = occupied(before, mask);
+                    before.outs = outs;
+                    let untouched = before.clone();
+                    for index in 0..13 {
+                        let is_hit = matches!(index, 3 | 4);
+                        for word in if is_hit { vec![0, u64::MAX] } else { vec![0] } {
+                            let result = policy.transition(
+                                &before,
+                                sample(index),
+                                if is_hit { hit_draw(word) } else { None },
+                            );
+                            assert!(result.is_ok(), "dispatch refused model {model:?} shape {index} mask {mask} outs {outs}: {:?}", result.err());
+                            let transition = result.unwrap();
+                            if is_hit {
+                                let context = Context {
+                                    value: if index == 3 { 1 } else { 2 },
+                                    mask: mask as u8,
+                                    outs,
+                                };
+                                let kernel = Kernel::fit(&cells, context, model).unwrap();
+                                assert_eq!(
+                                    kernel.vectors(),
+                                    dispatch_support(context.value, context.mask)
+                                );
+                                assert!(kernel
+                                    .probabilities()
+                                    .iter()
+                                    .all(|q| q.numerator > 0 && q.denominator >= q.numerator));
+                                assert_eq!(kernel.masses().iter().sum::<u64>(), 1 << 53);
+                                assert_eq!(kernel.edges().last(), Some(&(1 << 53)));
+                                assert_eq!(
+                                    transition,
+                                    kernel
+                                        .project(&before, word, ModeledCause::UnaidedNoMisplay)
+                                        .unwrap()
+                                );
+                                let targets = if word == 0 {
+                                    dispatch_support(context.value, context.mask)[0].clone()
+                                } else {
+                                    dispatch_support(context.value, context.mask)
+                                        .last()
+                                        .unwrap()
+                                        .clone()
+                                };
+                                let expected_runs =
+                                    targets.iter().filter(|target| **target == 4).count() as u8;
+                                assert_eq!(transition.event().delta.runs, expected_runs);
+                                assert_eq!(transition.event().delta.outs, 0);
+                                assert_eq!(
+                                    transition.event().fielding_review,
+                                    bbsim_engine::FieldingReview::NoMisplay
+                                );
+                                for (movement, target) in
+                                    transition.event().delta.moves.iter().zip(targets)
+                                {
+                                    assert_eq!(
+                                        movement.to,
+                                        [
+                                            Destination::First,
+                                            Destination::Second,
+                                            Destination::Third,
+                                            Destination::Home
+                                        ][usize::from(target - 1)]
+                                    );
+                                }
+                                let stats = bbsim_engine::accounting::derive_accounting(
+                                    std::slice::from_ref(&transition),
+                                )
+                                .unwrap();
+                                let offense = half.offense();
+                                let batter = &before.teams[offense].batting_order[0];
+                                assert_eq!(
+                                    stats.batters[offense][batter].credited_rbi,
+                                    u32::from(expected_runs)
+                                );
+                                assert_eq!(stats.batters[offense][batter].plate_appearances, 1);
+                            } else {
+                                assert_eq!(
+                                    transition.to_bytes(),
+                                    apply(
+                                        &before,
+                                        joint::event_for(&before, sample(index)).unwrap()
+                                    )
+                                    .unwrap()
+                                    .to_bytes()
+                                );
+                            }
+                            assert_eq!(transition.before(), &before);
+                            assert_eq!(transition.after().teams[half.offense()].next_batter, 1);
+                            assert_eq!(
+                                bbsim_engine::EventTransition::from_bytes(&transition.to_bytes())
+                                    .unwrap(),
+                                transition
+                            );
+                            assert_eq!(
+                                apply(&before, transition.event().clone()).unwrap(),
+                                transition
+                            );
+                            assert_eq!(before, untouched);
+                            frames += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(frames, 2160);
+}
+
+// Independent indexed SplitMix64 oracle; no use of the mutable producer RNG.
+fn dispatch_reference_word(seed: u64, ordinal: u64) -> u64 {
+    let mut z = seed.wrapping_add(0x9e3779b97f4a7c15u64.wrapping_mul(ordinal));
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+    z ^ (z >> 31)
+}
+
+fn dispatch_prefix(
+    seed: u64,
+    policy: &ConditionalHits,
+    sampler: &joint::JointModel,
+) -> (Vec<bbsim_engine::EventTransition>, u64) {
+    let mut state = initial();
+    let mut rng = preview::Rng::new(seed);
+    let mut words = 0;
+    let mut log = Vec::new();
+    while !(state.over || state.half == Half::Bottom && state.inning >= 9) {
+        assert!(
+            log.len() < 1000,
+            "seed {seed}: censored-prefix resource ceiling"
+        );
+        let sample = sampler.sample(&mut rng);
+        words += 1;
+        let unit = (dispatch_reference_word(seed, words) >> 11) as f64 / (1u64 << 53) as f64;
+        assert_eq!(
+            sample,
+            sampler.sample_unit(unit).unwrap(),
+            "seed {seed}: PA word drift"
+        );
+        let draw = if matches!(
+            sample.outcome,
+            preview::Outcome::Single | preview::Outcome::Double
+        ) {
+            let word = rng.next_u64();
+            words += 1;
+            assert_eq!(
+                word,
+                dispatch_reference_word(seed, words),
+                "seed {seed}: hit word drift"
+            );
+            hit_draw(word)
+        } else {
+            None
+        };
+        let transition = policy
+            .transition(&state, sample, draw)
+            .unwrap_or_else(|error| panic!("seed {seed}, frame {}: {error}", log.len() + 1));
+        assert_eq!(transition.before(), &state);
+        assert_eq!(
+            apply(&state, transition.event().clone()).unwrap(),
+            transition
+        );
+        assert_eq!(
+            bbsim_engine::EventTransition::from_bytes(&transition.to_bytes()).unwrap(),
+            transition
+        );
+        state = transition.after().clone();
+        log.push(transition);
+    }
+    assert!(!log.is_empty());
+    assert!(state.over || (state.half == Half::Bottom && state.inning >= 9));
+    assert!(policy.transition(&state, sample(0), None).is_err());
+    // This diagnostic check-word is outside the censored generation prefix.
+    assert_eq!(rng.next_u64(), dispatch_reference_word(seed, words + 1));
+    assert_eq!(
+        words,
+        log.len() as u64
+            + log
+                .iter()
+                .filter(|frame| frame
+                    .event()
+                    .delta
+                    .credits
+                    .iter()
+                    .any(|credit| matches!(credit.kind, CreditKind::Single | CreditKind::Double)))
+                .count() as u64
+    );
+    let stats = bbsim_engine::accounting::derive_accounting(&log).unwrap();
+    assert_eq!(stats.runs, state.score.map(u32::from));
+    for side in 0..2 {
+        let pas = log
+            .iter()
+            .filter(|frame| frame.before().half.offense() == side)
+            .count() as u32;
+        let outs: u32 = log
+            .iter()
+            .filter(|frame| frame.before().half.offense() == side)
+            .map(|frame| u32::from(frame.event().delta.outs))
+            .sum();
+        assert_eq!(
+            stats.batters[side]
+                .values()
+                .map(|line| line.plate_appearances)
+                .sum::<u32>(),
+            pas
+        );
+        assert_eq!(
+            stats.pitchers[1 - side]
+                .values()
+                .map(|line| line.batters_faced)
+                .sum::<u32>(),
+            pas
+        );
+        assert_eq!(
+            stats.pitchers[1 - side]
+                .values()
+                .map(|line| line.outs_recorded)
+                .sum::<u32>(),
+            outs
+        );
+        assert_eq!(
+            stats.batters[side]
+                .values()
+                .map(|line| line.credited_runs)
+                .sum::<u32>(),
+            stats.runs[side]
+        );
+        assert_eq!(
+            stats.pitchers[1 - side]
+                .values()
+                .map(|line| line.runs_allowed)
+                .sum::<u32>(),
+            stats.runs[side]
+        );
+    }
+    (log, words)
+}
+
+#[test]
+fn conditional_dispatch_fixed_seed_prefixes_preserve_words_continuity_and_available_stats() {
+    let base = preview::Baseline::from_counts([4, 2, 1, 4, 2, 1, 1, 1, 9]).unwrap();
+    let sampler = joint::JointModel::from_counts(&base, [2, 2, 2, 1, 2]).unwrap();
+    let cells = dispatch_cells();
+    let mut prefixes = 0;
+    for model in [Model::UniformLegal, Model::PooledMask, Model::BaseOut] {
+        let policy = ConditionalHits::new(&cells, model).unwrap();
+        for seed in 1..=128 {
+            let first = dispatch_prefix(seed, &policy, &sampler);
+            let repeat = dispatch_prefix(seed, &policy, &sampler);
+            assert_eq!(first, repeat, "seed {seed}, model {model:?}: prefix drift");
+            prefixes += 1;
+        }
+    }
+    assert_eq!(prefixes, 384);
+}
+
+#[test]
+fn conditional_dispatch_refuses_bad_draws_samples_states_and_terminal_boundaries() {
+    let policy = ConditionalHits::new(&dispatch_cells(), Model::BaseOut).unwrap();
+    let before = initial();
+    assert!(policy.transition(&before, sample(3), None).is_err());
+    assert!(policy.transition(&before, sample(4), None).is_err());
+    assert!(policy
+        .transition(
+            &before,
+            sample(3),
+            Some(HitDraw {
+                word: 0,
+                cause: ModeledCause::Unknown
+            })
+        )
+        .is_err());
+    for index in (0..13).filter(|index| !matches!(index, 3 | 4)) {
+        assert!(policy
+            .transition(&before, sample(index), hit_draw(0))
+            .is_err());
+    }
+    for broken in [
+        joint::Sample {
+            outcome: preview::Outcome::Single,
+            contact: Some(joint::ContactKind::Ground),
+        },
+        joint::Sample {
+            outcome: preview::Outcome::ContactOut,
+            contact: None,
+        },
+    ] {
+        assert!(policy.transition(&before, broken, hit_draw(0)).is_err());
+    }
+    let mut states = vec![];
+    let mut ended = before.clone();
+    ended.over = true;
+    states.push(ended);
+    let mut inning = before.clone();
+    inning.inning = 0;
+    states.push(inning);
+    let mut outs = before.clone();
+    outs.outs = 3;
+    states.push(outs);
+    let mut cursor = before.clone();
+    cursor.teams[0].next_batter = 9;
+    states.push(cursor);
+    let mut identity = occupied(before.clone(), 1);
+    identity.bases[0].as_mut().unwrap().player_id = "not-active".into();
+    states.push(identity);
+    for state in states {
+        let original = state.clone();
+        assert!(policy.transition(&state, sample(3), hit_draw(0)).is_err());
+        assert!(policy.transition(&state, sample(0), None).is_err());
+        assert_eq!(state, original);
+    }
+    for inning in [9, 10, u16::MAX] {
+        for outs in 0..3 {
+            for score in [[0, 0], [1, 0], [0, 1]] {
+                for cursor in [0, 8] {
+                    let mut state = occupied(initial(), 7);
+                    state.half = Half::Bottom;
+                    state.inning = inning;
+                    state.outs = outs;
+                    state.score = score;
+                    // Rebind occupied identities to the actual offense, without changing rules.
+                    state = occupied(state, 7);
+                    state.teams[1].next_batter = cursor;
+                    let original = state.clone();
+                    for index in 0..13 {
+                        let result = policy.transition(
+                            &state,
+                            sample(index),
+                            if matches!(index, 3 | 4) {
+                                hit_draw(0)
+                            } else {
+                                None
+                            },
+                        );
+                        assert!(result.is_err(), "Bottom>=9 accepted");
+                    }
+                    assert_eq!(state, original);
+                }
+            }
+        }
+    }
+}
