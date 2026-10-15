@@ -232,3 +232,27 @@ no application/test/assertion/input change. Reprepare/read versioned final-doc
 v2 delta,then repeat private-index AND actual-index whitespace gates before commit.
 Original v1 delta/eight actual-reading views/receipt and all full-run pins stay
 unchanged. Postcommit verification is still pending;no gate or producer approval.
+
+## Verified local construction checkpoint — 2026-10-15
+
+Corrected final-doc v2 `proc_f6f0` exit0/43s:12227-byte exact substitutions from
+actually-read scoped tree;all9 complete views read/receipted. SHA
+7dd04c055037c2f482cc78f53a0c2f3c2ed729afd5c962f684badb7c64cf23b4.
+Original v1 delta/8 reading views/failure/pins remain unchanged. New v2 checkpoint
+checks private-index whitespace before parent acceptance,then repeats actual-index
+whitespace/tree/blob gates;no old gate removed. `proc_bf8b` exit0/28s commits and
+postverifies `6d7bad69a97bc2272e9053e3ed24855b1209e342`,parentec415e9:
+249 exact HEAD/index/work blobs/245 protected/156 frozen sources/all13 inputs/
+28 recipes/163 closed full artifacts/560 prose links;clean main ahead13,origin
+804a72d unchanged,no push. Accepted tree05cbe0a1629586879896b0d23b42e959e2ac5826;
+diffSHA86a286eaec90c7c770271e86a1613a39bda4a14c86f4be447fa329410198e644.
+Authority `/tmp/bbsim-contact-consequence-projection/code-post-v2.json` and
+`author-acceptance-v2.json`. Fresh execution is proc_a262,not the postcommit hashes;
+the latter prove unchanged executable/test bytes and retained full evidence.
+
+Parent accepts only the standalone supplied clean episodes. No caller integration,
+rate/attempt policy,independent review,calibration,manager or gate claim. Next
+corrective prerequisite is a separately preregistered read-only source-label/
+literal-shape SF/SH/GIDP support audit using the accepted census/exports and
+unchanged game split. It must retain compound/overlap/missing observations and
+unknown causal/scorer facts before any later occurrence-rate/producer proposal.
