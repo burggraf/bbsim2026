@@ -1,4 +1,5 @@
-//! Versions 25 (legacy), 26 (air catch) and 27 (ordinary walk-off hit facts).
+//! Versions 25 (legacy), 26 (air catch), 27 (ordinary walk-off hit facts),
+//! and 28 (explicit caught-sacrifice-fly facts).
 //! Little-endian, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
@@ -148,6 +149,9 @@ binary_enum!(ThirdOutKind { BatterBeforeFirst = 0, Force = 1, Timing = 2, Preced
 binary_enum!(FieldingReview { Unknown = 0, NoMisplay = 1, SoleGroundMuff = 2 });
 binary_enum!(ContactClass { Grounded = 0, NotGrounded = 1 });
 binary_enum!(AirContact { Fly = 0, LineDrive = 1, PopUp = 2 });
+binary_enum!(SacrificeFlyHandling { Unknown = 0, QualifyingOutfielderOrInfielderInOutfield = 1 });
+binary_enum!(SacrificeFlyRetouch { Unknown = 0, Legal = 1 });
+binary_enum!(SacrificeFlyRunTiming { Unknown = 0, AfterCatch = 1, BeforeCatch = 2 });
 binary_enum!(ContactContinuity { Continuous = 0, Discontinuous = 1, Unknown = 2 });
 binary_enum!(ForceLoss { RemovedByFirstOut = 0, PreviouslyRemoved = 1, NeverForced = 2, Unknown = 3 });
 binary_enum!(DeliveryContext { RunnerOnly = 0, UncaughtThirdStrike = 1, DeliveredFourthBall = 2 });
@@ -450,6 +454,12 @@ binary_struct!(OrdinaryAirCatchFacts {
     fielder_id,
     contact
 });
+binary_struct!(CaughtSacrificeFlyFacts {
+    scoring_runner_id,
+    handling,
+    retouch,
+    timing
+});
 binary_struct!(ProtectedAwardFacts { batter_id });
 binary_struct!(SoleHomeRunFacts { batter_id });
 binary_struct!(SoleSafeHitFacts { batter_id });
@@ -476,7 +486,9 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = if self.walkoff_hit.is_some() {
+        let mut out = if self.caught_sacrifice_fly.is_some() {
+            b"BBE28".to_vec()
+        } else if self.walkoff_hit.is_some() {
             b"BBE27".to_vec()
         } else if self.event.ordinary_air_catch.is_some() {
             b"BBE26".to_vec()
@@ -492,10 +504,15 @@ impl EventTransition {
         if let Some(facts) = &self.walkoff_hit {
             facts.encode(&mut out);
         }
+        if let Some(facts) = &self.caught_sacrifice_fly {
+            facts.encode(&mut out);
+        }
         out
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
-        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE27") {
+        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE28") {
+            (payload, 28)
+        } else if let Some(payload) = bytes.strip_prefix(b"BBE27") {
             (payload, 27)
         } else if let Some(payload) = bytes.strip_prefix(b"BBE26") {
             (payload, 26)
@@ -511,7 +528,7 @@ impl EventTransition {
         let before = GameState::decode(&mut reader)?;
         let mut event = Event::decode(&mut reader)?;
         let after = GameState::decode(&mut reader)?;
-        if version == 26 {
+        if version == 26 || version == 28 {
             event.ordinary_air_catch = Some(OrdinaryAirCatchFacts::decode(&mut reader)?);
         }
         let walkoff_hit = if version == 27 {
@@ -519,9 +536,14 @@ impl EventTransition {
         } else {
             None
         };
+        let caught_sacrifice_fly = if version == 28 {
+            Some(CaughtSacrificeFlyFacts::decode(&mut reader)?)
+        } else {
+            None
+        };
         if !reader.0.is_empty() {
             return Err(TransitionError::InvalidEncoding);
         }
-        Self::try_new_inner(before, event, after, walkoff_hit)
+        Self::try_new_inner(before, event, after, walkoff_hit, caught_sacrifice_fly)
     }
 }

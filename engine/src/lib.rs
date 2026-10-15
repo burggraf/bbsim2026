@@ -13,10 +13,14 @@ mod pitch;
 mod protected_award;
 mod reducer;
 mod rules;
+mod sacrifice_fly;
 mod sole_home_run;
 mod sole_safe_hit;
 mod walkoff_hit;
-pub use reducer::{apply, apply_with_walkoff_hit_facts};
+pub use reducer::{apply, apply_with_caught_sacrifice_fly_facts, apply_with_walkoff_hit_facts};
+pub use sacrifice_fly::{
+    CaughtSacrificeFlyFacts, SacrificeFlyHandling, SacrificeFlyRetouch, SacrificeFlyRunTiming,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TeamSide {
@@ -457,7 +461,8 @@ pub enum AirContact {
     PopUp,
 }
 /// One ordinary non-bunt direct legal catch retiring the batter before legal
-/// First acquisition; before runners hold. Not an automatic penalty or tag.
+/// First acquisition; before runners hold unless separate caught-SF transition
+/// facts qualify the bounded scoring episode. Not an automatic penalty or tag.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OrdinaryAirCatchFacts {
     pub batter_id: String,
@@ -525,6 +530,7 @@ pub struct EventTransition {
     event: Event,
     after: GameState,
     walkoff_hit: Option<WalkoffHitFacts>,
+    caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
 }
 
 impl std::fmt::Debug for EventTransition {
@@ -536,6 +542,9 @@ impl std::fmt::Debug for EventTransition {
             .field("after", &self.after);
         if let Some(facts) = &self.walkoff_hit {
             transition.field("walkoff_hit", facts);
+        }
+        if let Some(facts) = &self.caught_sacrifice_fly {
+            transition.field("caught_sacrifice_fly", facts);
         }
         transition.finish()
     }
@@ -553,7 +562,7 @@ impl EventTransition {
         after: GameState,
         facts: WalkoffHitFacts,
     ) -> Result<Self, TransitionError> {
-        Self::try_new_inner(before, event, after, Some(facts))
+        Self::try_new_inner(before, event, after, Some(facts), None)
     }
 
     /// Named direct-catch PO/A, only with whole-chance review; not a full box.
@@ -612,6 +621,7 @@ impl EventTransition {
         self.protected_award_rbi()
             .or_else(|| self.sole_home_run_rbi())
             .or_else(|| self.sole_safe_hit_rbi())
+            .or_else(|| self.caught_sacrifice_fly_rbi())
     }
 
     /// Event-local protected-award RBI proof, not complete segment/box coverage.
@@ -749,7 +759,7 @@ impl EventTransition {
         event: Event,
         after: GameState,
     ) -> Result<Self, TransitionError> {
-        Self::try_new_inner(before, event, after, None)
+        Self::try_new_inner(before, event, after, None, None)
     }
 
     fn try_new_inner(
@@ -757,6 +767,7 @@ impl EventTransition {
         event: Event,
         after: GameState,
         walkoff_hit: Option<WalkoffHitFacts>,
+        caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
     ) -> Result<Self, TransitionError> {
         rules::validate_snapshot(&before)?;
         rules::validate_snapshot(&after)?;
@@ -766,7 +777,12 @@ impl EventTransition {
         let offense = before.half.offense();
         rules::validate_participants(&before, &event)?;
         let is_pa = event.kind.is_pa();
-        let batter_charge = rules::batter_charge(&before, &event, walkoff_hit.as_ref())?;
+        let batter_charge = rules::batter_charge(
+            &before,
+            &event,
+            walkoff_hit.as_ref(),
+            caught_sacrifice_fly.as_ref(),
+        )?;
         rules::validate_fielding_review(&event)?;
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
         rules::validate_event_shape(&event)?;
@@ -967,6 +983,7 @@ impl EventTransition {
             event,
             after,
             walkoff_hit,
+            caught_sacrifice_fly,
         })
     }
     pub fn before(&self) -> &GameState {

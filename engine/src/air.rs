@@ -1,7 +1,14 @@
 //! Explicit direct caught-air episode, never inferred from trajectory or PO credits.
 use super::*;
 
-pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), TransitionError> {
+pub(crate) fn validate(
+    before: &GameState,
+    event: &Event,
+    caught_sacrifice_fly: Option<&CaughtSacrificeFlyFacts>,
+) -> Result<(), TransitionError> {
+    if let Some(facts) = caught_sacrifice_fly {
+        return crate::sacrifice_fly::validate(before, event, facts);
+    }
     let Some(facts) = &event.ordinary_air_catch else {
         return Ok(());
     };

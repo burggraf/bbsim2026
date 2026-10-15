@@ -9,24 +9,40 @@ pub fn apply_with_walkoff_hit_facts(
     event: Event,
     facts: WalkoffHitFacts,
 ) -> Result<EventTransition, TransitionError> {
-    apply_inner(before, event, Some(facts))
+    apply_inner(before, event, Some(facts), None)
+}
+
+/// Apply the bounded direct catch/Third-score episode with supplied Rule 9.08(d) facts.
+/// Does not infer handling, retouch legality, scoring chronology or attempt policy.
+pub fn apply_with_caught_sacrifice_fly_facts(
+    before: &GameState,
+    event: Event,
+    facts: CaughtSacrificeFlyFacts,
+) -> Result<EventTransition, TransitionError> {
+    apply_inner(before, event, None, Some(facts))
 }
 
 /// Derive the after-state from a before-state and explicit event effects.
 /// This does not sample outcomes or infer missing decisions.
 pub fn apply(before: &GameState, event: Event) -> Result<EventTransition, TransitionError> {
-    apply_inner(before, event, None)
+    apply_inner(before, event, None, None)
 }
 
 fn apply_inner(
     before: &GameState,
     event: Event,
     walkoff_hit: Option<WalkoffHitFacts>,
+    caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
 ) -> Result<EventTransition, TransitionError> {
     if before.teams.iter().any(|team| !rules::valid_team(team)) {
         return Err(TransitionError::InvalidState);
     }
-    rules::batter_charge(before, &event, walkoff_hit.as_ref())?;
+    rules::batter_charge(
+        before,
+        &event,
+        walkoff_hit.as_ref(),
+        caught_sacrifice_fly.as_ref(),
+    )?;
     let mut after = before.clone();
     let offense = before.half.offense();
     if event.kind.is_pa() {
@@ -151,7 +167,13 @@ fn apply_inner(
         }
         rules::Ending::Continue => after.outs = outs,
     }
-    EventTransition::try_new_inner(before.clone(), event, after, walkoff_hit)
+    EventTransition::try_new_inner(
+        before.clone(),
+        event,
+        after,
+        walkoff_hit,
+        caught_sacrifice_fly,
+    )
 }
 
 fn base_index(base: Base) -> usize {

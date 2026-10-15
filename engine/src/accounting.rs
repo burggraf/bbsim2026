@@ -438,7 +438,9 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             lost_muff_outs = 0;
             half_runs.clear();
         }
-        let clean = clean_play(before, event);
+        // Scoring caught-SF context is not the older held-air clean-ER proof.
+        // Positive-prefix Rule 9.16 expansion requires its own contract/evidence.
+        let clean = transition.caught_sacrifice_fly_facts().is_none() && clean_play(before, event);
         if (before.outs < 2 || error_batter.is_some())
             && before.bases.iter().all(Option::is_none)
             && event.fielding_review == FieldingReview::SoleGroundMuff

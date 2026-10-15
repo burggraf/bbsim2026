@@ -393,12 +393,13 @@ pub(crate) fn batter_charge<'a>(
     before: &'a GameState,
     event: &Event,
     walkoff_hit: Option<&super::WalkoffHitFacts>,
+    caught_sacrifice_fly: Option<&super::CaughtSacrificeFlyFacts>,
 ) -> Result<&'a str, TransitionError> {
-    if walkoff_hit.is_some() && event.sole_safe_hit.is_none() {
+    if walkoff_hit.is_some() && (event.sole_safe_hit.is_none() || caught_sacrifice_fly.is_some()) {
         return Err(TransitionError::UnsupportedRule);
     }
     // Known bound causal facts precede unrelated occurrence/charge uncertainty.
-    super::air::validate(before, event)?;
+    super::air::validate(before, event, caught_sacrifice_fly)?;
     super::ground_muff::validate(before, event)?;
     super::sole_safe_hit::validate_with_walkoff(before, event, walkoff_hit)?;
     super::sole_home_run::validate(before, event)?;
