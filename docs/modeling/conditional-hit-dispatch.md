@@ -208,3 +208,28 @@ terminal-policy approval or G1/G2/G3 signoff. Correct the stale task-table pendi
 label and append completion evidence only; all138 executable/test bytes stay fixed.
 Local exact accepted-stage inspection/commit/postverification remain pending here;
 the completion handoff will record their actual receipts, not predict a commit.
+
+## Verified local code checkpoint and completion handoff — 2026-10-14
+
+`proc_ad7d` exit0/9s: all221 exact index/work blobs and219 non-doc reviewed bytes,
+138 frozen sources/137 original-prior/217 protected/eleven inputs/completed evidence/
+prefixes/whitespace pass. Four bounded acceptance doc-edit fragments were consumed;
+fresh527 prose links pass. Accepted895-line/67,412-byte full-index diff SHA256
+`3cee3ca890cf64af829932fcfc6de122c5dc3bd7cf9e84a36dd2449b14fedd15`,
+tree `7a636f343ab0e448f972d6e9ab034a4225978b00`.
+
+`proc_d283` exit0/21s freshly verifies that exact accepted snapshot, commits locally
+and postverifies code **`7850a22a45729a1e15780b6c73ab8b3e0c435b82`**, parent
+`c1266ef36ee3e1ac709438561e0540c26d94771d`: four files/848 insertions/two deletions,
+all221 committed/index/work blobs, accepted tree/diff,138 frozen sources and all
+completed evidence exact; clean main ahead1, origin unchanged, no push. Complete
+short stdout consumed/stderr empty; `code-post.json` records actual postverification.
+No executable/test bytes changed after the full-suite freeze. This two-doc
+completion handoff needs only fresh exact doc stage/inspection/commit/postchecks,
+not historical-test credit for changed code. Its eventual `handoff-post.json`
+records completion; no self-referential hash or premature handoff claim is needed.
+
+Next: inspect canonical ordinary walk-off hit ceilings/source terminal exclusions
+and separately preregister any subsequent bounded mechanism before implementation.
+All Bottom>=9 refusals, model-selection/production-integration limits, manager
+NO-GO and G1/G2/G3 boundaries remain unchanged. No current owner-input blocker.
