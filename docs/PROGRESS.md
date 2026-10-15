@@ -126,8 +126,13 @@ before counters/all240 full cells/inverse/reference exact;54 measurement artifac
 failed-full-v2 and helper recovery,all original receipts and reading qualifications.
 Fresh50module/281test lines and63+2 document views actually read before code commit;
 no complete raw/historical-log or independent-review claim. No source/test changes
-since22-method green. Two-doc handoff authority is work-root handoff-v1/post.json;
-check its existing HEAD identity before starting new work,not an occupied rerun.
+since22-method green. Two-doc handoff a787917 is verified:259 blobs/257 protected,
+163 sources/573 links/clean main ahead21,no push;authority work-root handoff-v1/post.json.
+A postcheckpoint documentary correction qualifies remaining truncated-log/result
+visibility claims;reading-qualification-v4.json preserves original receipts and
+withdraws unsupported complete27/28/52/124-line reading,not native test results.
+Correction authority is work-root reading-correction-v1/post.json;check its existing
+HEAD identity before new work,not an occupied rerun. No new complete-log claim.
 
 Next concrete action:inspect audits/joint_contact.py and actual source/producer
 callers,then preregister F-01-contact-proxy-joint-cohort before new tests/counts.

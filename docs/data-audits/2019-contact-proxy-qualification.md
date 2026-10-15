@@ -323,8 +323,8 @@ keeps two before opportunities and one extra native child, preserves incomplete
 vector evidence, and reconstructs the entire report exactly. No source guard or
 assertion contract was relaxed to accommodate the wrapper.
 
-`proc_f8ca` exits 0/1s: all **22 methods pass in 0.307s**; complete 28-line stderr
-was displayed. Original failing source/stream are pinned separately. This is a
+`proc_f8ca` exits 0/1s: all **22 methods pass in 0.307s**. The earlier claim of
+complete 28-line stderr display is withdrawn: a response truncated. Original failing source/stream are pinned separately. This is a
 late already-correct coverage control, not falsely claimed pre-implementation TDD.
 `test-coverage-delta-v3.{json,diff}` and `tests-coverage-v3.py` bind the addition;
 `validate-coverage-v2.py` checks the single import/method AST delta, all 161 prior
@@ -364,9 +364,9 @@ unsupported earlier complete-file/header/log display timing claims are withdrawn
 The current **50 module/281 test lines** were genuinely displayed completely in
 two 25-line module requests and fourteen 20/21-line test requests, after TDD and
 measurement, before/during full-v3 and before any code commit. The old focused
-27-line stream was genuinely reread now, not retrospectively certified at its
-original run. `inspection-qualification-v3.json` and `source-inspection-v3.json`
-bind the observations and precise timing; no entire raw/historical-log or
+27-line stream's claimed complete reread is also withdrawn because a later request
+truncated. `reading-qualification-v4.json` supersedes those specific visibility
+claims in the unchanged v3 receipts, not their actual source hashes; no entire raw/historical-log or
 independent-review claim follows. Two helper-preparation string-replacement
 assertions failed **before destination writes/staging**; root/reversible fixes
 and failure metadata remain separate from executable test outcomes.
@@ -384,8 +384,9 @@ all inherited source/native/property checks, BBE27–29 payloads, 384 mixed pref
 `proc_75c4` exits 0/4s and verifies **132 closed current full-run artifacts**.
 `full-result-v3.json` SHA
 `f855e9cb77cf232bc1cc93890243e1b69b7670c87877512f1d97d5c6c4efc97a`.
-All 124 structured result lines were actually displayed, with bounded raw spans;
-not every raw log line. Stdout: 2,553 lines / 149,075 bytes /
+The structured result and bounded raw spans were inspected, but the earlier claim
+that all 124 result lines were displayed is withdrawn: one request truncated.
+This does not establish entire raw-log reading. Stdout: 2,553 lines / 149,075 bytes /
 `2ce402dea6fd22af2c2222d930943487c30eead7cfb23a6797f0e5d0d133d2ff`.
 Stderr: 837 lines / 119,838 bytes /
 `1f260306a94dbc4b8239d86b7e87992915aa1070db379d231999d245c3d18674`.
@@ -434,3 +435,17 @@ This is not already an accepted contract or permission to fit/integrate a model;
 it must retain original source units, splits, guards and unknowns and must not
 promote PA frames into tactical opportunities/rates. No new measurement has been
 performed for that task. See PROGRESS for the single live resume action.
+
+### Postcheckpoint reading qualification — 2026-10-15
+
+After code `c008864` and verified handoff `a787917`, further inspection found
+remaining unsupported complete-display claims in immutable v3 receipts and this
+report. `reading-qualification-v4.json` explicitly withdraws complete 27/28/52-line
+focused/failure-stream visibility and all-124-line result visibility where tool
+responses truncated; it also rejects a complete raw-stderr-tail inference.
+Original receipts, raw streams, manifests and existing commits remain intact.
+No later hash/parser check or reread retroactively proves earlier reading.
+Actual bounded current-source/document reading and native test exits remain as
+recorded; no source/test changes, new measurement, repeated suite or independent
+review is claimed. This documentary correction does not repair source evidence
+or change the bounded scientific findings or any gate decision.
