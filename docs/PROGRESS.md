@@ -4,7 +4,7 @@
 
 **Current state:** F-01–F-04 and E-01–E-02 done for the limited internal 2019 pilot on macOS arm64; **G0 GO for internal engine development only** on the maintainer's 2026-10-10 statement of data-use permission. No documented publisher grant or public redistribution clearance; no bundled data/public app. F-04 source gaps remain flagged.
 
-**Current task:** P-01-preview-contact-proxy-contract active — [two-document zero-fit route](modeling/preview-contact-proxy-contract.md),preregistration proc_a793 verified0/18s;actual caller boundary/end-state definitions inspected,fit gate closed;documentary/source checkpoint next before read-only target qualification. F-01-contact-fact-evidence-boundary done — [C01–C14 evidence/assumption map](data-audits/2019-contact-fact-evidence-boundary.md),verified local a4e2db9;261 protected/165 sources/89 recipes/583 links/2+1 prose controls;no new counts/fits,automatic historical-cause importer or manager/gate approval. F-01-contact-proxy-joint-cohort done for bounded parent-author descriptive acceptance — [verified source-cohort audit](data-audits/2019-contact-proxy-joint-cohort.md),local code4b69d93;687Rust/526WerrorPython/full inherited checks;5389 labels/4059 geometry memberships,all4059 legacy residual;40 other labels are roe. Original zero literal vectors unchanged;no causal/rate/producer/manager/gate approval. F-01-contact-proxy-qualification done for bounded parent-author descriptive acceptance,verified local c008864:22 focused/687 Rust/508 Python/all inherited checks;original5389 labels/zero full literal vectors unchanged. Original literal findings unchanged. No fitting/producer/manager/gate approval. F-01-contact-consequence-support done for bounded parent-author descriptive acceptance:code d27d81e plus verified reading-claim correction fa5c6e6;original overclaims withdrawn,subsequent bounded remediation inspected. F-01-contact-consequence-support code verified locald27d81e;687 Rust/470 Python/full inherited checks on159 frozen sources;5389 labels but zero full literal vectors,not zero real mechanisms or a manager/gate approval. P-01-contact-consequence-projection done for bounded parent-author acceptance, verified local6d7bad6;687 Rust/424 Werror Python/full inherited checks on156 frozen sources; no producer/manager or gate approval. Standalone supplied SF/bunt/force-relay decisions only; no RNG, rate selection, producer integration or source-cause inference. E-03-ground-force-double-play done for bounded parent-author acceptance, verified local63410b4;681 Rust/424 Werror Python/all inherited checks; no gate signoff. The earlier durable bundle certifies only its paused snapshot. Bunt functional checkpoint6f367c0 and inspection correction4b2ab88 are verified locally; no producer/manager or gate waiver; P-01-runner-only-projection done — bounded parent-author standalone acceptance, verified localf965b77; no attempt policy or producer integration; F-01-cs-observability done — bounded parent-author descriptive acceptance, verified local278ac65; preregistered read-only missing-field census; F-01-runner-only-steals done — bounded parent-author descriptive acceptance, verified local86fa434 — [four-path source/proxy contract](data-audits/2019-runner-only-steals.md), preregistered before tests/measurement; no attempt-rate fit or generator change. E-03-ordinary-walkoff-hit done for bounded parent-author acceptance, verified local efc81ae — [nine-path explicit-facts prerequisite](engine/ordinary-walkoff-hit-facts.md), preregistered before tests/code; no producer/policy/gate change. F-01-terminal-hit-source done — bounded parent-author acceptance, code `804a72d` — [read-only four-path prerequisite](data-audits/2019-terminal-hit-source.md), no terminal policy/engine change. P-01-terminal-hit-compatibility done — verified local `ff793ac` — [three-path diagnostic](modeling/terminal-hit-compatibility.md), no production or terminal-policy change. Predecessor P-01-conditional-hit-dispatch done — verified local `7850a22`; [four-path preregistration](modeling/conditional-hit-dispatch.md), standalone nonterminal outcome dispatcher; all three explicit models, supplied hit word/cause, unchanged other11 shapes and fail-closed Bottom>=9. No current producer/CLI/UI/manager integration. Training prerequisite done — verified local `8a0d325`: [six-path export/native-loader prerequisite](modeling/hit-training-counts.md), base `2759d98`,213 protected/133 prior sources/final137. Training-only authenticated qualification/count export, strict typed loader, all three explicit variants/exact arithmetic parity; no producer/manager/default-model/terminal-policy or legacy change. Native prerequisite done, code `d417b7f`/postverified two-doc handoff `2759d98`,623 Rust/356 Werror Python/full frozen controls/compatibility and exact214 blobs; clean main ahead11/no push. Prior comparison done, code `f3a11d7`/verified handoff `e1ccd7c`:33 focused/609 Rust/356 Werror Python/full native/source/four-mode compatibility; `proc_0853` and `proc_2c6e` exact code/doc checkpoint postchecks,211 committed-index-work blobs/clean main. No simulator/model-selection/gate approval. Previously examined reservation means retrospective diagnostics, not fresh blinded validation. F-01-hit-advancement verified local `95150b6`,609 Rust/323 Werror Python/full exact evidence; no generator/manager integration authorized by that audit. F-01-runner-transitions verified local `a1db0db` under its [completed contract](data-audits/2019-runner-transitions.md). After verified E-03-fidelity `bd29eb9`, [three-path report](modeling/engine-fidelity-checkpoint.md); source foundation verified, manager deferred. No production engine/model changes or accuracy claim. Prior context: P-01-player-preview [player-specific probability pilot](modeling/player-probability-preview.md) done for bounded D-17, verified local code `f67d26f`; maintainer feedback: “this looks good -- please continue”. D-18 read-only bullpen audit is done, verified local `3d0729b`/handoff `7c42374`. Maintainer requests continuation with pitcher-specific average-outing workload rather than the proposed fixed-sixth-inning plumbing test. D-19 confirmed interview `b3ec6a67-afb5-41ae-b739-2d71de84007c`: audit start/relief PA workloads, implement a separate opt-in managed preview using individual mean thresholds and the explicitly modeled full recorded cast, verify then stop for testing. [Preregistration](modeling/pitcher-workload-preview.md) precedes outing measurements/implementation; F-01-workload done for the bounded source/export foundation:23 focused tests, source/native repeats and independent485-outing/24-role reconciliation plus30-vector/12-pitcher exports verified; `proc_f9d0` passes601 Rust/246 Python/full checks, complete eight-path full-index diff inspected and exact stage/prefix/pins/490 links accepted. Verified local code `105fb6e`; E-03-fidelity diagnostic now parent-accepted under its separate preregistered scope; common-mechanism NO-GO keeps manager deferred. Dependent P-02-managed-preview remains planned behind D-20 fidelity. D-21 supersedes routine testing pauses; continue until explicit input is needed, without gate waivers. No simulator changes yet. P-03-real-lineup [bounded Seattle–Oakland preview](modeling/real-lineup-preview.md) verified `c71ff80`/handoff `7488d53` supplies the fixed starting personnel. F-01-lineup audit verified local `c806a4f`/handoff `f048bf4` supplies starting identities/positions, not eligible bench or ratings. Only accepted offline 2019 data; D-17 permits this fixed participant-proxy probability estimation, not production fitting/reskin/transfer. Previous P-01-preview [experimental joint contact preregistration/count recipe](modeling/joint-contact-preview.md), count-only prerequisite `c7093c2` and opt-in sampler/policy `7c20947` accepted/committed; separate [player-opportunity support audit](modeling/player-opportunity-support.md) accepted/committed `4dc0ef7`; P-03-preview [joint-contact viewer integration](modeling/joint-contact-viewer.md) done for this bounded internal slice, parent-accepted/verified local `c3be669`; next scope resolved as D-15's read-only readiness audit; preregistered before tests/code under the maintainer's preserved interview choice; E-03 [ordinary caught-air prerequisite](engine/ordinary-air-catch.md) accepted/committed `315de0b`; F-01 [observed support map](modeling/observed-outcome-support.md) accepted/committed `83366fe`. [Raw supplement](data-audits/2019-outcome-details.md) published locally/verified `4ec6243`; [lexical mechanism inventory](data-audits/2019-raw-mechanisms.md) accepted/committed `668fe61` on548 Rust/124 Python/full checks. No new network authorization is needed for these offline facts; causal retirement clocks/all throws/opportunity denominators remain partial. Exact live evidence/next action is in Resume below. D-13 still prioritizes observable simulation/product milestones over open-ended edge-case accounting; unrelated UI work, production player fitting and first-two-out positive-prefix ER extension remain deferred; D-16 now authorizes the bounded opt-in real-lineup producer/viewer and stopped-afterward loopback/browser verification, not production or general roster expansion. P-03-preview [visible engine viewer](../preview/README.md) prior radio log `abef0e7` and native trace `e05054d` default bytes preserved; temporary verification stopped. E-03/G1 incomplete; no production model/accuracy/public release claim.
+**Current task:** F-01-contact-proxy-observable-targets verified for bounded descriptive acceptance — [after-descriptor audit](data-audits/2019-contact-proxy-observable-targets.md),base eb3928d;two fresh byte-identical measurements/all new cells reference-exact;4059 geometry memberships:2256 mask matches/286 known differences/1517 boundary-not-compared;not historical causal eligibility or a fit cohort. Fresh full-v3 proc_9f4a exit0/705s:687 Rust/548 Werror Python/all inherited checks and17 Python summaries;inspector proc_bd01 exit0/22s closes145 artifacts. Four-path checkpoint is the immediate action;no push. Then ready P-01-preview-contact-proxy-fit-contract,documentation only;fit/kernel/producer/manager/gates remain closed. P-01-preview-contact-proxy-contract done — [verified zero-fit route](modeling/preview-contact-proxy-contract.md),local eb3928d;262 protected/165 sources/89 recipes/588 links/2+1 prose controls;fit/kernel/producer/manager/gates remain closed. F-01-contact-fact-evidence-boundary done — [C01–C14 evidence/assumption map](data-audits/2019-contact-fact-evidence-boundary.md),verified local a4e2db9;261 protected/165 sources/89 recipes/583 links/2+1 prose controls;no new counts/fits,automatic historical-cause importer or manager/gate approval. F-01-contact-proxy-joint-cohort done for bounded parent-author descriptive acceptance — [verified source-cohort audit](data-audits/2019-contact-proxy-joint-cohort.md),local code4b69d93;687Rust/526WerrorPython/full inherited checks;5389 labels/4059 geometry memberships,all4059 legacy residual;40 other labels are roe. Original zero literal vectors unchanged;no causal/rate/producer/manager/gate approval. F-01-contact-proxy-qualification done for bounded parent-author descriptive acceptance,verified local c008864:22 focused/687 Rust/508 Python/all inherited checks;original5389 labels/zero full literal vectors unchanged. Original literal findings unchanged. No fitting/producer/manager/gate approval. F-01-contact-consequence-support done for bounded parent-author descriptive acceptance:code d27d81e plus verified reading-claim correction fa5c6e6;original overclaims withdrawn,subsequent bounded remediation inspected. F-01-contact-consequence-support code verified locald27d81e;687 Rust/470 Python/full inherited checks on159 frozen sources;5389 labels but zero full literal vectors,not zero real mechanisms or a manager/gate approval. P-01-contact-consequence-projection done for bounded parent-author acceptance, verified local6d7bad6;687 Rust/424 Werror Python/full inherited checks on156 frozen sources; no producer/manager or gate approval. Standalone supplied SF/bunt/force-relay decisions only; no RNG, rate selection, producer integration or source-cause inference. E-03-ground-force-double-play done for bounded parent-author acceptance, verified local63410b4;681 Rust/424 Werror Python/all inherited checks; no gate signoff. The earlier durable bundle certifies only its paused snapshot. Bunt functional checkpoint6f367c0 and inspection correction4b2ab88 are verified locally; no producer/manager or gate waiver; P-01-runner-only-projection done — bounded parent-author standalone acceptance, verified localf965b77; no attempt policy or producer integration; F-01-cs-observability done — bounded parent-author descriptive acceptance, verified local278ac65; preregistered read-only missing-field census; F-01-runner-only-steals done — bounded parent-author descriptive acceptance, verified local86fa434 — [four-path source/proxy contract](data-audits/2019-runner-only-steals.md), preregistered before tests/measurement; no attempt-rate fit or generator change. E-03-ordinary-walkoff-hit done for bounded parent-author acceptance, verified local efc81ae — [nine-path explicit-facts prerequisite](engine/ordinary-walkoff-hit-facts.md), preregistered before tests/code; no producer/policy/gate change. F-01-terminal-hit-source done — bounded parent-author acceptance, code `804a72d` — [read-only four-path prerequisite](data-audits/2019-terminal-hit-source.md), no terminal policy/engine change. P-01-terminal-hit-compatibility done — verified local `ff793ac` — [three-path diagnostic](modeling/terminal-hit-compatibility.md), no production or terminal-policy change. Predecessor P-01-conditional-hit-dispatch done — verified local `7850a22`; [four-path preregistration](modeling/conditional-hit-dispatch.md), standalone nonterminal outcome dispatcher; all three explicit models, supplied hit word/cause, unchanged other11 shapes and fail-closed Bottom>=9. No current producer/CLI/UI/manager integration. Training prerequisite done — verified local `8a0d325`: [six-path export/native-loader prerequisite](modeling/hit-training-counts.md), base `2759d98`,213 protected/133 prior sources/final137. Training-only authenticated qualification/count export, strict typed loader, all three explicit variants/exact arithmetic parity; no producer/manager/default-model/terminal-policy or legacy change. Native prerequisite done, code `d417b7f`/postverified two-doc handoff `2759d98`,623 Rust/356 Werror Python/full frozen controls/compatibility and exact214 blobs; clean main ahead11/no push. Prior comparison done, code `f3a11d7`/verified handoff `e1ccd7c`:33 focused/609 Rust/356 Werror Python/full native/source/four-mode compatibility; `proc_0853` and `proc_2c6e` exact code/doc checkpoint postchecks,211 committed-index-work blobs/clean main. No simulator/model-selection/gate approval. Previously examined reservation means retrospective diagnostics, not fresh blinded validation. F-01-hit-advancement verified local `95150b6`,609 Rust/323 Werror Python/full exact evidence; no generator/manager integration authorized by that audit. F-01-runner-transitions verified local `a1db0db` under its [completed contract](data-audits/2019-runner-transitions.md). After verified E-03-fidelity `bd29eb9`, [three-path report](modeling/engine-fidelity-checkpoint.md); source foundation verified, manager deferred. No production engine/model changes or accuracy claim. Prior context: P-01-player-preview [player-specific probability pilot](modeling/player-probability-preview.md) done for bounded D-17, verified local code `f67d26f`; maintainer feedback: “this looks good -- please continue”. D-18 read-only bullpen audit is done, verified local `3d0729b`/handoff `7c42374`. Maintainer requests continuation with pitcher-specific average-outing workload rather than the proposed fixed-sixth-inning plumbing test. D-19 confirmed interview `b3ec6a67-afb5-41ae-b739-2d71de84007c`: audit start/relief PA workloads, implement a separate opt-in managed preview using individual mean thresholds and the explicitly modeled full recorded cast, verify then stop for testing. [Preregistration](modeling/pitcher-workload-preview.md) precedes outing measurements/implementation; F-01-workload done for the bounded source/export foundation:23 focused tests, source/native repeats and independent485-outing/24-role reconciliation plus30-vector/12-pitcher exports verified; `proc_f9d0` passes601 Rust/246 Python/full checks, complete eight-path full-index diff inspected and exact stage/prefix/pins/490 links accepted. Verified local code `105fb6e`; E-03-fidelity diagnostic now parent-accepted under its separate preregistered scope; common-mechanism NO-GO keeps manager deferred. Dependent P-02-managed-preview remains planned behind D-20 fidelity. D-21 supersedes routine testing pauses; continue until explicit input is needed, without gate waivers. No simulator changes yet. P-03-real-lineup [bounded Seattle–Oakland preview](modeling/real-lineup-preview.md) verified `c71ff80`/handoff `7488d53` supplies the fixed starting personnel. F-01-lineup audit verified local `c806a4f`/handoff `f048bf4` supplies starting identities/positions, not eligible bench or ratings. Only accepted offline 2019 data; D-17 permits this fixed participant-proxy probability estimation, not production fitting/reskin/transfer. Previous P-01-preview [experimental joint contact preregistration/count recipe](modeling/joint-contact-preview.md), count-only prerequisite `c7093c2` and opt-in sampler/policy `7c20947` accepted/committed; separate [player-opportunity support audit](modeling/player-opportunity-support.md) accepted/committed `4dc0ef7`; P-03-preview [joint-contact viewer integration](modeling/joint-contact-viewer.md) done for this bounded internal slice, parent-accepted/verified local `c3be669`; next scope resolved as D-15's read-only readiness audit; preregistered before tests/code under the maintainer's preserved interview choice; E-03 [ordinary caught-air prerequisite](engine/ordinary-air-catch.md) accepted/committed `315de0b`; F-01 [observed support map](modeling/observed-outcome-support.md) accepted/committed `83366fe`. [Raw supplement](data-audits/2019-outcome-details.md) published locally/verified `4ec6243`; [lexical mechanism inventory](data-audits/2019-raw-mechanisms.md) accepted/committed `668fe61` on548 Rust/124 Python/full checks. No new network authorization is needed for these offline facts; causal retirement clocks/all throws/opportunity denominators remain partial. Exact live evidence/next action is in Resume below. D-13 still prioritizes observable simulation/product milestones over open-ended edge-case accounting; unrelated UI work, production player fitting and first-two-out positive-prefix ER extension remain deferred; D-16 now authorizes the bounded opt-in real-lineup producer/viewer and stopped-afterward loopback/browser verification, not production or general roster expansion. P-03-preview [visible engine viewer](../preview/README.md) prior radio log `abef0e7` and native trace `e05054d` default bytes preserved; temporary verification stopped. E-03/G1 incomplete; no production model/accuracy/public release claim.
 
 **Verified E-03 history:** E-03 bounded [clean safe-PA earned-run proof](engine/clean-safe-pa-er.md), parent-verified bounded [PA hit/no-hit coverage checkpoint](engine/pa-hit-coverage.md), selected before TDD after actual canonical/fold/generated-contact caller inspection. The [ordinary ground-throw evidence contract](engine/ordinary-ground-throw.md) is parent-accepted and locally committed as `eb0f1e762c01e1a678f5b8650ef6b3d69ebec422` on fresh `proc_a099`:384 Rust/62 Python/full checks and unchanged38 Rust hashes, after test-first compound-history priority corrections. Complete1,891-line staged30-path diff, exact working/index/frozen equality and clean checkpoint verified; not pushed, independently reviewed or a G1/full-box claim. The preregistered [reviewed ground clean-ER proof](engine/clean-ground-er.md) is now parent-accepted on fresh `proc_970c`:386 Rust/62 Python/full applicable checks/all38 frozen hashes; verified local commit `ac7ba5e15fcbe49aa3607cc53cb5e75a470f6f0c` after complete412-line five-path staged inspection/exact index-working-frozen equality; no push/independent review. The [exact reviewed BB/HBP forced-award ER](engine/clean-forced-award-er.md) slice is now parent-accepted on fresh `proc_0021`:388 Rust/62 Python/full applicable checks/all38 frozen hashes, verified local `4037189b24abe01211c5b067e153867c02e4454c` after complete412-line staged five-path inspection and exact working/index/frozen equality; no push or independent review. [Ordinary caught-K fielding evidence](engine/ordinary-caught-k.md) is parent verified by final `proc_5800` (395 Rust/62 Python/full applicable checks/282 links/all40 checked hashes); verified local `2071bbf98654031a577cbadf8d4b145ce9611b8a` after complete1,626-line33-path staged inspection and exact working/index/frozen equality, no push/independent review/G1 claim. Current slice: [sole protected BB/HBP-award RBI cause](engine/protected-award-rbi.md), preregistered before tests/production; fresh final `proc_e76f` verifies406 Rust/62 Python/full applicable checks/all42 frozen hashes. Complete1,709-line34-path staged snapshot inspected; exact working/index/all42 frozen equality and fresh289 links passed. Parent accepts this bounded source; verified local `a17b778a959bf2a0840c3df938256869b8a8a08b`, clean main ahead5; no push/independent review/G1 claim. Current [observed-PA RBI coverage](engine/pa-rbi-coverage.md) was preregistered before tests/production and is full verified on `proc_4271`414 Rust/62 Python/all applicable checks/all43 frozen hashes; complete754-line eight-path staged inspection/exact working-index-all43-frozen equality/fresh294 links passed; bounded parent acceptance/verified local `7815d19def01a7e44c8de6435456987c9f3fb84a`, clean main ahead6, no push/independent review/G1 claim. Current [sole out-of-park-HR RBI cause](engine/sole-home-run-rbi.md) was preregistered before tests/production; fresh final `proc_2ad4` verifies425 Rust/62 Python/all applicable checks/all45 frozen hashes, including two inspection-added supplemental proofs; complete1,685-line34-path staged inspection/working-index-all45-frozen equality/fresh300 links passed; bounded parent acceptance/verified local `f600c52`, no push/independent review/G1 claim. Clean safe-PA ER `7eb5160` and generated preview `eefba3a` are now committed/published with the other six local checkpoints; `proc_67f7` verifies remote main `57ba400`. **E-03 remains incomplete under the approved field/event matrix**; the bounded D-12 product proof does not waive it. Maintainer confirmed [the concrete accounting contract](engine/g1-accounting-scope.md), without edits, in interview `e75959e7-704f-40cc-943b-1a3a10e34285`; scope approval is not completion/G1 signoff. Parent accepts the bounded [single-delivery WP/PB checkpoint](engine/pitch-occurrences.md), **`3059fbc` committed/pushed**, on unchanged final `proc_fae0`: **220 Rust (51 WP/PB)/59 Python/native1,350/27ER/54boxes/fmt/Clippy/167 prose links/diff**, final retained Sol-high review **OK with notes; no issues found**, F1/F1a/F1b/F2 resolved. `BBE15`/WPtag23 add supplied current-pitcher units and optional causal/steal/recovery facts, not official completeness or ER expansion. `proc_df98` publication/remote hash equality/clean synchronized main consumed. Prior published **`3ca87eb` GIDP** and IBB `94c467a`, hit-value `be97d6b`, CS/slots remain accepted. Parent now accepts the **first ordinary imposed balk exact-award/counter checkpoint (`BBE16`; **`b96b02a` committed/pushed**)** on unchanged final `proc_d129`: **251 Rust (31 balk)/59 Python/native1,350/27ER/54boxes/fmt/strictClippy/177 prose links/diff/all24 source-test hashes before-after**, retained Sol-high **OK with notes; no issues found**, F1–F3 resolved. Parent also accepts the [ordinary play-proceeds minimum-progress checkpoint](engine/balk-progress.md), selected before TDD: `BBE17`, final `proc_8c24` **280 Rust (29 progress)/59 Python/native 1,350/27 ER/54 boxes/fmt/strict Clippy/188 links/diff/all 25 before-after hashes**, retained Sol-high **OK with notes; no issues found**, F1/F2 resolved. **`8efac26` committed/pushed**; native `proc_c9cc` publication/remote equality/clean synchronized main fully consumed. Parent now accepts the bounded [automatic-K delivery checkpoint](engine/automatic-k-pitches.md): unchanged final `proc_87c1` **310Rust(30automatic)/59Python/native1,350/27ER/54boxes/fmt/strictClippy/199links/diff/all26hashes**, retained Sol-high **OK with notes; no issues found**, original F1/P1 and F2/P2 resolved with preserved test-first/encoding evidence. No new DTO/wire/fold/ER/completeness in that checkpoint; its source/test snapshot stayed unchanged from retained review through publication. **`ad42cd1` committed/pushed**; native `proc_926d` exit0/full publication output consumed, HEAD exactly remote `refs/heads/main`, clean synchronized main captured. User requested continuation after Pi restart. Parent now accepts the bounded [automatic-K plus separate recovery retirement checkpoint](engine/automatic-k-recovery.md), selected before TDD: fresh Sol-high **No issues found / OK with notes**, unchanged final `proc_f4de` **327 Rust (47 automatic)/59 Python/native1,350/27 shared-upstream ER/54 boxes/fmt/strictClippy/207 links/diff/all26 hashes**. Verified code checkpoint **`a0938f6` published** with handoff **`f718217`**; `proc_e7f9` confirmed HEAD equals actual remote main and clean synchronized main. No full-box/ER/G1 claim. The bounded explicit First-touch/before-first-third-out guard is now parent-accepted on `proc_466c`:333 Rust (53 automatic)/59 Python/native1,350/27ER/54boxes/fmt/strictClippy/211links/diff/same26hashes and targeted parent/author inspection, **not an independent reviewer verdict**; commit **`85b798c` verified**, now published via `proc_67f7`. Bounded [after-First catcher throw](engine/uncaught-k-after-first-throw.md) is now parent-accepted after test-first canonical/unknown-history priority corrections: contract selected before TDD, appended recovery tag5/`BBE18`, unchanged final `proc_8e9d` **348 Rust (68 automatic-K)/59 Python/native1,350/27 shared-upstream ER/54 boxes/fmt/strictClippy/217 links/diff/all26 hashes**, targeted parent/author review only, not independent. Commit **`747f0ed` verified**, now published via `proc_67f7`. Later continuation notes are local until a subsequent verified checkpoint. Richer WP/PB/SB/K chronology, retirement/appeal/terminal balk histories and full matrix coverage/Rule9.16/literal-box evidence remain required. AB/ER/credit coverage and source gaps remain visible in [accounting](engine/accounting.md). Historical 27 ER/54 box comparisons are shared-upstream, not full engine reconstruction/season accuracy; replay2,415 candidates/14 exclusions is diagnostic, not complete eligibility. No current authentication/maintainer-input blocker. **E-03 not done, G1 pending; P-01/UI not started.**
 
@@ -37,7 +37,9 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | F-01-contact-fact-evidence-boundary | done —[bounded evidence/assumption GO](data-audits/2019-contact-fact-evidence-boundary.md),verified local a4e2db9;proc_27b3 exits0/40s;261 protected/165 sources/89 recipes/583 links;no new data counts or source changes | Inspect exact handling/retouch/timing/force/relay/judgment requirements versus retained field definitions;separate explicit evidence,derivation,missing fields and modeled assumptions;no endpoint repair,fitting,producer change or new transfer |
 | F-01-contact-endpoint-semantics | done — bounded parent-author descriptive acceptance;[audit](data-audits/2019-contact-endpoint-semantics.md)/verified local code d59ea44;two actual exports/all808 cells exact;fresh full687 Rust/486 Python plus all inherited checks on161 sources | D-20/D-21 read-only explanation of absent batter children and retired base_end representation using accepted cached source definitions;no prior predicate relaxation,source mutation,fitting or new transfer. |
 | F-01-contact-consequence-support | done — bounded descriptive audit;code d27d81e/verified reading correction fa5c6e6;not an independent review or causal certificate | D-20/D-21 [read-only support contract](data-audits/2019-contact-consequence-support.md); source-label/literal-shape support for supplied SF/SH/GIDP episodes; reuse complete runner census and unchanged training/heldout/excluded split; unknown causes stay unknown,no rate fitting/producer change. |
-| P-01-preview-contact-proxy-contract | active —[two-doc zero-fit preregistration](modeling/preview-contact-proxy-contract.md),base a4e2db9;proc_a793 verified0/18s;documentary checkpoint pending | Define descriptor response/mass/model-assertion/producer boundary and read-only observable-target prerequisite before fitting;no model/kernel/producer or gate approval |
+| F-01-contact-proxy-observable-targets | done for bounded parent-author descriptive acceptance —[report](data-audits/2019-contact-proxy-observable-targets.md);two repeated reports/all new cells reference-exact;fresh full-v3 proc_9f4a0/705s,687Rust/548WerrorPython/17 summaries;inspector proc_bd010/22s,145 closed artifacts;checkpoint next | Preserve direct descriptors;2256 mask matches/286 differences/1517 boundary-not-compared among4059 geometry memberships;no causal eligibility or fitted-rate certification |
+| P-01-preview-contact-proxy-fit-contract | ready — documentation-only successor after verified four-path checkpoint | Freeze population/response,previously examined splits,all286 differences/1517 boundaries,legal modeled fallbacks,arithmetic/RNG/artifact and numerical acceptance limits before any fitting;do not select2256 matched rows or open producer/manager/gates |
+| P-01-preview-contact-proxy-contract | done —[verified zero-fit route/prerequisite contract](modeling/preview-contact-proxy-contract.md),local eb3928d;proc_a7c7 exits0/41s;262 protected/165 sources/89 recipes/588 links | Define descriptor response/mass/model-assertion/producer boundary and read-only observable-target prerequisite before fitting;no model/kernel/producer or gate approval |
 | P-01-contact-consequence-projection | done — bounded parent-author acceptance; verified local6d7bad6 | D-20/D-21 [four-path standalone projector](modeling/contact-consequence-projection.md),baseec415e9/245 protected/154 prior/final156 sources; canonical SF/bunt/force-relay facts, no policy/producer change. |
 | E-03-ground-force-double-play | done — bounded parent-author acceptance; verified local63410b4 | D-20/D-21 [eight-path direct force/relay contract](engine/ground-force-double-play.md),base4b2ab88/238 protected/152 prior/final154 sources. Existing GIDP/TwoOutContactFacts remain unchanged and do not supply named fielders;no generator,measurement or gate claim. |
 | E-03-sacrifice-bunt-throw | done — functional6f367c0 plus verified inspection correction4b2ab88; parent-author only | D-20/D-21 [nine-path separate bunt contract](engine/sacrifice-bunt-throw.md), basea3e7f39/234 protected/150 prior/final152 sources. First→clear Second/Third holds/batter out/explicit scorer judgment/direct named throw;no reinterpretation of non-bunt ground facts,producer/policy or gate change. |
@@ -109,7 +111,223 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 
 ## Resume here
 
-### Current — P-01-preview-contact-proxy-contract;route present,verification next;2026-10-15
+### Current — F-01-contact-proxy-observable-targets verified;four-path checkpoint next;2026-10-15
+
+No active process. The bounded descriptive audit is verified,not a causal/rate or
+production gate approval. Only changed paths: `docs/PROGRESS.md`,
+`docs/data-audits/2019-contact-proxy-observable-targets.md`,
+`audits/contact_proxy_observable_targets.py`, `tests/test_contact_proxy_observable_targets.py`.
+All165 prior sources/263 protected paths remain unchanged;no dependencies/network,
+engine/producer/UI/manager changes. Two actual reports are byte-identical,2,831,484
+bytes each,SHA `c498044cb505bb2dcbb5f41448144eb35a1e3d1b745195f0970bb3b914f87666`.
+All2085 source/191 membership cells exactly match the separate aggregation
+reference;5389 distinct labels,4059 geometry memberships,out-sum matches4059,
+controlled mask2256 matches/286 differences/1517 boundary-not-compared.
+
+Fresh command `bash /tmp/bbsim-contact-proxy-observable-targets/full-v3/full-checks.sh`
+with separate full-v3 stdout/stderr: **proc_9f4a exit0/705s**,687 Rust/43 zero-failure
+summaries;548 Werror Python37.388s;all17 Python summaries,offline/locked build/tests/
+fmt/strict all-target Clippy and all inherited native/source/property/refusal/
+legacy/BBE/prefix/four-mode/raw-page checks. New16 Rust shapes remain exact.
+`python3 -Werror /tmp/bbsim-contact-proxy-observable-targets/inspect-completed-v3.py`
+**proc_bd01 exit0/22s** authenticates167 sources/111 recipes(including all89 old),
+all201 inherited driver lines and145 full artifacts. Authority `full-result-v3.json`
+SHA `c7cbef200360fa3ddd785e65aef0fd0f64b2ed3523c0294d5dfa923b9700d43a`,
+`completed-v3.sha256`,plus53 stable supplementary artifacts. Raw logs preserved;
+summary/error searches and bounded spans inspected,not complete large-log display.
+The failed27 preparation/139 full-v2 artifacts and all original receipts remain.
+
+**Next concrete action:** final prose/diff checks,then private candidate via
+`python3 -Werror /tmp/bbsim-contact-proxy-observable-targets/checkpoint-v2.py prepare`;
+inspect its exact four-path diff,then once-only `commit` and identity-only `post`.
+Expected267 blobs/263 protected/167 sources;no push. On any postcheck failure inspect
+existing HEAD/index/receipts,never blindly recommit/amend/rollback. Commit/post
+success is not yet claimed at this writing. After verified `code-post-v1.json`,
+continue ready P-01-preview-contact-proxy-fit-contract as a separate doc-only scope;
+freeze numerical acceptance limits before fitting. No owner-input blocker.
+
+### Recorded execution — observable targets (superseded status notes)
+
+The following task-phase notes retain original timing and failures;their pending
+or active statuses and next actions are historical,not the live instructions above.
+
+Verified preceding **eb3928dd861808e88a43b72792e045bbf35b78e6**,parenta4e2db9,
+treef7f682c24ef3e002db6b560f7618b119a83d134f;proc_a7c7 exits0/41s,once-only
+two-doc commit then existing-identity postcheck;264 exact blobs/262 protected/
+165 sources/89 recipes/588 links;clean main ahead26 at capture,origin804a72d
+unchanged/no push. Authority `/tmp/bbsim-preview-contact-proxy-contract/post-v1.json`;
+complete short commit/post JSON/stdout inspected,stderr empty. All26 bounded changed
+doc views including entire12926-character new contract actually displayed before
+commit. Fresh prepare proc_ac61 exits0/18s after unchanged-prefix recovery;2 prose
+link tests0.010s and1 tracking test0.006s pass,real broken-link refusal retained.
+Bounded GO is architecture/prerequisite contract only;NO-GO for fit/selection/
+kernel/producer/manager/causal certification. Current protocol remains verbatim
+including original status epoch;results append rather than rewrite its prefix.
+
+Reading qualification `/tmp/bbsim-preview-contact-proxy-contract/reading-qualification-after-checkpoint-v1.json`
+retains original fact-boundary source-inspection receipt/hash but withdraws any
+inherited whole PLAN/EXECUTION/SQL/module display claim beyond actually visible
+responses:requested ranges/hashes/ASTs do not certify truncated contents. PLAN
+all75 lines plus blank tail and EXECUTION all70 lines/tail were freshly displayed
+in bounded chunks after eb3928d/before this target-audit protocol;not retroactive
+proof for earlier preregistration. Old receipts remain unchanged. New target scope
+preliminary source inspection:joint-cohort1–137,literal1–173,old joint tests1–85,
+literal fixtures1–85,proxy fixtures1–75,projector1–90 and canonical tests1–90;
+not whole-module reading except the137-line joint module. No new data rows/counts.
+The old literal after-state check is gated by earlier geometry/child sufficiency;
+absence of its diagnostic is not automatically a passed after-state check.
+
+New root `/tmp/bbsim-contact-proxy-observable-targets/`;base264 blobs/263 protected/
+165 prior sources/89 recipes;own only ledger/new report/new pure audit/new tests,
+expected267 blobs/167 sources. Protocol written before new tests,synthetic canonical
+reference output or source counts. Preserve all old native/census/whole joint-cohort
+reconciliation before new counters. Add direct frame_end/after_outs/after_base_mask
+axes at distinct source/membership grains;separate literal-check reachability,
+raw-out-sum and controlled-mask relations. An unchanged Rust projector must supply
+all16 fictional clean Top2 contexts;no Python transition engine or historical
+cause/eligibility certification. No source transfer/fits/model selection/producer
+or UI change. Concrete next action:authenticate protected/source/recipe/input/
+authority bindings and freeze protocol,then observe new semantic red controls
+before implementation,reference/canonical evidence and two fresh measurements;
+finish with the entire applicable fresh offline/locked suite after source/test
+changes. No owner-input/network/ER blocker;fit and all production gates stay closed.
+
+Preregistration **proc_12c0 exits0/19s**,264 base/263 protected/165 prior sources/
+89 recipes/23+13 inputs/6 definitions/15 authorities/12 inspection inputs;complete
+short stdout/stderr inspected. Protocol frozen before new test/reference outputs/
+counts. Missing-module ImportError is interface evidence only. Typed-empty scaffold
+6 methods yields5 assertion failures/2 fixture errors:inherited outcome validator
+requires known nonboundary after fields and exact active out sum. Actual validator
+56–95/join33–82 inspected;no predecessor predicate relaxed. Correct fixture domains
+and retain invalid cases as refusal controls:8 methods/11 semantic assertion
+failures/zero errors0.035s,raw streams/snapshots retained in semantic-source-v2 and
+tdd-through-v2.json. Controlled-mask unknown comparison is currently unreachable
+through accepted nonboundary exports;boundary-not-compared tests do not cover it.
+Changed paths now include only the two owned docs,new tests and an8-line typed-empty
+pure-audit interface,not behavioral implementation. Concrete next action:expand
+remaining guard/grain/property red controls,then implement mandatory inherited
+reconciliation and validated modeled-reference lookup before new counters;produce
+Rust/reference evidence and two actual measurements only after focused green.
+Entire fresh offline/locked suite remains required after these source/test changes.
+
+Expanded tests before behavioral implementation:21 methods/116 assertion failures/
+zero errors0.301s,all64 source contexts reach missing-membership cardinality failures;
+deep component assertions were not yet reached. Raw1177-line/111918-byte stderr
+retained;first100/last13 displayed plus exact summary/error-pattern search,not every
+traceback. Validation-only stage21 methods leaves77 table failures/zero errors,
+7 guard/preservation methods green0.481s. Minimal finite lookup/comparison tables
+then21 methods green0.426s. Additional strength-only canonical-half-change-alone
+boundary control was already green (not claimed initial red);now **22 methods green
+0.484s**,complete short test stderr displayed. Pure audit validates whole inherited
+cohort plus modeled shape schema before counters;folds every old source weight and
+membership axis exactly;no Python transition model. New audit/test only,old165
+sources remain protected. Canonical `proc_256f`exit0/26s:16 fictional clean Top2 controls from unchanged
+Rust projector,all17 raw CSV lines displayed and every fixture shape exact.
+CSV SHA `9c00caad3dc8b6ce87b8fa10ba943ce4b24b7c0a35c12a9cde0f6e812d586644`;
+reference SHA `8704a6d7851c79967d9027abb96232bfd51d3b096c827560570d37e0dd8bbef9`.
+14 closed canonical artifacts include commands/driver/executable/raw streams/167
+source bindings. Independent set/direct-geometry reference:4 methods/67 assertion
+failures/zero errors0.392s before behavior,then4 green0.362s. Shared inherited
+parsers/classifiers and shape reference,not independent causal validation.
+`reading-withdrawal-v1.json`withdraws renewed inherited whole PLAN/EXECUTION/joint
+module display claims exceeding truncated responses;original receipts retained.
+Renewed15-line PLAN/EXECUTION and two-view module completeness claims were also
+unsupported by some truncated responses and are explicitly withdrawn in
+`reading-qualification-v3.json`;original receipts retained. Current module/test
+have now been actually displayed in4/5 bounded views,after implementation/around
+measurement,not retroactively before protocol. Large red/focused logs are retained,
+not claimed entirely displayed.
+Concrete next action:run new root `freeze-v1.py`then`measure-v1.py`with fresh raw
+streams;close167-source/89-recipe/control bindings before two fresh complete actual
+publications. Entire fresh applicable offline/locked suite remains next. No actual
+source counts/fit or full-suite pass is newly claimed.
+
+Freeze `proc_ebee`exit1/18s before exclusive freeze artifacts or measurement
+execution:private proposed .py/.rs-only scope predicate omitted21 SQL queries and
+Cargo.toml/Cargo.lock. Existing167 binding manifest/protected files unchanged.
+Two-method AST regression observes1 assertion failure/zero errors0.003s;fresh
+`evidence-v2.py`correctly includes query/build sources,2 green0.002s,missing/extra
+sources still refused. Original failed helpers/streams retained and hashed in
+`source-scope-failure-v1.json`;publication paths remained unused. Concrete next
+command:`freeze-v2.py`with fresh freeze-v2 streams,then unchanged-purpose
+`measure-v1.py`with fresh measurement-v2 streams. No actual measurement started;
+whole-suite execution remains pending. Do not rerun/overwrite failed v1 streams.
+
+**Latest verified measurement:**`proc_86dc`exit0/563s including freeze;measurement
+543.662s. Two byte-identical2,831,484-byte reports,SHA
+`c498044cb505bb2dcbb5f41448144eb35a1e3d1b745195f0970bb3b914f87666`;
+2085 source/191 membership cells,192025 real/5389 labeled/no overlap,all complete
+old reports/native/provenance exact before new counters. All new cells reference-
+exact/all source weights and membership folds conserved.55 closed artifacts/44
+controls/167 sources/89 inherited recipes. Of4059 geometry memberships:raw out-sum
+matches4059;controlled masks match2256,differ286(SF284/SH2),boundary-not-compared1517
+(SF8/GIDP1509). All5389 original literal-after checks unreached;zero full literal
+vectors unchanged. Descriptor matches/differences do not certify causes/eligibility
+or tactical rates. Do not hide conflicts by selecting the matched subset.
+
+**Preparation recovery:**`proc_ecf3`exit1/37s,no full-suite execution:old predecessor
+live HEAD4b65 pin correctly refused currenteb3928d.27 failed artifacts closed in
+`failed-preparation-v1.sha256`;all prior assertions retained via reversible current
+HEAD/tree/264-blob/four-path aliases. Two-method AST red1 failure/zero errors then
+2green;negative later guards only individually reached after positive current epoch
+accepts. Input-manifest preflight also observes2 assertion failures/zero errors in
+one method:ROOT's obsolete filename absent;v2 aliases the byte-identical existing
+13-row inherited manifest,not new input. Native/modified control math unchanged.
+
+**Preparation verified:**`proc_5813`exit0/44s,complete short stdout/stderr displayed.
+167 sources/263 protected/108 recipes including all89 originals;all201 inherited
+driver lines retained reversibly,218 total with new controls. Native-output-root
+1test and exact inherited-input-alias1test green. No scientific source/measurement
+changed. Authority`preparation-lifecycle-v2.json`preserves both failed/successful
+commands and results.
+
+**Full-v2 failure:**`proc_8fa1`exit1/733s. All43 Rust summaries/687tests and548
+Werror Python39.201s passed;14 zero-failure Python summaries/inherited native,
+source,legacy/prefix/BBE/four-mode/raw-page checks and new16 canonical controls
+passed before newly added prose-helper invocation omitted required recipe argv.
+`IndexError`is helper-interface evidence,not a scientific test regression or a
+full-suite pass. Raw2676-line stdout/928-line stderr and139 artifacts retained in
+`failed-full-v2.sha256`;all167 scientific sources/actual measurement unchanged.
+One-method shell-argv regression observes2 assertion failures/zero errors;newv3
+supplies current checkpoint's links recipe,unchanged2+1 prose controls already
+pass with that argument. Fresh whole suite is still required,not a tail/smoke rerun.
+Two private template guards also stopped non-unique/overlapping-name substitutions;
+partial outputs inspected and only missing helpers generated via exact single-pass
+aliases. No overwrite/rebaseline/assertion relaxation.
+
+**Full-v3 preparation verified:**`proc_1aaa`exit0/40s;complete short stdout/stderr
+actually displayed;111 recipes(all89 originals)/167 sources/263 protected/all201
+inherited lines,219 total. Native-output/input-alias/prose-invocation1test each
+green;unchanged prose2+1 controls separately pass with the correct recipe argument.
+Authority`preparation-lifecycle-v3.json`;all failed139/27 artifacts unchanged.
+
+**Active native process:`proc_9f4a`**,entire fresh
+`bash /tmp/bbsim-contact-proxy-observable-targets/full-v3/full-checks.sh`
+into full-v3 stdout/stderr. Concrete next action:consume native lifecycle/inspect
+actual exit and raw summaries;only after full success record full-lifecycle-v3.json
+and run inspect-completed-v3.py with unused streams. Expected—not yet observed—
+43Rust/687tests and Python summary counts
+`[548,3,3,1,1,1,1,3,1,4,4,2,2,1,1,2,1]`/17OK markers. Then verify supplement-v2,
+final prose/diff/private candidate and once-only checkpoint-v2.py commit/post.
+Checkpoint helper expects267 blobs/263 protected/167 sources/111 recipes and still
+needs actual full-result-v3.json/completed-v3.sha256. Stable supplement-v2 is now
+closed at53 artifacts,including all34 original rows;do not overwrite its files.
+Do not modify any111 frozen recipe or167 scientific source during the run. Do not
+poll/rerun occupied outputs;no full-suite/completion/commit success yet claimed.
+Nine private helpers' earlier Werror py_compile passed,not a full-suite pass.
+Reading qualificationv3 supersedes unsupported renewal claims in frozenv2 and
+focused-inspectionv1;actual module/test full display now established in4/5 bounded
+views,not pre-protocol/pre-measurement inspection;no whole PLAN/EXECUTION/prior
+module/test/focused/large-log reading claim. Subsequently all current PLAN/EXECUTION
+text was actually displayed in21 ≤1400-character views while full suite8fa1 runs;
+`contract-reading-v4.json`records exact reconstruction/hashes/timing,not retroactive
+pre-protocol proof.34 stable recovery/reading/split-summary/checkpoint-helper
+artifacts closed in`closure-supplement-v1.sha256`. Full native result/inspection,
+final doc/prose/diff checks and four-path candidate/commit/post remain pending.
+Four owned repo paths only,no staged change/new commit/push;fit/producer/manager/
+gates stay closed.
+
+### Previous — P-01-preview-contact-proxy-contract;2026-10-15
 
 Verified preceding checkpoint **a4e2db909677a1d6b8657793df28183156d45f5c**,parent
 ee51474,treeee19f1dd2e8edd7e0408da9f8ea208d7fad329f1;proc_27b3 exits0/40s:
