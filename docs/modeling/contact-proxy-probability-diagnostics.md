@@ -274,3 +274,209 @@ methods,Werror private-helper compilation/diffcheck and exact historical links()
 AST pass. These are already-green documentary adaptations,not semantic-red
 scientific implementation evidence. Candidate/acceptance/once-only local commit/
 postcheck remain separately gated;no new scientific suite or score is claimed.
+
+## Separate computational task — toy implementation checkpoint;2026-10-15
+
+Documentaryf5e2000 is identity-verified by proc_82ff exit0/1s:283 exact blobs/
+281 protected/177 unchanged scientific sources/208 recipes/621 links/clean main
+ahead35/no push. Its complete276-line document is preserved byte-exactly as the
+prefix of these findings;the263-line original numerical definitions are unchanged.
+New root `/tmp/bbsim-contact-proxy-probability-diagnostics/`;four owned paths are
+ledger,this append-only document,new Python diagnostics and its new tests.
+
+Two prerequisite failures are retained:proc_c080 exit1/9s miscounted fresh document
+metadata as277 rather than276;proc_b61a exit1/8s caught an accidental broad numeric
+replacement changing a helper's expected SHA literal,not the frozen artifact.
+Actual-guard regression controls have1+2 semantic assertion failures before3+2
+pass;two initial documentary refusals were already green for the wrong reason.
+V3 uses6 unique exact-inverse changes,unchanged authority literals/thresholds;
+proc_d1db exit0/9s authenticates276 whole documentary lines/283 base/281 protected/
+177 prior sources/208 recipes/all274 current257 inherited lines.37 prerequisite/
+recovery bindings close;original failed partials/raw streams remain immutable.
+
+Private API/report/reference/publication boundary predates scientific tests.
+Missing-module ImportError is interface-only. Typed-empty10-method semantic red:
+proc_f5a9 wrapper0/1s/native1,1895 assertion failures/zero errors/0.466s;raw
+2342253-byte/24469-line stderr retained. Positive authenticate()->None was already
+green on the empty stub. First positive stops0!=72;isolated summary fields,
+authentication refusals and missing repeat proposal stop deeper assertions.
+No individually-red claim for later rational/NLL/bit/null/repeat branches.
+
+New pure module reauthenticates original whole source/count/native/parameter bytes
+through unchanged public probability review before all72-context/3-split scoring.
+Exact Fraction frequencies/residuals/unscaled Brier and direct-weight binary64
+natural-log NLL retain all exposures/prior-only/null reasons;structural positives
+refuse before any log. No clipping,new parameter or engine/integration hook.
+proc_7d36 exit0/16s passes33 focused methods15.142s;proc_eb8c exit0/16s passes35
+methods15.225s (12 new+10 unchanged review+13 unchanged count),Werror compilation/
+diffcheck. Two test-only strengthenings retain row-order/scaling and nontraining
+proposal checks. Initial strengthening expected6/25 but fixture defaultmask5 gave
+1/3;explicit intendedmask1 corrects only fixture,all assertions unchanged. Raw
+failure retained;these are already-green behavior strengthenings,not new missing
+feature-red or independent/native-execution proof.
+
+Separate reference has missing-file interface-only failure then proc_b151
+wrapper0/1s/native1:5 scalar methods/1782 assertion failures/zero errors/0.325s;
+first tuple/shape/refusal stops do not prove deeper endpoint assertions red.
+K96 Fraction/integer scalar interval behavior passes proc_817d exit0/0s,5 methods
+0.226s/Werror compilation/diffcheck. Full report reference's separate hex-helper
+AttributeError is interface-only;proc_7b2b wrapper0/0s/native1 has5 methods/
+40 assertion failures/zero errors/0.166s. Shape/hex/refusal first stops do not
+establish later per-field branches red. Implemented independent source-derived
+rational/interval report comparison now passes proc_c654 exit0/1s,5 report methods
+0.254s+5 unchanged scalar methods0.220s/Werror compilation/diffcheck. A separately
+versioned6-method report strengthening adds positive training/heldout/excluded
+exposures10/3/2 and exact unequal-weight Brier/NLL;proc_fc4e exit0/1s passes.
+Its extra behavior was already green,not a missing-feature red. Publication has
+missing-file interface-only failure then proc_dba0 wrapper0/1s/native1:7 methods/
+20 assertion failures/zero errors/0.216s;first no-report/no-raise stops do not
+individually red-prove deeper byte/receipt branches. First publisher proc_bf5b
+exit0/1s passes7 methods0.357s. New certificate-integrity regression proc_b43c
+wrapper0/1s/native1 has8 methods/4 assertion failures/zero errors/0.478s:
+publisher checked certificate keys then discarded contents before projection,
+accepting noncanonical/zero-denominator/inverted/inconsistent NLL references.
+Full53-line raw stderr read;NaN serialization refusal was already green. Exact
+hex/interval/exposure/width/distance guard fixes cause before publication,without
+new log/score/tolerance. proc_e75a exit0/2s passes8 publication0.469s+6 report
+0.321s+5 scalar0.221s/Werror compilation/diffcheck. Original-byte authentication
+precedes output/scoring;complete approved proposal/CDF metadata,exclusive roots/
+companions/four occupied root kinds,partial/failure receipts and repeated exact
+canonical toy reports pass. Fault injection is not scientific accuracy proof.
+Actual inputs/helper freeze/scoring/full scientific suite/candidate/commit remain
+incomplete. New private NLL endpoint pairs use exact signed hex strings to avoid
+decimal-digit conversion limits without rounding or disabling security limits;
+primary rational pairs/budgets/definitions unchanged,details preregistered before
+reference tests. No actual source frequency/residual/NLL/Brier evaluation yet.
+No accuracy/calibration/uncertainty/predictive/causal/manager/release or new gate.
+
+## Frozen actual retrospective diagnostics — 2026-10-15
+
+This section supersedes the preceding pending actual-input/scoring snapshot;the
+complete276-line preregistered prefix and all tolerances remain byte-exact.
+Current four-path/history guard interface missing-file errors are not semantic
+red. proc_2732 wrapper0/0s/native1 has7 methods/7 assertion failures/zero errors/
+0.018s. First metadata tuple/no-raise stops limit deeper-red claims. proc_adf0
+exit0/9s passes7 methods9.069s/Werror/diffcheck;proc_2556 exit0/9s repeats7
+methods8.909s plus3 actual-driver precondition methods0.005s. Separate driver
+interface missing-file failure is not semantic red;proc_dba7 wrapper0/0s/native1
+has3 methods/6 assertion failures/zero errors/0.006s. Refusals precede loading,
+output and scoring;later positive real path intentionally awaits freeze.
+
+Observed35 primary/review/count+19 publication/reference/scalar+10 current guard/
+driver=64 selected methods bind current code in controls-lifecycle-v1.json.
+This is not the complete scientific suite. proc_d8d4 exit0/8s then freezes179
+scientific sources/281 protected paths/166 stable helper artifacts/eight original
+source/count/parameter/native input copies/208 inherited recipe bindings/all274
+previous driver lines. Whole501-line application and276-line diagnostics bytes
+remain exact. No actual diagnostic score preceded this freeze. Manifest SHAs:
+
+- sources:`a90fa6187a803bf218072b9ae7f9b7fb7dd14b9fa587642c578dd6eb88d9197f`;
+- helpers:`113521afdaea6c89067a98197e9648bc17fe8b3090b0e96100202d3ac95be7a6`;
+- eight inputs:`c13a34c3e18633e402b07dbb24854438213fde4eade6ab96e54c0bc7db834fe7`;
+- closed5-role freeze:`9715f725d5635a4821c57904de1212b6aa3c425f6911b215efd2f2e48dadf67c`.
+
+proc_b3f3 exit0/39s passes5 post-freeze methods39.007s/Werror/diffcheck:correct
+external anchor accepts;wrong anchor/poisoned scientific source/reference helper/
+closed input refuse without modifying real files. Already-green strengthening,
+not missing-feature red. Cold private CLI uses explicit`PYTHONPATH=.`and rejects
+malformed freeze authority with no output,not a loader/import failure. Nine
+completed freeze/gate/cold-CLI/execution-recipe bindings close SHA
+`26464feac9ba6b554dd4be07972db99c453e35aba0e4ab1196b1908abf6cac5a`.
+
+proc_ee03 exit0/32s produces two **822679-byte** canonical complete reports,SHA
+`4225c65a4f9e6f9f977320948b558d0b325ac86033ae5c304cdfc8a53aec6036`,
+byte-identical over all72 contexts/3 split summaries/24 unchanged training
+proposals/exact rational fields/primary binary64 bits/independent NLL intervals/
+null reasons/complete original-byte authorities. Both complete original sources
+are reauthenticated before parent output;all72 structural preflights precede logs.
+No native process executed in this diagnostics publisher;the closed previously
+produced native witnesses remain original inputs,not regenerated diagnostics.
+
+Descriptive split means below are rounded presentation only;exact reduced Brier
+pairs and primary NLL bits/intervals are retained in both full reports:
+
+| Split interpretation | Parents | Mean unscaled Brier | Mean NLL,nats/parent |
+|---|---:|---:|---:|
+| training,in-sample hindsight | 31692 | 0.133842290601066 | 0.213167463704029 |
+| heldout,previously examined retrospective | 7853 | 0.133912486329309 | 0.211871059930271 |
+| excluded,informational not validation | 69 | 0.110645775910289 | 0.181380905058765 |
+
+Do not rank models or infer accuracy/calibration/coverage/predictive quality from
+these numbers. There is only one fixed proposal,no fitted alternative/threshold/
+sampling or integration. Observed maximum NLL mean interval width is approximately
+`2.1980994740752323e-94`≤registered`1e-80`;maximum exact primary-mean distance is
+approximately`1.5896643502076087e-16` and normalized-loss-sum distance approximately
+`1.359682742351683e-16`,both≤registered`1e-12`nats/parent. Exact signed-hex pairs
+remain in artifacts-v1/result.json;these approximations are presentation,not new
+bounds or statistical accuracy tolerances. No32epsilon-as-NLL claim.
+
+proc_3af4 exit0/10s rechecks all75 exact certificates/canonical projections and
+closes16 actual artifacts,including both six-companion publications,root result,
+completed outer streams and lifecycle receipt. Publication inner stdout/stderr and
+outer stderr are empty;both status receipts authenticate/complete/publish true,
+native_executed false. These are bounded author checks,not an independent review
+or exhaustive visible reading. Complete fresh scientific suite/repeats and exact
+four-path candidate/local commit/postcheck still pending;limited internal G0
+permission is unchanged,no new G0–G5/product/manager/data-redistribution approval.
+
+Fresh full-suite preparation follows,not a historical-pass substitution.
+proc_6bdf wrapper0/0s observes actual-AST epoch/driver variants each2 methods/
+1 assertion failure/zero errors/0.001s at positive stale280/257 metadata;negative
+refusals were already green for stale reasons,old live guards never run as current.
+proc_8071 exit0/0s passes7 exact-inverse epoch/helper/input aliases/current2-method
+AST/Werror/diffcheck. proc_1dfd exit0/92s passes2 exact274-driver AST methods,
+1 native-output AST+1 input alias+1 prose argv+2 driver controls,bash syntax,
+all270 recipe hashes,complete historical/current scientific guard,diffcheck.
+Historical application177 is explicitly subset-only;current179/281 remains frozen.
+Seven epoch and7 driver aliases preserve all old64hex authority literals and
+scientific bodies/tolerances;270 recipe rows retain all208 previous bindings as
+exact prefix,296-line driver reconstructs all274 prior lines byte-exactly.
+Eighteen completed preparation bindings SHA
+`9cc7161f6f3addc51e973c68bc731ca9b99dedd9efd7dc87fd671b58c7503992`.
+proc_32ea now runs full-v1/full-checks.sh with explicit module path/global Python
+warnings-as-errors,exclusive once-only receipt/raw streams. Whole fresh suite,
+additional actual repeats,candidate/commit/postcheck outcome remains unobserved.
+
+
+## Fresh complete verification and bounded checkpoint — 2026-10-15
+
+This supersedes the preceding unobserved full-suite state,not the frozen276-line
+specification. **proc_32ea exits0/1564s** for the exact command
+`PYTHONPATH=. PYTHONWARNINGS=error bash /tmp/bbsim-contact-proxy-probability-diagnostics/full-v1/full-checks.sh`.
+All703 Rust executions/45 zero-failure Rust summaries,601 Werror Python discovery
+methods54.021s and all38 zero-failure Python summaries pass. The full driver also
+passes offline/locked Rust build/tests/fmt/strict all-target Clippy,Werror Python
+compilation,all inherited scientific/source/native/property/refusal/publication/
+collision/compatibility/BBE/prefix/four-mode/raw-page/legacy checks and diagnostics.
+The private inspector's unexecuted602-method estimate was corrected to observed
+601=589+12 after actual AST/raw inventory;no executed failure or scientific
+assertion/threshold/source change. Historical passes are not substituted here.
+
+Two additional full-suite822679-byte reports and canonical primary reports match
+the initial publications exactly,including every72 context rows/3 splits/24 fixed
+proposals/null/exact rational/primary binary64 bit/NLL interval. Report SHA remains
+`4225c65a4f9e6f9f977320948b558d0b325ac86033ae5c304cdfc8a53aec6036`.
+All75 certificates recheck within original budgets;publication statuses complete,
+inner streams empty,native_executed=false. Original parameter-application native
+repeats,3040 synthetic fixtures/72960 contexts/15 comparator refusals,384 mixed
+prefixes,16 four-mode records/four raw UTF-8 pages,legacy bytes and all three
+walkoff/SF/bunt BBE parity families remain exact. No new score/model comparison.
+
+**proc_384a exits0/56s**:completed-suite inspector authenticates current179 sources/
+281 protected paths/270 recipes,all expected inventories/parities and both extra
+actual reports,then closes179 full artifacts. Full result SHA
+`9a9f33dd176284f9d19013f63442eeeeb215ba368cdcd5054d12e7a5bff169bc`.
+Raw stdout322562bytes/4743lines SHA
+`cff78e5e9458f978599e32b445bb77e6882a52d115f5552f3b7791b13b656910`;
+stderr184732bytes/1238lines SHA
+`5a6e3ca37ba24e6a0fc5253a075b7ab5a6ee5f510b87343836605b01254d6006`.
+Full streams remain preserved;visible first1800/last5000-character views plus
+machine-wide inventory/parity checks are bounded author inspection,not exhaustive
+visible raw-log reading or independent review. Private/tmp evidence is local.
+
+Exact four-path285-blob candidate/bounded acceptance/once-only local commit and
+existing-identity postcheck remain separate. Maintainer explicitly requests commit
+and push after verification;that authorizes code publication,not source datasets,
+a public app,accuracy/integration/manager or new G0–G5 signoff. A later sampler or
+adapter needs its own preregistered boundary/tests and fresh verification;this
+package adds no RNG,transition generation,optimized fitting or model selection.
