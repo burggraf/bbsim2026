@@ -318,7 +318,47 @@ Inspection displayed complete six-line inspector stdout/empty stderr,full stderr
 839–864 and stdout2631–2642 plus complete machine scalar/test-summary fields.
 **No complete raw-log reading claim.** Original streams/history remain untouched.
 
-The source finding has fresh executable evidence,not yet the scoped code/author
-checkpoint. Task remains active;no commit,push,independent review,producer fitting,
-manager/gate approval or causal certification is implied. No executable source/test
-changed after focused green or measurement;later changes are documentation only.
+At that verification checkpoint the scoped code/author commit was still pending.
+No executable source/test changed after focused green or measurement;later changes
+are documentation only.
+
+## Bounded parent-author acceptance — 2026-10-15
+
+**GO for this descriptive reconciliation only.** Verified local code
+`4b69d93141b1242c0aa5ad7cd7356f6716fad70f`,parent4b65bd5,
+tree`db869c43a65500e9ee12e7c08b8a57d2e5149203`. **proc_ac58 exits0/22s**:
+one scoped four-path commit followed by explicit existing-identity postcheck,
+262 exact HEAD/index/work blobs/258 protected/165 sources/89 recipes/578 prose
+links;clean main ahead23 at capture,origin804a72d unchanged,no push. Authority:
+`/tmp/bbsim-contact-proxy-joint-cohort/code-post-v1.json`. Commit streams and
+postcheck evidence retained;2 prose-link/1 tracking controls pass without weakening
+broken-link checks. A private candidate is not actual staging. All55 bounded
+before/after documentary views,including the entire324-line new report,were
+actually displayed before that commit. Earlier137 module/273 test inspection
+identity/timing is retained;no retrospective full-stream reading certification.
+
+Observed source/family grains,whole prior reports,all full cells and exact
+conservation are accepted with fresh687Rust/526WerrorPython/full inherited evidence.
+The original5389/zero literal vectors are unchanged. All4059 geometry memberships
+remain residual;40 other labels are roe. Shared classification is explicitly not
+independent causal validation. No mechanism/rate/denominator promotion,fitting,
+producer/manager integration,E-03/G1/G2/G3/G0–G5 signoff,desktop/season/release or
+licensing approval follows. Missing evidence stays unknown.
+
+Next ready **F-01-contact-fact-evidence-boundary** must first preregister a small,
+zero-new-count map from exact canonical SF/bunt/force-relay required facts to the
+already retained source definitions/available exported fields. It must distinguish
+direct evidence,derivation,unavailable facts and modeled assumptions,not infer
+retouch/handling/force/relay/timing or scorer judgments from these labels. No new
+source transfer,endpoint repair,producer code or fitted rates are authorized by
+this audit. Actual gaps should produce a precise source/licensing/modeling decision,
+not another implicit gate waiver. PROGRESS remains the sole live next-task ledger.
+
+Handoff preparation failure retained:`proc_440f` exits1/18s before staging/commit;
+Python3.15 Werror raises`DeprecationWarning` for`os.path.commonprefix`. A text-prefix
+regression reproduces seven runtime errors before the helper fix;all seven empty/
+Unicode/path-like literal string cases then pass under unchanged Werror. A direct
+character-prefix calculation replaces the deprecated function;filesystem commonpath
+would not preserve text semantics. Original helper/streams/empty v1 views retained,
+reversible private handoff-v2 uses fresh stems. Project source/tests,actual counts
+and the fresh full-suite identity are unchanged;no old publication was overwritten.
