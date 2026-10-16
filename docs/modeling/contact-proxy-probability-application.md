@@ -261,3 +261,241 @@ separate actions. Actual checkpoint identity is authoritative only when root
 278 paths/175 sources/178 recipes;do not infer it from prose. No actual report
 has entered the probability function,no proper scores or rates were evaluated,
 and no model/integration/accuracy/gate/release approval or push occurred.
+
+## Four-path application implementation protocol — 2026-10-15
+
+Task **P-01-contact-proxy-probability-application**,separate from the documentary
+preregistration above. Actual base **76ee5294105a985b6324c3be8a107d88541cbefc**,
+tree1908bfd857ad23e3783b6be999d0be5db53c7234,parenta73b693. Commit proc_1afa
+exit0/2s and existing-identity postcheck proc_d882 exit0/1s verify280 exact
+committed/index/work blobs/278 protected/175 unchanged sources/178 recipes/
+617 links;clean main ahead33,origin804a72d unchanged,no push. The documentary
+root's postcheck-closed-v1.sha256 closes8 actual lifecycle/identity bindings;
+checkpoint-closed-v1.sha256 closes42 stable artifacts. Reading-correction-v3.json
+and all original failed/raw evidence remain immutable.
+
+### Ownership,boundary and observable checks before implementation
+
+Own only ledger,this document's appended findings,new
+`audits/contact_proxy_probability_review.py` and new
+`tests/test_contact_proxy_probability_review.py`. Preserve all278 other existing
+paths/all175 prior scientific sources/all178 old recipe bindings/every257 current
+full-driver line,including244 inherited. Expected282 blobs/177 scientific sources.
+Freeze this implementation protocol and the full preexisting263-line document
+before interfaces,tests,reference behavior or any actual-rate invocation. Root:
+`/tmp/bbsim-contact-proxy-probability-application/`;exclusive versioned evidence.
+
+The review module is source/authentication/computational review,not an engine,
+public probability codec,producer or CLI. Propose two byte-based entry points:
+`authenticate(source_bytes,expected_source_sha256,count_pair,expected_count_sha256)`
+validates the approved whole source and exactly two identical canonical count
+byte strings before native invocation;it supplies no mutable trusted bypass.
+`review` takes those same original bytes/bindings plus private native witness
+bytes and repeats authentication before returning a diagnostic dictionary.
+Expected hashes must originate in the approved closed authority chain,not be
+inferred from presented metadata. Reuse unchanged count-codec encode/parse;
+never accept a supplied parsed training subtable as authentication.
+
+1. Before behavior,authenticate actual base/index/work/source/recipe/input/
+   definition/closed authorities and freeze protocol. No source transfer/query,
+   new population census,season expansion or altered split/classification.
+2. Observe interface failures separately,then compiled semantic assertion red
+   using typed-empty interfaces where needed. Cover complete valid toy source/
+   count/native examples,full original24-context domain/prior-only/support,
+   source mutations outside training,wrong/source/artifact digest pairs,invalid
+   report/byte/schema/model/prior/count/aggregate inputs and all native metadata/
+   integer/support/prior/rational/bit/CDF discrepancies. Disclose first-assertion
+   stops,already-green strengthening and unreachable defensive branches.
+3. Keep an exact literal-support Fraction review algebra separate from native
+   arithmetic. Verify counts/raw u64 numerator/common D exactly,positive support/
+   positive-zero structural probabilities,and raw binary64 division/left-to-right
+   CDF/sentinel bits. Check exact Fraction discrepancy against unchanged32*2^-52;
+   no normalization/clipping/sampling or source-to-causal promotion.
+4. The native witness is private inspection output,not a new public artifact
+   format. Use a new private actual-input driver;do not alter the frozen toy-only
+   driver with its fictional digest. Invoke unchanged Rust `calculate` only after
+   external whole-source/count authentication. Review reauthenticates all bytes
+   and refuses malformed/extra/missing/reordered/duplicate/poisoned witnesses.
+5. Freeze all177 candidate scientific sources/private helpers/inputs/178 prior
+   recipe bindings before actual invocation. Only then authenticate both747-byte
+   artifacts against the complete3328994-byte report and approved source/count
+   digests above,reconcile all24 contexts and invoke the fixed proposal. Produce
+   private reports/native streams twice at fresh paths;require exact repeated
+   bytes,exact rational/metadata checks and bounded numerical parity. Record
+   actual output hashes only after creation;preserve originals on any failure or
+   collision. Test publication failure/companion collisions without overwrites.
+6. This is the first fixed training-count parameter calculation,not merely a
+   synthetic check;label it honestly. It is not optimized fitting,model selection,
+   production calibration or predictive validation. Compute no NLL/Brier/frequency
+   scores,posterior uncertainty claims,ensemble simulations or heldout tuning.
+7. Run the entire fresh applicable offline/locked Rust build/tests/fmt/strictall-
+   target Clippy/Werror Python/inherited scientific/source/native/property/
+   compatibility/publication/collision suite. Retain all178 old recipe bindings/
+   all257 driver lines by exact reversible aliases,never a smoke replacement.
+   Preserve raw failures/seeds/toolchain/dataset and close fresh result evidence.
+8. Verify exact four-path candidate/protected/source/protocol/evidence identities;
+   targeted author inspection is not exhaustive manual or independent review.
+   Once-only local commit requires existing-identity postcheck;no push.
+
+No RNG/word/draw/grid/fallback/sampler/adapter,engine/reducer/projector/producer/
+CLI/UI/manager hookup,new public storage schema or G0–G5 signoff. Retain original
+286 differences/1517 boundary-not-compared/1330 nongeometry/2256 descriptor matches
+without filtering or identity/causal repairs. Existing limited internal G0
+permission only;unknown facts stay unknown. Actual rates remain uncomputed at
+protocol writing. Prerequisite authentication/freeze/tests/behavior/results are
+pending;there is no identified owner-input blocker.
+
+## Initial implementation evidence — synthetic inputs only
+
+Preregistration **proc_062f exit0/9s** authenticates280 base/278 protected/175
+prior sources/178 recipes/all257 actual driver lines,including244 inherited/the
+whole263-line previous contract/618 links/closed historical groups before tests
+or behavior;16 bindings are closed. Prior sources/definitions/failed evidence
+remain unchanged;reading ranges/hashes are not a whole manual-review claim.
+
+Interface proc_a65c exit0/1s wraps native unittest1/one ImportError for the absent
+review module;not semantic red. Typed-empty interfaces then compile. Semantic
+proc_fa41 exit0/2s retains native unittest1:9 methods/8274 assertion failures/
+zero errors/1.808s. Before behavior,a10th method adds canonical-array boolean/
+spacing aliases/native input types;proc_b5f2 exit0/2s retains native unittest1:
+10 methods/8493 assertion failures/zero errors/1.835s. Original raw streams,
+source snapshots and both epochs remain intact;46 stable TDD bindings close them.
+Only bounded first/last raw windows were viewed,not complete multi-megabyte logs.
+Positive/core tests stop at missing24-context shape;authentication subtests stop
+at first accepted invalid input,so later review assertions/deeper arithmetic/
+bit/repeat checks do not all have individual-red evidence.
+
+The two new Python files now implement original-byte authentication of the whole
+source and tuple of two identical approved count files,then private native/
+literal-support Fraction review. The source is reprojected before training-only
+selection via unchanged codec encode/parse. Public review reauthenticates rather
+than trusting a parsed object or previous authenticate return. All24 metadata/
+count/support/prior/raw-rational/division/CDF bits are checked,with exact rational
+error pairs bounded by unchanged32/2^52. No clipping,renormalization or I/O.
+
+**proc_8c2d exit0/15s**:23 toy methods pass in14.683s (10 new review/13 unchanged
+count methods),Werror compileall over audits/tests/preview and diffcheck pass.
+1716 small supported partitions/all24 contexts and cap/rotation cases exercise
+the internal strict-parsed computational core;that is not whole-source authority
+or native-execution proof. Public toy whole-source/malformed/native/high-bit/
+canonical-array/source-outside-training/repeat checks pass. Exact rational-
+closure/raw-float-bound defensive failures are unreachable through valid strict
+counts and correct division bits;no independent branch-coverage claim. These are
+not the full fresh scientific suite or actual parameter application.
+
+Next:preregister/test private native/publication/refusal/collision helpers,freeze
+all177 candidate scientific sources/helpers/inputs/178 old recipes,then separately
+authenticate actual artifacts before native invocation. No actual parameter,
+proper score or new native real-input driver/output exists at this checkpoint.
+No new gate signoff/integration/push. Work incomplete:private application/fresh
+whole suite/candidate/identity-postchecked local commit remain outstanding.
+
+## First actual fixed-proposal application — 2026-10-15
+
+Private current-epoch guard controls proc_85c3 exit0/9s:7 methods8.617s
+(already-green adaptation,not semantic-red evidence). Private publication runner
+has separate interface proc_3518 and compiled semantic proc_40be:6 assertion
+failures/zero errors/0.028s;first-shape/first-refusal limitations remain recorded.
+Strict native compile plus publication proc_455d exit0/2s:6 methods0.585s;
+3 additional runtime-digest/arity/strict-byte/repeat controls proc_8fba exit0/0s:
+0.139s,already-green strengthening. Toy native execution/repeated report bytes,
+all5 occupied companions/file/symlink aliases,poisoned authorities/native failure
+and malformed-success refusal pass. Failed raw streams/status are preserved;
+completed private reports are not published on those failures.
+
+**Freeze proc_6f17 exit0/16s precedes actual invocation**:177 unchanged/tested
+candidate scientific sources SHA
+62a9e6a221ddb513cd05256432cb2c365f393b34a255238aba1b821f23600fb5;
+89 stable application helper/control/TDD bindings SHA
+a9fd3fac0a004621f56285896023e505665eed91386dcdc330156ea08ebf52b0;
+4 externally bound actual input paths SHA
+273739fe5d7ee178f4220b73fbe38c01c6a6d5a3c5d4fe08bd8fb0c96babb13f;
+178 prior recipes/all257 actual driver lines/263-line prior contract retained.
+No active-writer pin;4-binding freeze closure is required by the actual helper.
+Approved expected source/count digests are fixed closed-authority values,not
+self-hashes inferred from presented metadata. Both complete source reports and
+both747-byte count artifacts remain unchanged.
+
+**Actual application proc_8546 exit0/16s**,reported15.943s,does calculate the
+first fixed-proposal hindsight training-count parameters after complete-source/
+count authentication. It is **not synthetic-only**,but not optimized fitting or
+model selection. All24 contexts/31692 training parents/raw unreduced a/D pairs/
+metadata/support/prior-only/native division/CDF bits/exact Fraction bounds pass.
+Two fresh private27486-byte reports are identical,SHA
+859835c865b74a6d9fc924144a314f568ccb41724371bd945705b36ad4ec801c;
+two4339-byte native witnesses are identical,SHA
+37cbe1e0772b331f6f50a4101f2b04c47227a77848226825f0030e1836a1d8c8.
+Maximum exact probability error89/1733885856537640960;maximum exact CDF error
+11/171418260816789504,both≤32/4503599627370496. These are numerical errors
+against exact rational arithmetic,not outcome/performance scores. There are16
+artifact bindings plus5 observed lifecycle/result bindings under the private root.
+Short result receipt/stdout/empty stderr were inspected;all24 records/full bytes
+were checked computationally,not exhaustive manual27KB report reading or an
+independent review. No NLL/Brier/frequency scores,uncertainty/calibration/predictive
+claim,causal certification,sampling,integration,new gate approval or push.
+
+Work remains incomplete:the fresh entire scientific suite,exact reversible
+current-epoch aliases preserving178 prior recipes/all257 driver lines,closed
+fresh results/four-path candidate/once-only local commit/identity postcheck remain.
+Existing limited internal G0 permission is unchanged;not public distribution or
+bundled-data/application approval. Parameter/parity success is not model accuracy
+or complete/legal vector support and does not resolve1517 boundary-not-compared,
+286 mask differences or1330 nongeometry memberships;2256 matches is no denominator.
+
+
+## Fresh full verification and bounded numerical acceptance — 2026-10-15
+
+Current-epoch preparation retains two real-AST semantic assertion failures
+(proc_fda1 wrapper0/native1 each):old HEAD277 versus current280,and244-line
+preparation versus actual257 inherited driver lines. Positives stop at first
+HEAD/line-count assertions,not individual-red proof for all deeper checks.
+proc_50ef exit0/9s validates the new280-blob epoch;proc_b7be exit0/45s prepares
+208 recipes,including all178 old bindings,and274 driver lines preserving all257
+prior lines by exact inverse. All old scientific assertion bodies/175 sources,
+263-line contract and278 protected existing paths remain unchanged. Current177
+sources remain exactly those frozen before actual invocation.158 preparation and
+7 separate already-green summary-verifier/control bindings are closed.
+
+**Fresh entire suite proc_938e exit0/1123s** runs
+`bash /tmp/bbsim-contact-proxy-probability-application/full-v1/full-checks.sh`
+with exclusive raw stdout/stderr.703 Rust executions/all45 zero-failure summaries;
+589 Werror Python discovery methods in53.997s/all30 Python summaries pass.
+Offline/locked build/tests/fmt/strict all-target Clippy,Python compilation and all
+inherited scientific/source/native/property/refusal/publication/collision/legacy/
+compatibility checks pass. Fresh3040 synthetic fixtures/72960 contexts/15 native
+comparator mutation refusals;384 mixed prefixes,16 four-mode seeded records/four
+raw UTF8 pages,16 fictional descriptor contexts,legacy/native-count records and
+three exact BBE families retain their original parities. No inherited assertion
+or scientific tolerance was weakened or historical result rebaselined.
+
+**Inspector proc_0fe5 exit0/45s** closes174 full artifacts;full-result-v1.json SHA
+5c5c9bfc5ff07e67576beea860a394bb1ae65c277f461296b6c2e3b14031c1df.
+Full raw stdout4387 lines/293003 bytes SHA
+dcf9dcaa4b5f1e39d7242bf0986aff096a44d3ef667af0b0cd5a65e07220c1dc;
+stderr1125 lines/167199 bytes SHA
+abf9f4dc45c77d3c90ebc09a60ef7936d3b1e730a54c94329297d3f980877aed.
+Fresh actual repeats take15.567s and retain the exact27486-byte report/4339-byte
+native witnesses and exact error pairs recorded above. Their earlier snapshot
+full_scientific_suite=false describes publication before the whole script exits;
+it is not rewritten. The separately observed native exit/closed full result is
+the full-suite evidence. Parameter reconstruction is real,not synthetic-only.
+
+Parent-author module/test/real-caller inspection plus complete byte/summary/parity
+checks is bounded acceptance,not independent review. Full logs/reports remain
+raw;only bounded first/last1200-character full-log views and short receipts were
+visibly read,not exhaustive manual reading. No performance score,optimization,
+selection,calibration,predictive/causal certification,sampling,integration or new
+G0–G5 signoff. Existing limited internal G0 permission is unchanged. All original
+286 differences/1517 boundaries/1330 nongeometry memberships remain;2256 matches
+is not a denominator. Broader P-01/E-03/G1/manager/release work is incomplete.
+
+The numerical subtask is accepted subject to exact four-path candidate checks;
+private candidate,once-only local commit and existing-identity postcheck are
+separate gated steps. Authoritative resulting identity belongs in
+`/tmp/bbsim-contact-proxy-probability-application/code-post-v1.json`;do not infer
+commit/postcheck success from this prose. No push/publication authorized. Private
+/tmp evidence is local,not remotely durable. The next bounded package is a
+separate documentation-only diagnostics preregistration:freeze exact proxy
+frequency/residual/proper-score definitions and bounded high-precision NLL
+reference before any scoring.32epsilon is not a logarithmic score bound;already
+examined heldout remains retrospective,not blind predictive validation.
