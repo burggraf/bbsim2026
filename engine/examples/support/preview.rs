@@ -428,11 +428,28 @@ where
 /// One shared seeded loop for explicitly supplied initial personnel/state.
 pub fn game_from<F>(
     seed: u64,
-    mut state: GameState,
+    state: GameState,
     mut produce: F,
 ) -> Result<Vec<EventTransition>, String>
 where
     F: FnMut(&GameState, &mut Rng) -> Result<(Outcome, Event), String>,
+{
+    let mut play = 0;
+    game_from_transitions(seed, state, |before, rng| {
+        let (outcome, event) = produce(before, rng)?;
+        play += 1;
+        apply(before, event).map_err(|e| format!("seed {seed}, play {play}, {outcome:?}: {e:?}"))
+    })
+}
+
+/// Retain supplied canonical transitions, including facts outside their Event.
+pub fn game_from_transitions<F>(
+    seed: u64,
+    mut state: GameState,
+    mut produce: F,
+) -> Result<Vec<EventTransition>, String>
+where
+    F: FnMut(&GameState, &mut Rng) -> Result<EventTransition, String>,
 {
     let mut rng = Rng::new(seed);
     let mut log = Vec::new();
@@ -442,9 +459,13 @@ where
                 "seed {seed}: resource ceiling reached, no winner fabricated"
             ));
         }
-        let (outcome, event) = produce(&state, &mut rng)?;
-        let transition = apply(&state, event)
-            .map_err(|e| format!("seed {seed}, play {}, {outcome:?}: {e:?}", log.len() + 1))?;
+        let transition = produce(&state, &mut rng)?;
+        if transition.before() != &state {
+            return Err(format!(
+                "seed {seed}, play {}: supplied transition before-state mismatch",
+                log.len() + 1
+            ));
+        }
         state = transition.after().clone();
         log.push(transition);
     }
