@@ -641,3 +641,499 @@ fn repeated_projection_does_not_mutate_supplied_state_parent_bytes_or_facts() {
     }
     assert_eq!((before, original.to_bytes(), bytes, facts), saved);
 }
+
+fn provider_selection_equal(got: &sampler::Selection, expected: &sampler::Selection) {
+    assert_eq!(got.class, expected.class);
+    assert_eq!(got.source_sha256, expected.source_sha256);
+    assert_eq!(got.model_id, expected.model_id);
+    assert_eq!(got.selection_version, expected.selection_version);
+    assert_eq!(got.training_events, expected.training_events);
+    assert_eq!(got.grid_word, expected.grid_word);
+    context_equal(&got.context, &expected.context);
+}
+fn provider_adapted_equal(got: &adapter::Adapted, expected: &adapter::Adapted) {
+    provider_selection_equal(&got.selection, &expected.selection);
+    assert_eq!(got.transition, expected.transition);
+    assert_eq!(got.transition.to_bytes(), expected.transition.to_bytes());
+    assert_eq!(got.realized, expected.realized);
+    assert_eq!(got.disposition, expected.disposition);
+}
+
+#[test]
+fn provider_all24_contexts_receives_complete_before_and_selection_once() {
+    assert_eq!(
+        adapter::PROVIDER_BOUNDARY_VERSION,
+        "supplied-contact-proxy-provider-boundary-v1"
+    );
+    let bytes = payload();
+    for m in 0..8 {
+        for outs in 0..3 {
+            let before = state(m, outs);
+            let original = parent(&before);
+            for supplied in [0, 1 << 62, 1 << 63, 3 << 62, u64::MAX] {
+                let expected =
+                    adapt(&before, sample(), &original, &bytes, DIGEST, supplied, None).unwrap();
+                let calls = std::cell::Cell::new(0);
+                let got = adapter::adapt_with_provider(
+                    &before,
+                    sample(),
+                    &original,
+                    &bytes,
+                    DIGEST,
+                    supplied,
+                    |seen, selected| {
+                        calls.set(calls.get() + 1);
+                        assert_eq!(seen, &before);
+                        provider_selection_equal(selected, &expected.selection);
+                        Ok(None)
+                    },
+                )
+                .unwrap();
+                assert_eq!(calls.get(), 1);
+                provider_adapted_equal(&got, &expected);
+                assert_eq!(got.transition.to_bytes(), original.to_bytes());
+            }
+        }
+    }
+}
+
+#[test]
+fn provider_supplied_canonical_decisions_match_direct_adapter_in_all_supported_contexts() {
+    let bytes = payload();
+    for class in &CLASSES[..3] {
+        for m in 0..8 {
+            if !match class {
+                ProxyClass::Sf => m >= 4,
+                _ => [1, 5].contains(&m),
+            } {
+                continue;
+            }
+            for outs in 0..2 {
+                let contacts: &[AirContact] = if *class == ProxyClass::Sf {
+                    &[AirContact::Fly, AirContact::LineDrive, AirContact::PopUp]
+                } else {
+                    &[AirContact::Fly]
+                };
+                for contact in contacts {
+                    let before = state(m, outs);
+                    let original = parent(&before);
+                    let facts = decision(*class, *contact);
+                    let expected = adapt(
+                        &before,
+                        sample(),
+                        &original,
+                        &bytes,
+                        DIGEST,
+                        word(*class, m),
+                        Some(&facts),
+                    )
+                    .unwrap();
+                    let calls = std::cell::Cell::new(0);
+                    let got = adapter::adapt_with_provider(
+                        &before,
+                        sample(),
+                        &original,
+                        &bytes,
+                        DIGEST,
+                        word(*class, m),
+                        |seen, selected| {
+                            calls.set(calls.get() + 1);
+                            assert_eq!(seen, &before);
+                            assert_eq!(selected.class, *class);
+                            Ok(Some(facts))
+                        },
+                    )
+                    .unwrap();
+                    assert_eq!(calls.get(), 1);
+                    provider_adapted_equal(&got, &expected);
+                    assert_eq!(got.disposition, Disposition::Projected);
+                    assert_eq!(
+                        EventTransition::from_bytes(&got.transition.to_bytes()).unwrap(),
+                        got.transition
+                    );
+                    assert_eq!(
+                        got.transition
+                            .event()
+                            .delta
+                            .credits
+                            .iter()
+                            .filter(|c| c.kind == CreditKind::PlateAppearance)
+                            .count(),
+                        1
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn provider_every_wrong_family_including_remaining_is_hard_refusal_after_one_call() {
+    let before = state(5, 0);
+    let original = parent(&before);
+    let bytes = payload();
+    for selected in CLASSES {
+        for supplied in &CLASSES[..3] {
+            if selected == *supplied {
+                continue;
+            }
+            let calls = std::cell::Cell::new(0);
+            let got = adapter::adapt_with_provider(
+                &before,
+                sample(),
+                &original,
+                &bytes,
+                DIGEST,
+                word(selected, 5),
+                |seen, selection| {
+                    calls.set(calls.get() + 1);
+                    assert_eq!(seen, &before);
+                    assert_eq!(selection.class, selected);
+                    Ok(Some(decision(*supplied, AirContact::Fly)))
+                },
+            );
+            assert_eq!(error(got), "contact-proxy adapter decision/class mismatch");
+            assert_eq!(calls.get(), 1);
+        }
+    }
+}
+
+#[test]
+fn provider_unknown_contradictory_and_ineligible_facts_keep_exact_projector_refusal() {
+    let before = state(5, 0);
+    let original = parent(&before);
+    let bytes = payload();
+    let mut variants = vec![];
+    for n in 0..4 {
+        let mut facts = decision(ProxyClass::Sf, AirContact::Fly);
+        if let ContactDecision::CaughtSacrificeFly { catch, facts: f } = &mut facts {
+            match n {
+                0 => f.handling = SacrificeFlyHandling::Unknown,
+                1 => f.retouch = SacrificeFlyRetouch::Unknown,
+                2 => f.timing = SacrificeFlyRunTiming::BeforeCatch,
+                _ => catch.fielder_id = "hbench".into(),
+            }
+        }
+        variants.push((ProxyClass::Sf, facts));
+    }
+    for n in 0..4 {
+        let mut facts = decision(ProxyClass::Sh, AirContact::Fly);
+        if let ContactDecision::SacrificeBunt(f) = &mut facts {
+            match n {
+                0 => f.judgment = SacrificeBuntJudgment::Unknown,
+                1 => f.judgment = SacrificeBuntJudgment::ExclusivelyForBaseHit,
+                2 => f.receiver_id = f.thrower_id.clone(),
+                _ => f.advancing_runner_id = "a4".into(),
+            }
+        }
+        variants.push((ProxyClass::Sh, facts));
+    }
+    for n in 0..4 {
+        let mut facts = decision(ProxyClass::Gidp, AirContact::Fly);
+        if let ContactDecision::GroundForceDoublePlay(f) = &mut facts {
+            match n {
+                0 => f.pivot_id = f.initial_fielder_id.clone(),
+                1 => f.pivot_id = f.first_receiver_id.clone(),
+                2 => f.forced_runner_id = "a4".into(),
+                _ => f.initial_fielder_id = "hremoved".into(),
+            }
+        }
+        variants.push((ProxyClass::Gidp, facts));
+    }
+    for (class, facts) in variants {
+        let expected = consequence::project(&before, &facts).expect_err("invalid supplied fixture");
+        let calls = std::cell::Cell::new(0);
+        let got = adapter::adapt_with_provider(
+            &before,
+            sample(),
+            &original,
+            &bytes,
+            DIGEST,
+            word(class, 5),
+            |_, selection| {
+                calls.set(calls.get() + 1);
+                assert_eq!(selection.class, class);
+                Ok(Some(facts))
+            },
+        );
+        assert_eq!(error(got), expected);
+        assert_eq!(calls.get(), 1);
+    }
+}
+
+#[test]
+fn provider_terminal_and_remaining_declarations_are_not_silently_discarded() {
+    let mut before = state(5, 0);
+    before.inning = 9;
+    before.half = Half::Bottom;
+    before.teams.swap(0, 1);
+    let original = parent(&before);
+    let bytes = payload();
+    for class in CLASSES {
+        for supplied in [false, true] {
+            let facts = supplied.then(|| {
+                decision(
+                    if class == ProxyClass::Remaining {
+                        ProxyClass::Sf
+                    } else {
+                        class
+                    },
+                    AirContact::Fly,
+                )
+            });
+            let expected = adapt(
+                &before,
+                sample(),
+                &original,
+                &bytes,
+                DIGEST,
+                word(class, 5),
+                facts.as_ref(),
+            );
+            let calls = std::cell::Cell::new(0);
+            let got = adapter::adapt_with_provider(
+                &before,
+                sample(),
+                &original,
+                &bytes,
+                DIGEST,
+                word(class, 5),
+                |seen, selection| {
+                    calls.set(calls.get() + 1);
+                    assert_eq!(seen, &before);
+                    assert_eq!(selection.class, class);
+                    Ok(facts)
+                },
+            );
+            assert_eq!(calls.get(), 1);
+            match (got, expected) {
+                (Ok(got), Ok(expected)) => provider_adapted_equal(&got, &expected),
+                (Err(got), Err(expected)) => assert_eq!(got, expected),
+                _ => panic!("provider changed terminal/family refusal into fallback or vice versa"),
+            }
+        }
+    }
+}
+
+#[test]
+fn provider_owned_once_errors_propagate_verbatim_even_when_reason_like_or_empty() {
+    let bytes = payload();
+    for terminal in [false, true] {
+        let mut before = state(5, 0);
+        if terminal {
+            before.inning = 9;
+            before.half = Half::Bottom;
+            before.teams.swap(0, 1);
+        }
+        let original = parent(&before);
+        for class in CLASSES {
+            for text in [
+                "modeled_facts_unavailable",
+                "terminal_api_unsupported",
+                "remaining_class",
+                "provider refused",
+                "",
+            ] {
+                let message = text.to_owned();
+                let expected = message.clone();
+                let calls = std::cell::Cell::new(0);
+                let got = adapter::adapt_with_provider(
+                    &before,
+                    sample(),
+                    &original,
+                    &bytes,
+                    DIGEST,
+                    word(class, 5),
+                    |seen, selection| {
+                        calls.set(calls.get() + 1);
+                        assert_eq!(seen, &before);
+                        assert_eq!(selection.class, class);
+                        // Returning the captured String by move requires only FnOnce,not FnMut/Fn.
+                        Err(message)
+                    },
+                );
+                assert_eq!(error(got), expected);
+                assert_eq!(calls.get(), 1);
+            }
+        }
+    }
+}
+
+fn provider_refuses_without_call(
+    before: &GameState,
+    supplied: joint::Sample,
+    original: &EventTransition,
+    bytes: &[u8],
+    digest: &str,
+) {
+    let expected = error(adapt(before, supplied, original, bytes, digest, 0, None));
+    let calls = std::cell::Cell::new(0);
+    let got = adapter::adapt_with_provider(before, supplied, original, bytes, digest, 0, |_, _| {
+        calls.set(calls.get() + 1);
+        panic!("invalid input must refuse before a provider can be invoked")
+    });
+    assert_eq!(error(got), expected);
+    assert_eq!(calls.get(), 0);
+}
+#[test]
+fn provider_invalid_parents_full_before_and_complete_loader_fail_before_callback() {
+    let before = state(5, 0);
+    let original = parent(&before);
+    let bytes = payload();
+    for supplied in [
+        joint::Sample {
+            outcome: preview::Outcome::Single,
+            contact: None,
+        },
+        joint::Sample {
+            outcome: preview::Outcome::Roe,
+            contact: None,
+        },
+        joint::Sample {
+            outcome: preview::Outcome::ContactOut,
+            contact: None,
+        },
+        joint::Sample {
+            outcome: preview::Outcome::Walk,
+            contact: Some(joint::ContactKind::Residual),
+        },
+        joint::Sample {
+            outcome: preview::Outcome::ContactOut,
+            contact: Some(joint::ContactKind::Ground),
+        },
+    ] {
+        provider_refuses_without_call(&before, supplied, &original, &bytes, DIGEST);
+    }
+    for n in 0..6 {
+        let mut changed = before.clone();
+        match n {
+            0 => changed.score[0] = 1,
+            1 => changed.bases[0].as_mut().unwrap().responsible_pitcher = "other-charge".into(),
+            2 => changed.teams[1].bench.push("extra".into()),
+            3 => changed.over = true,
+            4 => changed.outs = 3,
+            _ => changed.inning = 0,
+        }
+        provider_refuses_without_call(&changed, sample(), &original, &bytes, DIGEST);
+    }
+    // Those invalid-state fixtures first hit whole-before mismatch,not a later validator.
+    for other in [
+        apply(
+            &before,
+            joint::event_for(
+                &before,
+                joint::Sample {
+                    outcome: preview::Outcome::Single,
+                    contact: None,
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+        apply(
+            &before,
+            joint::event_for(
+                &before,
+                joint::Sample {
+                    outcome: preview::Outcome::ContactOut,
+                    contact: Some(joint::ContactKind::Ground),
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+        consequence::project(&before, &decision(ProxyClass::Sf, AirContact::Fly)).unwrap(),
+    ] {
+        provider_refuses_without_call(&before, sample(), &other, &bytes, DIGEST);
+    }
+    let text = String::from_utf8(bytes.clone()).unwrap();
+    for invalid in [
+        text.replace("C\t0\t0\t0\t0\t0\t0\t0\n", "C\t0\t0\t1\t1\t0\t0\t0\n")
+            .into_bytes(),
+        [bytes.clone(), b"extra\n".to_vec()].concat(),
+        text.replace("split\ttraining", "split\theldout")
+            .into_bytes(),
+    ] {
+        provider_refuses_without_call(&before, sample(), &original, &invalid, DIGEST);
+    }
+    provider_refuses_without_call(
+        &before,
+        sample(),
+        &original,
+        &bytes,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    );
+}
+
+#[test]
+fn provider_strict_quarter_neighbors_and_all_low11_words_are_unchanged() {
+    let before = state(5, 0);
+    let original = parent(&before);
+    let bytes = payload();
+    let mut grids = vec![0, (1 << 53) - 1];
+    for edge in [QUARTER, 2 * QUARTER, 3 * QUARTER] {
+        grids.extend([edge - 1, edge, edge + 1]);
+    }
+    for g in grids {
+        for low in 0..2048 {
+            let calls = std::cell::Cell::new(0);
+            let got = adapter::adapt_with_provider(
+                &before,
+                sample(),
+                &original,
+                &bytes,
+                DIGEST,
+                (g << 11) | low,
+                |seen, selection| {
+                    calls.set(calls.get() + 1);
+                    assert_eq!(seen, &before);
+                    assert_eq!(selection.class, CLASSES[(g / QUARTER) as usize]);
+                    assert_eq!(selection.grid_word, g);
+                    Ok(None)
+                },
+            )
+            .unwrap();
+            assert_eq!(calls.get(), 1);
+            assert_eq!(got.selection.class, CLASSES[(g / QUARTER) as usize]);
+            assert_eq!(got.transition.to_bytes(), original.to_bytes());
+            assert_eq!(got.realized, ProxyClass::Remaining);
+        }
+    }
+}
+
+#[test]
+fn provider_repeated_supplied_projection_preserves_all_immutable_inputs() {
+    let before = state(5, 0);
+    let original = parent(&before);
+    let bytes = payload();
+    let facts = decision(ProxyClass::Sh, AirContact::Fly);
+    let saved = (
+        before.clone(),
+        original.to_bytes(),
+        bytes.clone(),
+        facts.clone(),
+    );
+    let expected = consequence::project(&before, &facts).unwrap();
+    let calls = std::cell::Cell::new(0);
+    for _ in 0..4 {
+        let got = adapter::adapt_with_provider(
+            &before,
+            sample(),
+            &original,
+            &bytes,
+            DIGEST,
+            word(ProxyClass::Sh, 5),
+            |seen, selected| {
+                calls.set(calls.get() + 1);
+                assert_eq!(seen, &before);
+                assert_eq!(selected.class, ProxyClass::Sh);
+                Ok(Some(facts.clone()))
+            },
+        )
+        .unwrap();
+        assert_eq!(got.transition, expected);
+        assert_eq!(got.disposition, Disposition::Projected);
+    }
+    assert_eq!(calls.get(), 4);
+    assert_eq!((before, original.to_bytes(), bytes, facts), saved);
+}

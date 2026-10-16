@@ -7,6 +7,7 @@ use super::{joint, preview};
 use bbsim_engine::{apply, EventTransition, GameState, Half};
 
 pub const POLICY_VERSION: &str = "supplied-contact-proxy-adapter-v1";
+pub const PROVIDER_BOUNDARY_VERSION: &str = "supplied-contact-proxy-provider-boundary-v1";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Disposition {
     RemainingClass,
@@ -30,6 +31,34 @@ pub fn adapt(
     word: u64,
     decision: Option<&consequence::ContactDecision>,
 ) -> Result<Adapted, String> {
+    adapt_with_provider(
+        before,
+        parent_sample,
+        parent,
+        bytes,
+        expected_source_sha256,
+        word,
+        |_, _| Ok(decision.cloned()),
+    )
+}
+
+/// Ask once after validation/selection;provider errors are not unavailable facts.
+/// A supplied callback's external effects cannot be rolled back on later refusal.
+pub fn adapt_with_provider<F>(
+    before: &GameState,
+    parent_sample: joint::Sample,
+    parent: &EventTransition,
+    bytes: &[u8],
+    expected_source_sha256: &str,
+    word: u64,
+    provide: F,
+) -> Result<Adapted, String>
+where
+    F: FnOnce(
+        &GameState,
+        &sampler::Selection,
+    ) -> Result<Option<consequence::ContactDecision>, String>,
+{
     if parent_sample.outcome != preview::Outcome::ContactOut
         || parent_sample.contact != Some(joint::ContactKind::Residual)
     {
@@ -51,7 +80,8 @@ pub fn adapt(
         .enumerate()
         .fold(0, |m, (i, runner)| m | (u8::from(runner.is_some()) << i));
     let selection = sampler::select(bytes, expected_source_sha256, mask, before.outs, word)?;
-    let (transition, realized, disposition) = if let Some(facts) = decision {
+    let decision = provide(before, &selection)?;
+    let (transition, realized, disposition) = if let Some(facts) = decision.as_ref() {
         let matching = matches!(
             (selection.class, facts),
             (
