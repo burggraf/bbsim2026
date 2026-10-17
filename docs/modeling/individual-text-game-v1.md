@@ -167,6 +167,53 @@ engine/target/debug/examples/text_game \
   --seed 1
 ```
 
+#### Readable radio transcript
+
+Add `--format radio` for play calls instead of diagnostic output:
+
+```sh
+engine/target/debug/examples/text_game \
+  --baseline /tmp/bbsim-preview-2019-counts.csv \
+  --contact-counts /tmp/bbsim-joint-preview/counts.csv \
+  --lineup /tmp/bbsim-real-lineup/lineup-first.tsv \
+  --cast /tmp/bbsim-pitcher-workload/cast-first.tsv \
+  --seed 1 --format radio | less
+```
+
+This shows inning headings, named batters, pitching changes, runner advances and
+holds, scoring and the final result, followed by an inning-by-inning line score
+with team **R** (runs), **H** (hits), and **E** (errors). All extra innings are
+shown; `0` means a played scoreless half and `X` means the home team's final half
+was not played. Totals reuse canonical game accounting (errors belong to the
+fielding team), not a second scorer or a complete-official-box certification.
+
+A standard **box score** follows: each team's batting lineup in batting order
+(PA, AB, R, H, RBI, BB, SO), pitchers in entry order (IP, H, R, ER, BB, SO, HR,
+BF), and team totals. IP is baseball notation: `5.2` means five innings and two
+outs, not 5.2 decimal innings. Inherited runs stay charged to the responsible
+pitcher. Notes list recorded 2B/3B/HR, IBB, HBP, SH/SF, GDP, SB/CS, CI, errors,
+passed balls, wild pitches and balks when present. BB includes intentional walks;
+IBB is a subset, not an additional walk. Unknown scoring cells remain `?`,
+including team totals affected by them; this does not invent official AB/RBI/ER,
+pitcher wins/losses/saves, pitch counts, or season averages. Names and all values
+come from the retained game and canonical accounting, not the source game's box.
+
+Hits use field locations (for example,
+“Chad Pinder: Single to left field.”), without repeating the batter's implied
+arrival on base. Play calls name fielders only for recorded putouts or assists;
+redundant runner-out lines after double-play calls are omitted. Extra-base
+throw-outs remain explicit. Probability vectors, raw random numbers, source
+hashes and before/after state dumps are omitted. A short plain-language
+development caveat remains; the data attribution is kept here rather than in the
+radio transcript:
+
+> The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org".
+
+It is a presentation of the **same generated game**, not a different model or
+another random draw. `--format detailed` (or no format option) retains the
+verbose diagnostic format. Invalid/duplicate format options are refused.
+The local `/tmp` input files above are still required; they are not in a clone.
+
 Raw evidence and independent harness: `/tmp/bbsim-individual-text-game-v1/`.
 `diagnostics.json` has source/input/binary pins and every metric; `cohort/` retains
 all1000 stdout/stderr pairs. To repeat without overwriting that evidence:

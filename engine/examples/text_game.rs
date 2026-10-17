@@ -34,7 +34,7 @@ use std::{
     collections::BTreeMap,
     io::{self, Write},
 };
-const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--calibrated-ratings TREE.tsv]";
+const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--calibrated-ratings TREE.tsv] [--format detailed|radio]";
 fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
     if args == ["--help"] {
         return Ok(None);
@@ -49,6 +49,7 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
             "--cast",
             "--seed",
             "--calibrated-ratings",
+            "--format",
         ]
         .contains(&pair[0].as_str())
             || pair[1].is_empty()
@@ -69,6 +70,12 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
     let seed = fields.entry("--seed".into()).or_insert_with(|| "1".into());
     seed.parse::<u64>()
         .map_err(|_| "seed must be an unsigned 64-bit integer")?;
+    let format = fields
+        .entry("--format".into())
+        .or_insert_with(|| "detailed".into());
+    if !matches!(format.as_str(), "detailed" | "radio") {
+        return Err("format must be detailed or radio".into());
+    }
     Ok(Some(fields))
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -155,6 +162,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     let draws: BTreeMap<_, _> = draws.into_iter().collect();
     let mut output = io::stdout().lock();
+    if options["--format"] == "radio" {
+        writeln!(
+            output,
+            "Seattle Mariners at Oakland Athletics — radio transcript"
+        )?;
+        writeln!(
+            output,
+            "Simulated exhibition | Seed: {seed} | Ratings: {}",
+            if calibrated.is_some() {
+                "experimental v2"
+            } else {
+                "standard"
+            }
+        )?;
+        writeln!(
+            output,
+            "Uses 2019 stats; fielding and baserunning are simplified."
+        )?;
+        for (i, step) in steps.iter().enumerate() {
+            full_transcript::write_radio_step(
+                &mut output,
+                i + 1,
+                step,
+                &["Seattle".into(), "Oakland".into()],
+                &names,
+            )?;
+        }
+        let teams = ["Seattle Mariners".into(), "Oakland Athletics".into()];
+        full_transcript::write_line_score(&mut output, &steps, &teams)?;
+        full_transcript::write_box_score(&mut output, &steps, &teams, &names)?;
+        return Ok(());
+    }
     writeln!(
         output,
         "DEVELOPMENT TEXT GAME — INCOMPLETE RECOVERY MODEL, NOT ACCEPTED OR CALIBRATED"
@@ -209,6 +248,31 @@ mod tests {
     use super::parse;
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| s.to_string()).collect()
+    }
+    #[test]
+    fn radio_format_is_explicit_strict_and_keeps_detailed_default() {
+        let good = args(&[
+            "--baseline",
+            "base.csv",
+            "--contact-counts",
+            "contact.csv",
+            "--lineup",
+            "lineup.tsv",
+            "--cast",
+            "cast.tsv",
+        ]);
+        assert_eq!(parse(&good).unwrap().unwrap()["--format"], "detailed");
+        for format in ["radio", "detailed"] {
+            let explicit = [good.clone(), args(&["--format", format])].concat();
+            let parsed = parse(&explicit).unwrap().unwrap();
+            assert_eq!(parsed["--format"], format);
+            assert_eq!(parsed["--seed"], "1");
+            assert!(parse(&[explicit, args(&["--format", "radio"])].concat()).is_err());
+        }
+        for format in ["", "Radio", "brief", "--seed"] {
+            assert!(parse(&[good.clone(), args(&["--format", format])].concat()).is_err());
+        }
+        assert!(parse(&[good, args(&["--format"])].concat()).is_err());
     }
     #[test]
     fn options_require_all_offline_inputs_and_a_valid_seed_without_duplicate_or_unknown_flags() {

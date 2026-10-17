@@ -4,7 +4,7 @@
 
 **Current state:** F-01–F-04 and E-01–E-02 done for the limited internal 2019 pilot on macOS arm64; **G0 GO for internal engine development only** on the maintainer's 2026-10-10 statement of data-use permission. No documented publisher grant or public redistribution clearance; no bundled data/public app. F-04 source gaps remain flagged.
 
-**Current task:** **P-01-player-hit-mix-v3 done for the bounded comparison; model rejected.** [Preregistration](modeling/player-hit-mix-v3.md) and [results](modeling/player-hit-mix-v3-results.md). Separate 1B/2B reconstruction improves, but versus-v2 NLL+.001009976 exceeds the frozen+.001 limit; no waiver. Fresh867 Rust/3 example/623 Python tests, build/fmt/strict Clippy/diff, independent arithmetic,27-file pretest isolation and1000-game default byte parity pass on197 stable sourcepins. Private backups verified; code checkpoint`c8502f9` is committed/pushed under the maintainer's follow-up authorization (see newest Resume entry). A separate documentary commit`6bd2660` arrived and is preserved; it changes no tested source. **Next action:** review the fidelity-versus-score tradeoff before authorizing any runtime adoption or separately preregistered follow-up. Fixed200 stays default; v2 stays opt-in. No new fit, UI, source-data transfer, release or gate signoff is authorized by this checkpoint.
+**Current task:** **P-03-text-game-radio active — adding a final box score; uncommitted.** Opt-in concise narration and inning/R/H/E line score; detailed remains default. [Reproduction](modeling/individual-text-game-v1.md). Final line-score1000-game native audit and885 Rust/623 Python/full checks pass; these predate the requested box-score changes. Maintainer subsequently requests a full box score. **Next action:** verify the added box-score tables/notes on final source, then publish the authorized radio checkpoint. Commit/push was authorized; hold publication to include the new request and fresh verification. No model/RNG/manager/UI/data changes or gate signoff. Previous hit-mix v3 remains rejected; fixed200 stays default andv2 opt-in.
 
 **Verified modeling checkpoint:** bounded P-01/P-02 player-calibration checkpoint **verified**; overall fidelity remains incomplete. [Results/reproduction](modeling/player-calibration-v2-results.md): v1 joint20/20 **rejected** at+.0103893 NLL versus fixed200; separately preregistered v2 passes development bounds on a **reused retrospective benchmark**,not fresh predictive validation. Explicit-artifact CLI/fresh866 Rust/620 Python/full checks/197 stable source pins,independent arithmetic review and separate1000-game calibrated/default audits pass;all2000 default stdout/stderr files unchanged. **Latest follow-up:** [v3 singles/doubles comparison](modeling/player-hit-mix-v3-results.md) is complete with verified code but a rejected scientific disposition; review its reconstruction-versus-score tradeoff before further fitting/adoption. No default model,UI,source/publication or gate change. Prior initial individual-stat connection checkpoint verified within the [60-minute cap](modeling/individual-text-game-v1.md), verification finished15:43UTC on2026-10-17. Complete games now consume all30 cast profiles/current relievers; full857 Rust/611 Python/fmt/strict Clippy/build and fixed1000-game actor/probability/accounting/reproducibility audit pass after the review correction. **Overall player-stat fidelity remains incomplete; the current calibration checkpoint is bounded development evidence,not signoff.** No UI/new rare events/dependencies were added. Legacy folders remain references; future commentary adopts their radio style. No model has fresh independent predictive validation. See newest Resume. Previous P-02-text-game-recovery scope — maintainer explicitly authorizes integrated major-event model completion and full before/play/after text games,not UI work. See newest Resume and text-game recovery contract. Integrated Rust mechanism/model changes are authorized;no accuracy claim, publication or G1–G5 signoff. See newest Resume entry. **Paused task:** P-01-preview-supplied-contact-producer — [standalone helper implementation](modeling/preview-supplied-contact-producer.md);baseed75ecb/298 blobs/184 sources;four owned paths/protect297/all184 existing sources;expected301 blobs/186 sources. Prerequisites verified;15 semantic reds before body,then16 focused Rust/fmt/strict Clippy pass. Full freeze/suite/publication pending;no default integration. **Historical supplied-parent producer contract before publication:** P-01-preview-supplied-contact-producer-contract active — [standalone supplied-parent producer specification](modeling/preview-supplied-contact-producer-contract.md);two-document prerequisite only,base47a5dfc/297 blobs/184 sources;protect296 paths/all184 sources;expected298 blobs/184 sources. No producer implementation/default integration or actual-source class draws. **Historical durable handoff before publication:** P-01-preview-transition-transport-handoff active — [private durable evidence/restart handoff](modeling/preview-transition-transport-durable-handoff.md);publishedf734b5b/tree432dc057/296 blobs/184 sources;protect295 paths/all184 scientific sources;two-document scope/private archive only. Exact remote/HEAD/origin identity,211 completed/457 checkpoint/19 publication bindings verified. **Historical transport implementation before publication:** P-01-preview-transition-transport active — [four-path native transport](modeling/preview-transition-transport.md),baseb3bf6a1/294 blobs;proc_114a exits0/8s authenticates292 protected/183 prior/182 other sources/372 recipes/331 lines/197 completed/348+14 callback/43+14 documentary bindings. Original131-line implementation protocol frozen;old428-line preview prefix/all912 old generated-preview test lines and full165-line contract remain protected. Native loop/ordinary wrapper implemented;final corrected tests replay8 semantic reds/3 inherited controls,then proc_4947 exits0/14s with11 Rust methods2.38s/fmt/strict Clippy/diff. Fresh proc_9100 exits0/1560s(native1557.828s),744 Rust/48 zero-failure summaries/601 Werror Python56.461s/all48 summaries/build/fmt/strict Clippy/all inherited checks;proc_45cf exits0/42s verifies211 artifacts/parities/184 sources/292 protected/426 recipes. Bounded full acceptance closed;candidate/publication pending. **Latest verified checkpoint:** documentaryb3bf6a1dc441f12a982926f0ee5d508dfbfc5c18,treef1a663e2775572a5dc561888199f76b7828bf439;proc_698e exits0/7s once-only commit,proc_6a98 exits0/7s exact294 committed/index/work blobs/292 protected/all183 unchanged sources/372 recipes/645 links;proc_8b71 exits0/4s ordinary authorized push/actual synchronized main. **Historical documentary prerequisite before publication:** [two-document full-transition transport prerequisite](modeling/preview-transition-transport-contract.md);proc_d848 exits0/9s authenticates published7aac124/293 blobs/292 protected/183 unchanged scientific sources/372 recipes/331 driver lines/197 completed/348 checkpoint/14 publication bindings. Original146-line contract frozen before edits;no runtime,test,provider,producer,default,UI or gate change. **Latest verified checkpoint:** callback7aac1249400016990202895771fca11ff14909fa,treef32034b354e54dbdd45a61c460f1ed6e028b052d;proc_45f0 exits0/11s once-only commit,proc_ac79 exits0/9s exact293 committed/index/work blobs/289 protected/183 sources/372 recipes/642 links;proc_8798 exits0/5s ordinary authorized push/actual remote identity/clean synchronized main. Accepted bytes immutable through publication;348 checkpoint/14 post bindings closed. **Historical provider implementation/acceptance before publication:** fresh proc_9a3f exits0/3325s(2872.201s native),733 Rust/47 zero-failure summaries,601 Werror Python/all45 summaries/build/fmt/strict Clippy/all inherited checks;proc_2ac2 exits0/100s verifies197 completed artifacts,183 frozen sources/289 protected/372 recipes. No source changes after verification. [four-path one-selection supplied-provider protocol](modeling/contact-proxy-provider-boundary.md),124 lines frozen before new tests/behavior;proc_afc2 exit0/11s authenticates publishede296ac1/292 blobs/289 protected/183 prior sources/181 other sources/337 recipes/323 driver lines/195 completed/365 checkpoint/14 publication bindings. No automatic provider,actor policy,RNG,producer/default/UI/manager change or gate signoff. **Latest verified checkpoint:** adaptere296ac1,proc_aef5 exit0/10s once-only commit;proc_3b95 exit0/10s exact292 committed/index/work blobs/288 protected/183 sources/337 recipes/638 links;proc_7892 exit0/5s ordinary authorized push/actual remote identity/clean synchronized main. Fresh724 Rust executions/601 Werror Python/all inherited checks and195 artifacts;365 checkpoint/14 publication bindings closed. **Historical adapter preregistration (superseded status preserved):** P-01-contact-proxy-adapter active — [separate four-path synthetic-only supplied-facts implementation](modeling/contact-proxy-adapter.md);proc_02e9 exit0/8s authenticates published4d2ee7c/289 base/288 protected/181 prior sources/302 recipes/315 inherited lines/205 complete predecessor lines;expected292 blobs/183 sources. Original138-line protocol frozen before tests/code;native semantic reds observed before behavior. Focused proc_8e1e exit0/13s:12 synthetic Rust2.85s/fmt/strict all-target Clippy/diff. Fresh entire suite proc_ff3c exits0/3633s(3619.452s native):724 Rust executions/47 zero-failure summaries,601 Werror discovery/all45 Python summaries/build/fmt/strict Clippy and all inherited checks;proc_ed90 exits0/71s,195 artifacts/parities/183 frozen sources verified. Four-path candidate/publication pending;no source-code changes after verification. No live PRNG,actual-source draws,provider/producer/default/manager change or gate signoff. **Latest verified checkpoint:** documentary4d2ee7c,proc_88c9 exit0/9s once-only commit;proc_070d exit0/8s exact289 committed/index/work blobs/287 protected/181 sources/302 recipes/631 links;proc_7452 exit0/5s authorized ordinary push/actual GitHub main and origin/main/HEAD matched,clean synchronized main;29 checkpoint/14 publication bindings closed. **Historical documentary preregistration (superseded status preserved):** separate [two-document supplied-facts/parent-mass/word/fallback boundary](modeling/contact-proxy-adapter-contract.md),not code or gameplay integration. Documentary proc_833a exit0/10s verifies287 protected/181 unchanged sources/302 recipes/631 links and five existing prose/runtime controls;private candidate/commit/postcheck pending. proc_a9f2 exit0/9s authenticates publishedcb0223f/288 base/287 protected/181 unchanged scientific sources/302 recipes/315 inherited driver lines plus188 completed/331 checkpoint/14 publication bindings;expected289 blobs/181 sources. **Latest verified checkpoint:** selectorcb0223f,once-only commit proc_f1e7 exit0/10s;existing-identity post proc_639f exit0/8s verifies exact288 committed/index/work blobs/284 protected/181 sources/302 recipes/625 links;authorized ordinary push proc_3a17 exit0/5s publishes one commit,actual GitHub main/origin/main/HEAD equalcb0223f,clean synchronized main. Fresh712 Rust/601 Werror Python/all45 summaries and188 closed artifacts;four identical synthetic selection streams,no actual-source draws. **Historical selector preregistration (superseded status preserved):** [protocol](modeling/contact-proxy-class-sampler.md) frozen before tests/implementation;proc_a380 exit0/7s verifies published9f7881b/285 base/284 protected/179 unchanged sources/270 recipes/296 prior lines,expected288 blobs/181 sources. No live-game adapter,PRNG,actual-source sampling or gate change. **Latest verified checkpoint:** diagnostics9f7881b,proc_ffea exit0/10s;postcheck proc_ad19 exit0/8s285 exact committed/index/work blobs/281 protected/179 sources;authorized normal push proc_2049 exit0/11s publishes36 commits,actual GitHub main and origin/main equal9f7881b,clean synchronized main. Fresh703Rust/601WerrorPython/all38 summaries/four identical reports/all75 certificates. **Historical documentary checkpoint:** two-document zero-score contract after verified applicationc75f5d4/proc_8e57 exit0/9s282 exact blobs/177 sources/208 recipes/618 links/clean main ahead34/no push. Application bounded numerical acceptance is complete — [four-path implementation protocol](modeling/contact-proxy-probability-application.md),base76ee529;280 blobs/278 protected/175 prior sources/178 recipes/all257 current driver lines,including244 inherited;expected282 blobs/177 sources. Authenticate/freeze before interfaces/tests/behavior or actual fixed-proposal parameter calculation;no proper scores,optimization/selection,RNG,sampler/integration or new gate signoff. **Latest verified checkpoint:** documentary76ee529/postcheck proc_d882 exit0/1s280 exact committed/index/work blobs/175 unchanged sources/178 recipes/617 links,clean main ahead33/no push. **Latest verified checkpoint:** synthetic arithmetic locala73b693/postcheck proc_8a7e exit0/8s279 exact committed/index/work blobs/275 protected/175 sources/178 recipes/613 links,clean main ahead32/no push;fresh proc_a0f7 exit0/864s703 Rust executions/579 Werror Python/all25 summaries,inspector proc_276f exit0/33s closes170 artifacts. **Previous checkpoints:** P-01-contact-proxy-probability-arithmetic-preregistration verified local5299ea3/postcheck proc_d118 exit0/1s277 exact committed/index/work blobs/275 protected/173 unchanged sources/153 recipes/612 links,clean main ahead31/no push;documentary controls2+1+2 green,no new scientific run. P-01-contact-proxy-training-counts verified localc51417b/postcheck proc_57ea exit0/3s;276 exact committed/index/work blobs/270 protected/173 sources/153 recipes/608 links,clean main ahead30/no push;fresh proc_9b4e exit0/585s694Rust/579WerrorPython,inspector proc_1946 exit0/13s;all24 training rows/direct formatter/native exact. F-01-contact-proxy-response-counts verified local8aa58d8/postchecked271 blobs/267 protected/169 sources/129 recipes/604 links;clean main ahead29/no push;fresh full proc_8d71 exit0/532s687Rust/566Python and inspector proc_aba5 exit0/10s. Previous P-01-preview-contact-proxy-fit-contract verified for bounded documentary acceptance,local10c07f1/postchecked268 blobs/266 protected/167 unchanged sources/111 recipes/599 links,clean main ahead28/no push — [preregistered two-path scope](modeling/preview-contact-proxy-fit-contract.md);base8288a8a,267 blobs/266 protected/167 sources/111 inherited recipes;freeze observables,estimator/artifact and numerical acceptance before any fit. No new measurement/fit/engine/producer/manager/gate change. Previous F-01-contact-proxy-observable-targets verified for bounded descriptive acceptance — [after-descriptor audit](data-audits/2019-contact-proxy-observable-targets.md),base eb3928d;two fresh byte-identical measurements/all new cells reference-exact;4059 geometry memberships:2256 mask matches/286 known differences/1517 boundary-not-compared;not historical causal eligibility or a fit cohort. Fresh full-v3 proc_9f4a exit0/705s:687 Rust/548 Werror Python/all inherited checks and17 Python summaries;inspector proc_bd01 exit0/22s closes145 artifacts. Verified once-only code8288a8a/postcheck proc_cc3c0/6s:267 exact blobs/263 protected/167 sources,clean main ahead27,origin unchanged/no push. The two-path documentation successor is now active;fit/kernel/producer/manager/gates remain closed. P-01-preview-contact-proxy-contract done — [verified zero-fit route](modeling/preview-contact-proxy-contract.md),local eb3928d;262 protected/165 sources/89 recipes/588 links/2+1 prose controls;fit/kernel/producer/manager/gates remain closed. F-01-contact-fact-evidence-boundary done — [C01–C14 evidence/assumption map](data-audits/2019-contact-fact-evidence-boundary.md),verified local a4e2db9;261 protected/165 sources/89 recipes/583 links/2+1 prose controls;no new counts/fits,automatic historical-cause importer or manager/gate approval. F-01-contact-proxy-joint-cohort done for bounded parent-author descriptive acceptance — [verified source-cohort audit](data-audits/2019-contact-proxy-joint-cohort.md),local code4b69d93;687Rust/526WerrorPython/full inherited checks;5389 labels/4059 geometry memberships,all4059 legacy residual;40 other labels are roe. Original zero literal vectors unchanged;no causal/rate/producer/manager/gate approval. F-01-contact-proxy-qualification done for bounded parent-author descriptive acceptance,verified local c008864:22 focused/687 Rust/508 Python/all inherited checks;original5389 labels/zero full literal vectors unchanged. Original literal findings unchanged. No fitting/producer/manager/gate approval. F-01-contact-consequence-support done for bounded parent-author descriptive acceptance:code d27d81e plus verified reading-claim correction fa5c6e6;original overclaims withdrawn,subsequent bounded remediation inspected. F-01-contact-consequence-support code verified locald27d81e;687 Rust/470 Python/full inherited checks on159 frozen sources;5389 labels but zero full literal vectors,not zero real mechanisms or a manager/gate approval. P-01-contact-consequence-projection done for bounded parent-author acceptance, verified local6d7bad6;687 Rust/424 Werror Python/full inherited checks on156 frozen sources; no producer/manager or gate approval. Standalone supplied SF/bunt/force-relay decisions only; no RNG, rate selection, producer integration or source-cause inference. E-03-ground-force-double-play done for bounded parent-author acceptance, verified local63410b4;681 Rust/424 Werror Python/all inherited checks; no gate signoff. The earlier durable bundle certifies only its paused snapshot. Bunt functional checkpoint6f367c0 and inspection correction4b2ab88 are verified locally; no producer/manager or gate waiver; P-01-runner-only-projection done — bounded parent-author standalone acceptance, verified localf965b77; no attempt policy or producer integration; F-01-cs-observability done — bounded parent-author descriptive acceptance, verified local278ac65; preregistered read-only missing-field census; F-01-runner-only-steals done — bounded parent-author descriptive acceptance, verified local86fa434 — [four-path source/proxy contract](data-audits/2019-runner-only-steals.md), preregistered before tests/measurement; no attempt-rate fit or generator change. E-03-ordinary-walkoff-hit done for bounded parent-author acceptance, verified local efc81ae — [nine-path explicit-facts prerequisite](engine/ordinary-walkoff-hit-facts.md), preregistered before tests/code; no producer/policy/gate change. F-01-terminal-hit-source done — bounded parent-author acceptance, code `804a72d` — [read-only four-path prerequisite](data-audits/2019-terminal-hit-source.md), no terminal policy/engine change. P-01-terminal-hit-compatibility done — verified local `ff793ac` — [three-path diagnostic](modeling/terminal-hit-compatibility.md), no production or terminal-policy change. Predecessor P-01-conditional-hit-dispatch done — verified local `7850a22`; [four-path preregistration](modeling/conditional-hit-dispatch.md), standalone nonterminal outcome dispatcher; all three explicit models, supplied hit word/cause, unchanged other11 shapes and fail-closed Bottom>=9. No current producer/CLI/UI/manager integration. Training prerequisite done — verified local `8a0d325`: [six-path export/native-loader prerequisite](modeling/hit-training-counts.md), base `2759d98`,213 protected/133 prior sources/final137. Training-only authenticated qualification/count export, strict typed loader, all three explicit variants/exact arithmetic parity; no producer/manager/default-model/terminal-policy or legacy change. Native prerequisite done, code `d417b7f`/postverified two-doc handoff `2759d98`,623 Rust/356 Werror Python/full frozen controls/compatibility and exact214 blobs; clean main ahead11/no push. Prior comparison done, code `f3a11d7`/verified handoff `e1ccd7c`:33 focused/609 Rust/356 Werror Python/full native/source/four-mode compatibility; `proc_0853` and `proc_2c6e` exact code/doc checkpoint postchecks,211 committed-index-work blobs/clean main. No simulator/model-selection/gate approval. Previously examined reservation means retrospective diagnostics, not fresh blinded validation. F-01-hit-advancement verified local `95150b6`,609 Rust/323 Werror Python/full exact evidence; no generator/manager integration authorized by that audit. F-01-runner-transitions verified local `a1db0db` under its [completed contract](data-audits/2019-runner-transitions.md). After verified E-03-fidelity `bd29eb9`, [three-path report](modeling/engine-fidelity-checkpoint.md); source foundation verified, manager deferred. No production engine/model changes or accuracy claim. Prior context: P-01-player-preview [player-specific probability pilot](modeling/player-probability-preview.md) done for bounded D-17, verified local code `f67d26f`; maintainer feedback: “this looks good -- please continue”. D-18 read-only bullpen audit is done, verified local `3d0729b`/handoff `7c42374`. Maintainer requests continuation with pitcher-specific average-outing workload rather than the proposed fixed-sixth-inning plumbing test. D-19 confirmed interview `b3ec6a67-afb5-41ae-b739-2d71de84007c`: audit start/relief PA workloads, implement a separate opt-in managed preview using individual mean thresholds and the explicitly modeled full recorded cast, verify then stop for testing. [Preregistration](modeling/pitcher-workload-preview.md) precedes outing measurements/implementation; F-01-workload done for the bounded source/export foundation:23 focused tests, source/native repeats and independent485-outing/24-role reconciliation plus30-vector/12-pitcher exports verified; `proc_f9d0` passes601 Rust/246 Python/full checks, complete eight-path full-index diff inspected and exact stage/prefix/pins/490 links accepted. Verified local code `105fb6e`; E-03-fidelity diagnostic now parent-accepted under its separate preregistered scope; common-mechanism NO-GO keeps manager deferred. Dependent P-02-managed-preview remains planned behind D-20 fidelity. D-21 supersedes routine testing pauses; continue until explicit input is needed, without gate waivers. No simulator changes yet. P-03-real-lineup [bounded Seattle–Oakland preview](modeling/real-lineup-preview.md) verified `c71ff80`/handoff `7488d53` supplies the fixed starting personnel. F-01-lineup audit verified local `c806a4f`/handoff `f048bf4` supplies starting identities/positions, not eligible bench or ratings. Only accepted offline 2019 data; D-17 permits this fixed participant-proxy probability estimation, not production fitting/reskin/transfer. Previous P-01-preview [experimental joint contact preregistration/count recipe](modeling/joint-contact-preview.md), count-only prerequisite `c7093c2` and opt-in sampler/policy `7c20947` accepted/committed; separate [player-opportunity support audit](modeling/player-opportunity-support.md) accepted/committed `4dc0ef7`; P-03-preview [joint-contact viewer integration](modeling/joint-contact-viewer.md) done for this bounded internal slice, parent-accepted/verified local `c3be669`; next scope resolved as D-15's read-only readiness audit; preregistered before tests/code under the maintainer's preserved interview choice; E-03 [ordinary caught-air prerequisite](engine/ordinary-air-catch.md) accepted/committed `315de0b`; F-01 [observed support map](modeling/observed-outcome-support.md) accepted/committed `83366fe`. [Raw supplement](data-audits/2019-outcome-details.md) published locally/verified `4ec6243`; [lexical mechanism inventory](data-audits/2019-raw-mechanisms.md) accepted/committed `668fe61` on548 Rust/124 Python/full checks. No new network authorization is needed for these offline facts; causal retirement clocks/all throws/opportunity denominators remain partial. Exact live evidence/next action is in Resume below. D-13 still prioritizes observable simulation/product milestones over open-ended edge-case accounting; unrelated UI work, production player fitting and first-two-out positive-prefix ER extension remain deferred; D-16 now authorizes the bounded opt-in real-lineup producer/viewer and stopped-afterward loopback/browser verification, not production or general roster expansion. P-03-preview [visible engine viewer](../preview/README.md) prior radio log `abef0e7` and native trace `e05054d` default bytes preserved; temporary verification stopped. E-03/G1 incomplete; no production model/accuracy/public release claim.
 
@@ -50,6 +50,7 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | P-02-legacy-base-assessment | done — bounded read-only assessment, not P-02 completion | [Comparison/recommendation](modeling/legacy-simulator-assessment.md);7 Python/7 Node restoration tests,actual-controller 1,000-game characterization and624,023-pair numerical scan,independent2017 counts reconciliation;107 selected legacy files unchanged. No migration/fixes/calibration or gate signoff. |
 | P-01-player-hit-mix-v3 | done — bounded comparison closed; model rejected | [Frozen contract](modeling/player-hit-mix-v3.md)/[results](modeling/player-hit-mix-v3-results.md);full867 Rust/3 example/623 Python/build/fmt/strict Clippy/diff pass,197 stable pins. Independent all16 candidate audits/27-file pretest isolation/default1000-game byte parity pass. V3 improves1B/2B but fails+.001 NLL guardrail at+.001009976;accepted:false retained. Private backups verified;source checkpointc8502f9 published separately;no runtime integration,predictive claim or gate signoff. |
 | P-02-text-game-recovery | active — bounded calibration checkpoint verified; broader fidelity incomplete | [Results](modeling/player-calibration-v2-results.md): rejected v1 preserved;optional v2 development artifact,866 Rust/620 Python/full checks and separate1000-game calibrated/default audits pass. Reused benchmark is not independent validation;1B/2B allocation,sparse abilities and realistic season variance remain open. No UI or gate signoff;next separately preregister follow-up before new fits. |
+| P-03-text-game-radio | active — radio/line/standard box verified; authorized commit/push next | [Text-game guide](modeling/individual-text-game-v1.md);strict opt-in radio rendering of the same transitions,unchanged detailed default. Original873 Rust/4 example/623 Python/full checks and1000-game parity passed before subsequent requested wording edits. Latest21 narration tests/2 CLI tests/build/fmt/strict Clippy/native checks pass;radio uses concise hits,credited fielder names andrunner holds without duplicate double-play outs. Detailed intentionally omits the redundant home-run phrase too. No model or gate change. |
 | P-03-game-presentation | done — bounded displayed-play/header correction, uncommitted | [Viewer/reproduction](../preview/README.md);gameplay-first screen plus natural K/stranded language,name-only display,actual lineup-position contact labels. Final762 Rust/610 Werror Python/fmt/strictClippy/build/native non-commentary parity/browser exact scenario/review pass;see newest Resume. Maintainer testing next;not accuracy/fullP-03 or gate approval. |
 | P-01-preview-supplied-contact-producer | planned — paused for visible-game priority;[standalone supplied-parent helper](modeling/preview-supplied-contact-producer.md) | Four paths/baseed75ecb/298 blobs/protect297/all184 old sources;expected301 blobs/186 sources. Tests before body;scripted parents/synthetic proxy payloads only;exact RNG/provider/error/metadata/full-transition contracts;full applicable verification pending,no existing caller/default/CLI/UI change. |
 | P-01-preview-supplied-contact-producer-contract | done — [standalone one-step supplied-parent contract](modeling/preview-supplied-contact-producer-contract.md);no implementation yet | Base47a5dfc/297 blobs/184 sources;two documents/protect296/all184 sources;expected298 blobs. Caller chooses parent;helper constructs canonical ordinary parent;non-residual zero class words/callbacks;residual one class word/existing adapter;retain full result/selected-versus-realized metadata. proc_f9a0 exits0/12s prerequisites;proc_41d6 exits0/9s Werror/import2/link2/tracking1/source/archive checks/661 links;proc_77d1 exits0/9s private298 candidate;40 checkpoint bindings. proc_53c0 exits0/10s committeded75ecb;proc_3804 exits0/8s exact298 identity;proc_36c9 exits0/4s ordinary push/actual remote/clean main;18 publication bindings. proc_84ef exits0/0s separate durable67-file/1272840-byte private supplement. No default/CLI/UI/manager/gate change. |
@@ -133,6 +134,224 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | D-10 | confirmed completion contract | 2026-10-11 maintainer chose **B — Complete agreed box fields for a bounded event vocabulary** in interview `021d9e0d-b0b7-4164-a7c8-8bd88774c071`, then selected **“Approve the proposed matrix”** in interview `e75959e7-704f-40cc-943b-1a3a10e34285`, without edits. The [approved matrix](engine/g1-accounting-scope.md) governs required fields, event families, exclusions and observable checks. Fully specified simulated logs must yield complete agreed boxes; incomplete historical facts stay unknown. No completion/G1 approval, every-rare-rule/full-season-validation requirement or waiver inferred. The earlier technical CS boundary B is separate. | Implement one small test-first E-03 slice at a time; collect the required coverage/golden/property/historical evidence before E-03 completion and a separate G1 go/no-go. |
 
 ## Resume here
+
+### 2026-10-17 — P-03-text-game-radio box score requested; publication held
+
+Maintainer authorized commit/push, then requested a full box score after the
+radio transcript. Hold publication for the additional presentation work.
+Acceptance before implementation: derive all values from canonical accounting;
+show both batting lineups in lineup order, pitchers in entry order andteam totals;
+IP uses outs/3 plus outs%3, inherited runs stay with the responsible pitcher;
+unknown AB/RBI/ER remain`?`,never zero. Include supported extra-base-hit,
+baserunning andfielding notes. Maintainer selected the standard box with notes,
+not a separate per-fielder table (interview`019a9b36-0ce4-4a75-83f6-ca3ea76780bb`). Do not invent pitcher
+W/L/S, pitch counts or season averages. Missing names/incomplete/discontinuous
+logs refuse without a partial box. Keep prior narration/line-score prefix and
+all detailed bytes unchanged. Scope remains the same five radio paths;no engine,
+accounting,simulation,model,dependency or data changes.
+Line-score audit`proc_25f4`exited0/117s:1000 radio tables reconcile innings/R/H/E;
+114 extras,424 unplayed home halves;2000 detailed stdout/stderr files match the
+preserved baseline after only the requested home-run phrase normalization.
+Seed1 prefix,repeat determinism,v2 opt-in andsix binary/input pins pass.
+Receipt:`/tmp/bbsim-text-game-radio-line-score-v1/output-checks.json`.
+Full suite`proc_50a8`exited0/559s,20:23:13–20:32:31UTC:885 Rust tests,
+4 example tests,43 focused tests,623 Werror Python tests,build/fmt/strict all-target
+Clippy/diff pass. All197 before/after/current source pins match;raw logs and
+`verification-summary.json` retained in the same evidence directory. This certifies
+the line-score checkpoint,not future box-score edits.
+Box renderer andCLI integration are now implemented test-first. API red,three
+no-op semantic reds andnative missing-box red are retained at
+`/tmp/bbsim-text-game-radio-box-score-v1/`. All32 renderer tests pass,including100
+seeded canonical box comparisons,known batting/pitching totals,notes,unknown ER,
+entry order,inherited runs,zero-out starters,base-three IP andatomic refusals.
+Build/strict all-target Clippy pass. Native seed1 preserves the exact prior
+narration/line-score prefix anddetailed bytes. Its first post-build external check
+had a Python bytes/string assertion TypeError;raw`cli-green.*`is retained;
+corrected`cli-green-2.*`passes without a production change. Guide updated.
+Final source-pinned full suite`proc_41fd`runs`python3 -B /tmp/bbsim-text-game-radio-box-score-v1/verify.py`.
+Native box audit`proc_cad7`failed at seed10 because its external PB-name parser
+included the semicolon-delimited sentence in the catcher's name;production output
+was correct. Raw`native/`,first harness copies andprocess error are retained.
+Corrected PB parser passes all10 retained cases;`proc_f9f2`then stopped at seed73:
+its runner-name parser handled advances/outs but not a successful steal of home.
+Both raw cohorts/harness versions remain. The corrected oracle includes scoring
+stealers andpasses all73 retained games;`proc_1cf4`runs the1000-game comparison
+under`native-v3/`using`check-output.py`. Neither failure required production changes.
+An earlier sample oracle also misread terminal outs reset as a negative out count;
+its raw failure is retained. It now counts explicit detailed out movements and
+cross-checks nonterminal state differences. No production assertion weakened.
+Native`proc_1cf4`exited0/146s,20:43:52–20:46:18UTC:all1000 box scores reconcile
+player/team PA/AB/R/H/BB/SO,IP/H/R/BB/SO/HR/BF,pitcher entry order,inherited
+run charges andall displayed notes against independently parsed detailed events.
+RBI/ER unknown propagation andknown totals are checked;their official scoring is
+not independently recertified by this text oracle. All1000 prior radio prefixes
+and2000 detailed stdout/stderr files preserve the prior behavior (only the earlier
+requested HR-clause normalization). All114 extra-inning games/424 unplayed home
+halves,line scores,v2 opt-in seed1,determinism andsix binary/input pins pass.
+Receipt:`output-checks.json`;raw final cohort:`native-v3/`.
+Final full-suite`proc_41fd`exited0/585s,20:39:37–20:49:22UTC:889 Rust tests,
+4 example tests,47 focused tests and623 Python tests;example build,fmt,strict
+all-target Clippy anddiff checks all pass. All197 before/after/current source pins
+match. Exact8 commands,raw stdout/stderr andhash inventory remain under
+`/tmp/bbsim-text-game-radio-box-score-v1/verification/`;summary:
+`/tmp/bbsim-text-game-radio-box-score-v1/verification-summary.json`.
+Five-file scope/empty-index check,294 relative documentation links andadded-line
+credential-pattern scan pass. No model,accounting,engine,RNG,manager,data or
+scientific gate changes. The unknown AB/RBI/ER contract remains;this is not a
+complete official-scoring certification.
+**Next action:** commit/push the authorized five-path checkpoint,verify actual
+remote/tracking/HEAD identity andclean tree,andrecord publication. No radio commit
+orpush yet. Full tests now cover the box source,not only the earlier line score.
+
+### 2026-10-17 — P-03-text-game-radio final line score active
+
+Maintainer requests all innings andteam R/H/E totals after radio narration.
+Acceptance before implementation:reuse canonical `derive_accounting`,not a new
+scorer;correct offense runs/hits anddefense errors;retain all extra innings,
+zeroes for played scoreless halves and`X`for an unplayed final home half;
+walkoff totals include only credited runs/hits. Align team/inning/total columns,
+refuse incomplete/discontinuous logs without a partial table,keep detailed mode
+unchanged andradio attribution out of narration. Planned changes:existing
+renderer,CLI,renderer tests,guide,andthis ledger only. No gameplay/model change.
+Implementation is now in `full_transcript::write_line_score`,called after the
+radio final. API/6 semantic reds retained;28 renderer tests pass,including100
+seeded raw-transition comparisons. Build/2 CLI tests/fmt/strict Clippy/diff passed
+before the last property-test addition;the final focused rerun is green.
+Native seed1 appends the expected9-inning6–5 line with14–11 hits and0–0 errors;
+its prior narration is byte-exact. Evidence:
+`/tmp/bbsim-text-game-radio-line-score-v1/`.
+**Verification pending:** managed`proc_50a8`runs`python3 -B /tmp/bbsim-text-game-radio-line-score-v1/verify.py` (all8 project checks,197 source pins);
+`proc_25f4`runs`python3 -B /tmp/bbsim-text-game-radio-line-score-v1/check-output.py`
+(1000 native default/radio games,independent table arithmetic,default byte parity
+allowing only the previously requested HR-clause removal,andone v2 opt-in game).
+No done/full-suite/parity claim yet. **Next action:** consume both native process
+completion notifications andraw receipts;then finish the handoff. Do not edit
+source/tests while their source-pinned verification is active.
+
+### 2026-10-17 — P-03-text-game-radio footer removed; uncommitted
+
+Maintainer requests no Retrosheet notice in radio output. Removed only its radio
+footer in `engine/examples/text_game.rs`;full notice remains prominently in the
+[guide](modeling/individual-text-game-v1.md) anddetailed output. Rebuilt executable.
+Native red/green regression at`/tmp/bbsim-text-game-radio-no-footer-v1/check.py`
+proves all other radio bytes anddetailed seed1 output unchanged;raw outputs kept
+under`red/`and`green/`. Fresh build,2 CLI tests,fmt anddiff checks pass:
+`cargo build --offline --locked --manifest-path engine/Cargo.toml --example text_game`;
+`cargo test --offline --locked --manifest-path engine/Cargo.toml --example text_game`;
+`cargo fmt --manifest-path engine/Cargo.toml --check`;`git diff --check`.
+No full-suite rerun or publication/license signoff. **Next action:** rerun the
+same radio command;the rebuilt binary no longer prints the notice. Local only.
+
+### 2026-10-17 — P-03-text-game-radio runner summaries/hit calls done; uncommitted
+
+Maintainer requests concise safe-hit calls (“Chad Pinder: Single to left field.”),
+no repeated batter arrival or double-play runner-out line,andnamed fielders only
+when making a putout/assist. Radio now uses field locations for hits/HR;omits
+implied batter reaches,retains advances/holds (explicit andimplicit),scoring and
+third-out stranding,andkeeps extra-base throw-outs explicit. Fielder identities
+in play calls follow canonical PO/A credits;other defensive roles stay unnamed.
+Only renderer/tests/guide/ledger changed in this follow-up;no gameplay/RNG change.
+
+Fresh checks pass:21 narration tests (`cargo test --offline --locked --manifest-path engine/Cargo.toml --test full_transcript`),2 CLI tests (`cargo test --offline --locked --manifest-path engine/Cargo.toml --example text_game`),
+`cargo build --offline --locked --manifest-path engine/Cargo.toml --example text_game`,
+`cargo fmt --manifest-path engine/Cargo.toml --check`,
+`cargo clippy --offline --locked --manifest-path engine/Cargo.toml --all-targets -- -D warnings`,and`git diff --check`.
+Regressions cover both hit producers,all three outfield locations/hit values,
+credited fielders,explicit/implicit holds,double-play endings andpreserved detail.
+Raw red/green19-test runner-summary checkpoint:
+`/tmp/bbsim-text-game-radio-runner-summary-v1/`;final21-test hit-call checkpoint:
+`/tmp/bbsim-text-game-radio-hit-calls-v1/` (including the first run's obsolete
+named-catcher assertion failure;updated to assert role-only andno catcher name).
+Actual seed1 radio contains the exact Chad Pinder line andtwo double-play calls
+without redundant out summaries;detailed output is byte-identical to the prior
+wording checkpoint. Prior full-suite/1000-game checks predate these edits andwere
+not rerun. **Next action:** maintainer reruns the same radio command with the
+rebuilt executable to inspect the calls. Still uncommitted/unpushed;no gate claim.
+
+### 2026-10-17 — P-03-text-game-radio wording cleanup done; uncommitted
+
+Maintainer requests removing“every runner scores”,using“Marcus Semien walks.”,
+and omitting the implied batter reach to first after a walk. Shared home-run call
+now omits that clause in both formats;radio ordinary walks use“NAME walks.”.
+Radio ordinary/intentional walks omit only the batter's first-base movement;
+forced advances/scoring by other runners remain. No simulation/scoring change.
+Added red regressions then verified green;18 narration tests pass. Rebuilt the
+local executable. Exact checks:`cargo test --offline --locked --manifest-path
+engine/Cargo.toml --test full_transcript`;`cargo build --offline --locked
+--manifest-path engine/Cargo.toml --example text_game`;`cargo fmt --manifest-path
+engine/Cargo.toml --check`;`cargo clippy --offline --locked --manifest-path
+engine/Cargo.toml --all-targets -- -D warnings`;`git diff --check`.
+Raw reds/greens andfresh seed1 radio/detailed outputs:
+`/tmp/bbsim-text-game-radio-wording-v1/`. Actual radio contains“Marcus Semien walks.”;
+actual detailed seed1 differs from the preserved original only by the requested
+home-run clause removal. Previous full-suite/1000-game receipts below predate
+these wording edits;not rerun or relabeled as current proof. Old saved transcripts
+are unchanged. **Next action:** maintainer reruns the same`--format radio`command
+to inspect the wording. Still local/uncommitted;no push or model/gate claim.
+
+### 2026-10-17 — P-03-text-game-radio done; uncommitted, maintainer inspection next
+
+Maintainer can run games but finds the diagnostic transcript too verbose.
+Implement only`text_game --format radio`,with`detailed`as the unchanged default.
+Reuse retained mechanisms/canonical transitions;no new simulation,RNG,ratings,
+manager,UI,data,dependencies or automatic publication. Scope:CLI/parser,shared
+full-transcript renderer,their existing Rust tests,and this ledger/text-game guide.
+
+Observable acceptance: strict format/default/duplicate/invalid-value parsing;
+named batters,play calls,pitching changes,meaningful runner movement and scoring;
+half-inning headings,out counts,score updates andone correct final without an
+unplayed half. No PA vectors/RNG words/source hashes/before-after dumps or routine
+runner-hold spam. Retain brief development/hindsight caveat,seed/model and source
+attribution. Fail closed on missing displayed identities. Same-seed detailed
+stdout/stderr must remain byte-identical to the preserved1000-game cohort.
+
+Changed`engine/examples/text_game.rs`,`engine/examples/support/full_transcript.rs`,
+`engine/tests/full_transcript.rs`,the linked guide and this ledger. CLI red,
+missing-renderer API red and semantic narration reds were observed before the
+implementation. Focused16 narration/2 CLI tests pass. An initial implementation
+incorrectly treated the current-batter participant on runner-only events as a
+PA label;the regression caught it. Labels now require canonical PA credit.
+All existing narration scenarios also exercise radio output without debug dumps.
+
+Fresh full checks completed as`proc_62c5` via
+`PYTHONDONTWRITEBYTECODE=1 python3 -B /tmp/bbsim-text-game-radio-v1/verify.py`.
+Output/parity`proc_be5f` completed using`check-output.py` in the same directory. Its first
+harness run failed at seed26 because its expected-PA list omitted tactical IBBs
+(which have no random-draw receipt);raw first harness/cohort/error are retained,
+and the corrected check explicitly includes them. No production assertion was
+weakened. Seed1 radio is289 lines/13,101 bytes versus856/73,507 detailed.
+Output`proc_be5f` exits0/113s at19:42:30UTC:all2000 default stdout/stderr files
+match the preserved1000-game cohort byte-for-byte. All1000 radio games preserve
+final scores,half-inning order,named PA/IBB sequence,scoring-runner credits and
+pitching-change counts,without diagnostic dumps. Explicit detailed/repeated
+radio parity,v2 opt-in radio/detailed agreement andfive malformed-format refusals
+pass;input/artifact/binary hashes stay stable. Receipt:`output-checks.json`;
+raw corrected cohort:`cohort-v2/`. No gameplay or model adoption claim.
+Full verification`proc_62c5` exits0/583s,19:38:25–19:48:08UTC:873 Rust tests
+(63 zero-failure summaries),4 example tests,31 focused tests and623 Python tests
+(56.321s,ResourceWarnings as errors). Build,fmt,strict all-target Clippy anddiff
+checks pass. All197 before/after/current source hashes match. Receipts/raw logs:
+`verification/{results,source-before,source-after}.json`,
+`verification/{build,focused,rust,examples,fmt,clippy,python,diff}.{stdout,stderr}`
+and`verification-summary.json` under`/tmp/bbsim-text-game-radio-v1/`.
+Exact checks (repository root):
+
+```sh
+cargo build --offline --locked --manifest-path engine/Cargo.toml --examples
+cargo test --offline --locked --manifest-path engine/Cargo.toml --test full_transcript --test full_player_game --test player_calibration --test player_calibration_tree
+cargo test --offline --locked --manifest-path engine/Cargo.toml
+cargo test --offline --locked --manifest-path engine/Cargo.toml --examples
+cargo fmt --manifest-path engine/Cargo.toml --check
+cargo clippy --offline --locked --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+python3 -B -W error::ResourceWarning -m unittest discover -s tests -v
+git diff --check
+```
+
+**Next action:** maintainer reads radio games by adding`--format radio` to the
+existing command,or opens`/tmp/bbsim-text-game-radio-v1/radio-seed-1.txt`with`less`.
+Keep detailed mode for diagnostics. No new fitting,batter stretching-hit outcome,
+individual running/arm calibration,UI,commit/push or gate signoff in this slice.
+The five changed files and private evidence are local,not remotely durable.
 
 ### 2026-10-17 — P-01-player-hit-mix-v3 source checkpoint published; inspect games next
 
