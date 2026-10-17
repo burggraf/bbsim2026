@@ -133,6 +133,31 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 
 ## Resume here
 
+### 2026-10-17 — P-01-card-game-research done; documentary archive only
+
+Maintainer requests saving this discussion's research/recommendations and a local
+commit. [Research package](../CARD-BASED-GAME-RESEARCH/README.md): three Markdown
+files cover confirmed physical/offline play, two-sided L/R cards, matchup and
+league-adjustment math, exact dice resolution, defense/running, recommendations,
+18 source entries and explicit evidence/rights limitations. This independent
+archive does not replace the active player-hit-mix task or change any gate.
+
+Fresh verification: both `sh` recipes in the research README executed verbatim
+with `bash -eu`: all exact-rational/dice assertions pass; all20 relative Markdown
+link targets across3 documents resolve. Source-ID/UTF-8/newline/trailing-space
+checks pass; `git diff --check` passes. The staged slice must also pass
+`git diff --cached --check` before its isolated commit. No research code changes;
+Rust/model/application suites are not applicable to this Markdown-only slice and
+were not rerun. Arithmetic checks are not game/model accuracy evidence.
+
+Commit scope is the three research documents plus only this added handoff;
+existing calibration edits (including other ledger edits) remain outside it.
+The containing archive commit is discoverable with
+`git log -1 -- CARD-BASED-GAME-RESEARCH/`. No push, engine/default/UI/data changes,
+new fits, external-generator execution, printed cards or prototype authorization.
+**Next action:** review the archive before authorizing any card-game prototype;
+continue the main modeling task only under its separate scope and evidence.
+
 ### 2026-10-17 — code-only checkpoint committed/pushed; fresh verification passed
 
 Maintainer asks to commit/push the verified work if confident,then recommend the
