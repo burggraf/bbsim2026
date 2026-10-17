@@ -28,7 +28,7 @@ const SOURCE_CAST: [&[(&str, &str)]; 2] = [
     ],
 ];
 
-pub const POLICY_VERSION: &str = "workload-context-2019-v2";
+pub const POLICY_VERSION: &str = "workload-context-2019-v3";
 
 #[derive(Clone, Debug)]
 struct Workload {
@@ -426,11 +426,11 @@ impl Cast {
             .map(|t| u64::from(t.event().delta.runs))
             .sum();
         let lead = i64::from(before.score[side]) - i64::from(before.score[1 - side]);
-        let struggling = role == 0 && pa_count >= 9 && runs >= 4 && lead <= 0;
-        if !struggling && (pa_count as u64) < target {
+        // Observed outing budgets already include short/ineffective removals; do not shorten twice.
+        if (pa_count as u64) < target {
             return Ok(None);
         }
-        if role == 0 && runs == 0 && !struggling {
+        if role == 0 && runs == 0 {
             if lead > 3 {
                 target += 3;
             }

@@ -246,9 +246,10 @@ implementation/harness failures, not hidden baseball or statistical failures.
 
 ## Workload/context manager follow-up (2019 only)
 
-The complete text game uses `workload-context-2019-v2`, not a fixed27/6PA or
-seventh-inning hook. See the [manager contract](text-game-manager-v2.md) for
-preregistered heuristics, verification status andlimits. The existing v1cast
+The complete text game uses `workload-context-2019-v3`, not a fixed27/6PA
+or seventh-inning hook. See the [original manager contract](text-game-manager-v2.md)
+and [conditional usage audit/correction](text-game-usage-audit-v1.md) for policy,
+acceptance and limitations; PROGRESS owns current verification/adoption status. The existing v1cast
 uses individual role means with an explicit mean-only disclosure. To use the
 already-audited training outing distributions, export a separate v2cast:
 
@@ -266,8 +267,9 @@ not bundled data. Substitute that new cast path in the existing text-game comman
 anduse `--seed 67 --format radio`. Do not overwrite prior cast/scientific artifacts.
 A separate manager RNG samples one stable outing budget per pitcher entry;
 individual batter/current-pitcher probabilities andoutcome RNG remain separate.
-Score/performance andknown no-hit context can alter the hook; no no-hitter is
-promised. Other seasons, measured fatigue/pitch counts, verified bullpen rest
+Scoreless-lead and known no-hit context can extend the budget; v3 removes the
+additional early-performance cutoff because observed outing lengths already
+include removals. No no-hitter is promised. Other seasons, measured fatigue/pitch counts, verified bullpen rest
 andfull managerial/historical usage fidelity remain unsupported.
 
 ### Pre-review verification (boundary correction follows)

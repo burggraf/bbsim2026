@@ -182,7 +182,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
         writeln!(
             output,
-            "Manager: {} | {}; PA workload proxy, not pitch counts.",
+            "Manager: {} | {}; PA workload proxy, not pitch counts; no extra performance cutoff.",
             full_manager::POLICY_VERSION,
             cast.workload_mode()
         )?;
@@ -222,7 +222,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     writeln!(output,"Pooled reference counts: {counts:?}; interference alone retains pooled parent mass. Generated contact geometry/handling, runner/error/steal conditionals remain shared provisional priors; not observed mechanisms or validated individual speed/arm/fielding.")?;
     writeln!(output,"PA MODEL records the actual consumed vector, raw RNG word and selected parent (K, BB, HBP, 1B, 2B, 3B, HR, ROE, contact, interference). Tactical IBB overrides and runner-only events have no PA draw. Credited walkoff hit value may be shorter than the selected parent.")?;
-    writeln!(output,"Manager: {} | {}. Recorded nonstarters assumed available at start; not verified eligibility. Individual workloads with bounded score/performance/no-hit context; not measured pitch counts or fatigue. No automatic seventh-inning hook; exhausted cast keeps last pitcher.", full_manager::POLICY_VERSION, cast.workload_mode())?;
+    writeln!(output,"Manager: {} | {}. Recorded nonstarters assumed available at start; not verified eligibility. Individual outing budgets with bounded scoreless/no-hit extensions; no additional early-performance hook, measured pitch counts or fatigue. No automatic seventh-inning hook; exhausted cast keeps last pitcher.", full_manager::POLICY_VERSION, cast.workload_mode())?;
     writeln!(output,"KNOWN MISSING GENERATION: automatic uncaught-K out plus same-delivery runner advance, pinch hitting/running/defensive replacements, ground-rule doubles, inside-park home runs and appeal double-offs. Joint hits/runner tags and eligible recovered-K advances use provisional priors. No complete major-event coverage claim.")?;
     writeln!(output, "Source witness OAK201903200; accepted 2019 snapshot d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528; supplement 554632467416eef202b7a55cadad2d09e5355ce98c83868b26b5267f98852b82.")?;
     writeln!(output, "INTEGRITY CHECKS: contiguous canonical log; event-summed runs/PA/BF/outs/cursors and observed PO/A/E/PB reconciliation. Not complete official accounting.")?;

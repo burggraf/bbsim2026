@@ -1,5 +1,9 @@
 # P-02-text-game-manager-v2 — workload and context, 2019 pilot
 
+**Follow-up:** the [conditional usage audit/v3 correction](text-game-usage-audit-v1.md)
+removes the extra early-performance shortening rule; the original v2 contract
+and results below remain historical evidence. PROGRESS owns adoption status.
+
 ## Contract fixed before implementation or examining new cohort results
 
 Maintainer approved replacing the automatic seventh-inning hook after seed67

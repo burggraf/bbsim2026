@@ -343,7 +343,7 @@ fn loader_refuses_missing_selected_role_and_inconsistent_workload_denominators()
 }
 
 #[test]
-fn struggling_starter_hook_and_low_leverage_extension_have_boundary_controls() {
+fn individual_budget_is_not_shortened_again_by_performance_and_lead_extension_is_bounded() {
     let cast = cast();
     let mut before = cast.prepare(&state(1, Half::Top, true)).unwrap();
     let mut log = Vec::new();
@@ -354,7 +354,21 @@ fn struggling_starter_hook_and_low_leverage_extension_have_boundary_controls() {
     advance(&mut log, &mut before, out_pa);
     assert_eq!(cast.next_change(&before, &log).unwrap(), None);
     advance(&mut log, &mut before, out_pa);
+    assert_eq!(cast.next_change(&before, &log).unwrap(), None);
+    // The same observed outing budget must not be shortened by a second removal process.
+    let empirical = Cast::read_tsv(&empirical_text()).unwrap();
+    assert_eq!(empirical.next_change(&before, &log).unwrap(), None);
+    while log
+        .iter()
+        .filter(|t| t.event().participants.pitcher == "fierm001")
+        .count()
+        < 26
+    {
+        advance(&mut log, &mut before, out_pa);
+    }
+    advance(&mut log, &mut before, walk);
     assert!(cast.next_change(&before, &log).unwrap().is_some());
+    assert!(empirical.next_change(&before, &log).unwrap().is_some());
     let cast = Cast::read_tsv(&cast_text().replace(
         "workload:start:fierm001\t27,1",
         "workload:start:fierm001\t18,1",
@@ -408,7 +422,7 @@ fn empirical_sample_endpoints_reconcile_and_use_one_supplied_entry_word() {
             "usage:start:fierm001\t0,2,4\n",
         );
     let cast = Cast::read_tsv(&text).unwrap();
-    assert_eq!(full_manager::POLICY_VERSION, "workload-context-2019-v2");
+    assert_eq!(full_manager::POLICY_VERSION, "workload-context-2019-v3");
     assert!(cast.workload_mode().starts_with("empirical"));
     assert!(self::cast().workload_mode().contains("v1 fallback"));
     let mut before = cast.prepare(&state(1, Half::Top, true)).unwrap();
