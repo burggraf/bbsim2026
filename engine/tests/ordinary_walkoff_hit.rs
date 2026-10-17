@@ -395,7 +395,7 @@ fn exact_winning_count_and_late_bottom_context_are_required() {
 }
 
 #[test]
-fn empty_bases_triples_and_retirements_remain_outside_this_family() {
+fn empty_bases_and_retirements_refuse_but_explicit_first_origin_triple_is_legal() {
     let b = fixture(0, 0);
     let e = event(&b, 1, &[1]);
     let f = facts(
@@ -416,7 +416,7 @@ fn empty_bases_triples_and_retirements_remain_outside_this_family() {
         Destination::Third,
         NaturalCourseTouchTiming::ByWinningRun,
     );
-    refused(&b, &e, &f, TransitionError::UnsupportedRule);
+    checked(&b, &e, &f);
     let b = fixture(4, 0);
     let mut e = event(&b, 1, &[1, 4]);
     e.delta.moves[1].to = Destination::Out;
@@ -636,4 +636,42 @@ fn cartesian_named_winner_matrix_is_order_invariant_and_conserving() {
     }
     assert!(counts.iter().all(|count| *count > 0));
     println!("ordinary walkoff Cartesian accepted/ceiling/order: {counts:?}");
+}
+
+#[test]
+fn three_run_triple_names_first_winner_not_earlier_closer_scorers() {
+    for outs in 0..3 {
+        for timing in [
+            NaturalCourseTouchTiming::ByWinningRun,
+            NaturalCourseTouchTiming::AfterWinningRun,
+        ] {
+            let mut b = fixture(7, outs);
+            b.score = [12, 10];
+            let mut e = event(&b, 2, &[3, 4, 4, 4]);
+            for c in &mut e.delta.credits {
+                if c.kind == CreditKind::Double {
+                    c.kind = CreditKind::Triple;
+                }
+            }
+            let f = facts("h1", Destination::Third, timing);
+            assert_eq!(apply(&b, e.clone()), Err(TransitionError::UnsupportedRule));
+            let t = checked(&b, &e, &f);
+            assert_eq!(t.after().score, [12, 13]);
+            assert_eq!(t.sole_safe_hit_rbi().unwrap().runs_batted_in["h0"], 3);
+            refused(
+                &b,
+                &e,
+                &facts("h3", Destination::Third, timing),
+                TransitionError::IllegalCredit,
+            );
+            e.delta.moves.reverse();
+            e.delta.credits.reverse();
+            let permuted = checked(&b, &e, &f);
+            assert_eq!(t.after(), permuted.after());
+            assert_eq!(
+                derive_accounting(&[t]).unwrap(),
+                derive_accounting(&[permuted]).unwrap()
+            );
+        }
+    }
 }

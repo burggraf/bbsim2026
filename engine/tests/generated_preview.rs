@@ -769,7 +769,7 @@ fn radio(t: &EventTransition) -> String {
 #[test]
 fn radio_calls_name_actual_batter_pitcher_and_bound_fielders_for_all_categories() {
     let calls = [
-        "Home-pitcher to Away-1: strike three! Away-1 is out; Home-1 receives the strike.",
+        "Home-pitcher to Away-1: strike three! Away-1 is out.",
         "Home-pitcher to Away-1: ball four! Away-1 takes first.",
         "Home-pitcher to Away-1: hit by pitch. Away-1 takes first.",
         "Home-pitcher to Away-1: a single!",
@@ -860,7 +860,7 @@ fn radio_explains_held_runners_normalized_third_out_and_terminal_state() {
     .unwrap();
     let text = radio(&t);
     assert!(
-        text.contains("Away-6 holds at first. Side retired."),
+        text.contains("Away-6 is stranded at first. Side retired."),
         "{text}"
     );
     assert!(text.contains("After: Bottom 1 · 0 outs · Away 0–Home 0 · bases empty"));
@@ -875,6 +875,39 @@ fn radio_explains_held_runners_normalized_third_out_and_terminal_state() {
     let text = radio(&t);
     assert!(text.contains("The game is over."));
     assert!(text.contains("After: Final · Away 0–Home 1 · bases empty"));
+}
+
+#[test]
+fn inning_ending_strikeout_strands_runner_without_catcher_bookkeeping_or_display_ids() {
+    let mut before = initial();
+    before.outs = 2;
+    before.bases[0] = Some(bbsim_engine::Runner {
+        player_id: "Away-6".into(),
+        responsible_pitcher: "Home-pitcher".into(),
+    });
+    let t = apply(
+        &before,
+        preview::event_for(&before, Outcome::Strikeout).unwrap(),
+    )
+    .unwrap();
+    let frozen = t.to_bytes();
+    let names = [
+        ("Home-pitcher", "Michael Fiers"),
+        ("Away-1", "Ryon Healy"),
+        ("Home-1", "Nick Hundley"),
+        ("Away-6", "Domingo Santana"),
+    ]
+    .into_iter()
+    .map(|(id, name)| (id.into(), name.into()))
+    .collect();
+    let mut output = Vec::new();
+    game_trace::write_commentary_named(std::slice::from_ref(&t), &mut output, &names).unwrap();
+    let text = String::from_utf8(output).unwrap();
+    assert_eq!(text.lines().nth(1).unwrap(), "CALL PLAY 1: Michael Fiers to Ryon Healy: strike three! Ryon Healy is out. Domingo Santana is stranded at first. Side retired.");
+    assert!(!text.contains("receives the strike") && !text.contains("holds at"));
+    assert!(!text.contains('[') && !text.contains("Home-pitcher") && !text.contains("Away-6"));
+    assert_eq!(t.to_bytes(), frozen);
+    assert!(t.event().caught_strikeout.is_some());
 }
 
 #[test]

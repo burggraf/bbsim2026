@@ -211,3 +211,30 @@ Actual external authority `v2/code-post.json`, not a prospective receipt. This
 subsequent two-doc handoff records the observed result; no test/code change.
 Next inspect/preregister a common runner-only corrective prerequisite, keeping
 terminal dispatch refused and manager NO-GO rather than inventing a clock/model.
+
+## Bounded P-02 explicit Triple prerequisite — preregistered 2026-10-16
+
+Extend only the explicit-facts ordinary safe family from value1|2 to value1..=3.
+A legal three-run walkoff Triple can have First-origin winner after Third and
+Second score. Rule9.06 ceiling is that named winner's advance (three), not the
+closest earlier scorer's advance. Existing no-facts ceiling, codec, shared
+reducer and all identity/touch/no-passing/units guards remain unchanged.
+The existing explicit one-run First-origin Triple refusal is therefore superseded
+by acceptance; a Third-origin winner still cannot justify Triple credit.
+
+Observable semantic regression before implementation: bases loaded, deficit two,
+three physical/credited runs, safe batter Third, winner First, both known natural
+course phases, all outs and reversed move/credit order must apply/construct/codec
+roundtrip immutably. No-facts must retain UnsupportedRule. Wrong Third winner
+must refuse IllegalCredit; missing/unknown facts remain conservative. This changes
+no generated policy or wire format and is not P-02/full-game/G1 acceptance.
+
+Bounded verification: `03-triple-red.log` records two semantic UnsupportedRule
+failures before the sole guard extension. Final `14-validation.log` passes all
+15 ordinary-walkoff tests (including both known Triple timing phases), all
+hit_runner_tag/hit_value_2019/sole_safe_hit_rbi_2019 compatibility tests and nine
+standalone full-hit projection tests: 63 methods total, owned rustfmt and strict
+targeted Clippy. Raw commands/failures/results are retained under
+`/tmp/bbsim-text-game-recovery-v1/full-hit-worker/`. No codec/no-facts change;
+all seven parent-seeded hit/tag files remain byte-identical. This is bounded
+projector/prerequisite evidence, not full-game acceptance or gate signoff.

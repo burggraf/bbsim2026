@@ -88,12 +88,17 @@ fn fixture(before: &GameState, role: u8) -> (Event, GroundForceDoublePlayFacts) 
             to: Destination::Out,
         },
     ];
-    if let Some(third) = &before.bases[2] {
-        moves.push(RunnerMove {
-            runner: third.clone(),
-            from: Base::Third,
-            to: Destination::Third,
-        });
+    for (i, from, to) in [
+        (1, Base::Second, Destination::Second),
+        (2, Base::Third, Destination::Third),
+    ] {
+        if let Some(runner) = &before.bases[i] {
+            moves.push(RunnerMove {
+                runner: runner.clone(),
+                from,
+                to,
+            });
+        }
     }
     let event = Event {
         kind: EventKind::PlateAppearance,
@@ -219,11 +224,14 @@ fn expected_after(before: &GameState) -> GameState {
     let side = before.half.offense();
     after.teams[side].next_batter = (before.teams[side].next_batter + 1) % 9;
     after.outs = before.outs + 2;
-    after.bases = [None, None, before.bases[2].clone()];
+    after.bases = [None, before.bases[1].clone(), before.bases[2].clone()];
     if after.outs == 3 {
         after.outs = 0;
         after.bases = [None, None, None];
-        if before.half == Half::Top && before.inning >= 9 && before.score[1] > before.score[0] {
+        if before.inning >= 9
+            && ((before.half == Half::Top && before.score[1] > before.score[0])
+                || (before.half == Half::Bottom && before.score[0] != before.score[1]))
+        {
             after.over = true;
         } else if before.half == Half::Top {
             after.half = Half::Bottom;
@@ -307,7 +315,7 @@ fn cartesian_state_and_independent_accounting_oracle() {
         (65535, Half::Top),
     ] {
         for outs in 0..2 {
-            for mask in [1, 5] {
+            for mask in [1, 3, 5, 7] {
                 for cursor in 0..9 {
                     for dh in [false, true] {
                         for score in [[0, 0], [2, 0], [0, 2]] {
@@ -321,12 +329,8 @@ fn cartesian_state_and_independent_accounting_oracle() {
                                         event.delta.moves.reverse();
                                         event.delta.credits.reverse();
                                     }
-                                    if inning >= 9 && outs == 1 && score[1] > score[0] {
-                                        rejected(&before, &event, &facts);
-                                        terminal += 1;
-                                        continue;
-                                    }
                                     let t = checked(&before, &event, &facts);
+                                    terminal += u32::from(t.after().over);
                                     let stats = accounting::derive_accounting(&[t]).unwrap();
                                     let offense = half.offense();
                                     let defense = 1 - offense;
@@ -388,7 +392,7 @@ fn cartesian_state_and_independent_accounting_oracle() {
             }
         }
     }
-    assert_eq!((accepted, terminal), (9504, 864));
+    assert_eq!((accepted, terminal), (20736, 1728));
 }
 #[test]
 fn known_contradictions_and_eligible_named_roles() {
@@ -464,7 +468,7 @@ fn known_contradictions_and_eligible_named_roles() {
     rejected(&ambiguous, &event, &facts);
 }
 #[test]
-fn late_bottom_and_unqualified_episodes_refuse_without_fallback() {
+fn late_bottom_endings_and_unqualified_episodes_have_no_fallback() {
     for inning in 9..=u16::MAX {
         for outs in 0..2 {
             for score in [[0, 0], [2, 0], [0, 2]] {
@@ -472,8 +476,14 @@ fn late_bottom_and_unqualified_episodes_refuse_without_fallback() {
                 before.inning = inning;
                 before.score = score;
                 let (e, f) = fixture(&before, 0);
-                // Standalone guard is checked even where a legal after cannot exist.
-                assert!(apply_with_ground_force_double_play_facts(&before, e, f).is_err());
+                if score[1] > score[0] || (inning == u16::MAX && outs == 1 && score[0] == score[1])
+                {
+                    // No legal after-state exists for these supplied before/event pairs.
+                    assert!(apply_with_ground_force_double_play_facts(&before, e, f).is_err());
+                } else {
+                    let t = apply_with_ground_force_double_play_facts(&before, e, f).unwrap();
+                    assert_eq!(t.after(), &expected_after(&before));
+                }
             }
         }
     }

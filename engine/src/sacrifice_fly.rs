@@ -1,7 +1,7 @@
 //! Explicit Rule 9.08(d)(1) caught-SF context, never inferred from labels/endpoints.
 use crate::{
     accounting::RbiContribution, rules, Base, CreditKind, Destination, Event, EventKind,
-    EventTransition, FieldingReview, GameState, Half, TransitionError,
+    EventTransition, FieldingReview, GameState, TransitionError,
 };
 
 /// Supplied handling criterion, not a position guessed from a lineup index or PO.
@@ -115,8 +115,7 @@ pub(crate) fn validate(
     crate::balk::preflight(before, event)?;
     crate::pitch::preflight(before, event)?;
     crate::contact::validate(before, event)?;
-    if (before.half == Half::Bottom && before.inning >= 9)
-        || before.outs >= 2
+    if before.outs >= 2
         || event.delta.outs != 1
         || event.delta.runs != 1
         || event.delta.third_out.is_some()

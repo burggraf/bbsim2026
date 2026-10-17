@@ -87,7 +87,22 @@ class LivePreviewTests(unittest.TestCase):
                         try:response=urlopen(url+f'/?seed={seed}&model={mode}',timeout=30)
                         except HTTPError as error:
                             with error:self.fail(f'Expected200: {error.code}: {error.read().decode()}')
-                        with response:self.assertEqual(response.read().decode(),build_live_viewer(native,seed,joint_available=True,real_available=True,rated_available=True))
+                        with response:
+                            page = response.read().decode()
+                        self.assertEqual(page, build_live_viewer(native, seed, joint_available=True, real_available=True, rated_available=True))
+                        count = len(re.findall(r'^Play ', native, re.MULTILINE))
+                        self.assertEqual(page.count('class="frame"'), count + 1)
+                        self.assertIn(f'const total = {count};', page)
+                        if mode in ['real', 'rated']:
+                            from test_visible_viewer import selected_frame
+                            self.assertIn('data-batter="a1" data-pitcher="hp"', selected_frame(page, 0))
+                            self.assertIn('<strong>Player a1</strong>', selected_frame(page, 0))
+                            self.assertNotIn('data-batter=', selected_frame(page, count))
+                            self.assertEqual(page.count('class="lineup-hitter"'), 18)
+                            self.assertIn('<section id="starting-lineups"', page)
+                            self.assertIn('aria-label="Schematic base occupancy"', page)
+                            if mode == 'rated':
+                                self.assertIn('<details id="player-probabilities">', page)
                 ratings.write_text('bad')
                 with self.assertRaises(HTTPError) as error:urlopen(url+'/?model=rated',timeout=30)
                 with error.exception as response:self.assertEqual(response.code,500);response.read()

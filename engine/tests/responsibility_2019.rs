@@ -264,15 +264,32 @@ fn fc_label_cannot_coexist_with_hit_walk_k_or_pa_exclusions() {
 }
 
 #[test]
-fn fc_without_a_lone_runner_or_with_unmodeled_moves_is_unsupported() {
+fn unique_first_fc_allows_held_secondary_but_unmodeled_moves_remain_unsupported() {
     let mut before = state(0, 0);
     let valid = replacement(&before);
     before.bases[1] = Some(Runner {
         player_id: "away6".into(),
         responsible_pitcher: "home_reliever".into(),
     });
+    let held = apply(&before, valid.clone()).unwrap();
+    assert_eq!(held.after().bases[1], before.bases[1]);
     assert_eq!(
-        apply(&before, valid.clone()),
+        held.after().bases[0].as_ref().unwrap().responsible_pitcher,
+        "home_starter"
+    );
+    assert_eq!(EventTransition::from_bytes(&held.to_bytes()).unwrap(), held);
+    assert_eq!(
+        EventTransition::try_new(before.clone(), valid.clone(), held.after().clone()).unwrap(),
+        held
+    );
+    let mut advancing = valid.clone();
+    advancing.delta.moves.push(RunnerMove {
+        runner: before.bases[1].as_ref().unwrap().clone(),
+        from: Base::Second,
+        to: Destination::Third,
+    });
+    assert_eq!(
+        apply(&before, advancing),
         Err(TransitionError::UnsupportedRule)
     );
     before.bases = [None, None, None];

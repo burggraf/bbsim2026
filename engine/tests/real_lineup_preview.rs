@@ -248,7 +248,8 @@ fn named_native_commentary_uses_exact_tokens_and_preserves_raw_trace() {
     let mut calls = Vec::new();
     game_trace::write_commentary_named(&log, &mut calls, &lineup.names()).unwrap();
     let calls = String::from_utf8(calls).unwrap();
-    assert!(calls.contains("Pitcher h [hp] to Player a1 [a1]"));
+    assert!(calls.contains("Pitcher h to Player a1"));
+    assert!(!calls.contains("[hp]") && !calls.contains("[a1]"));
     assert!(!calls.contains("Away-"));
     let mut trace = Vec::new();
     game_trace::write(&log, &mut trace).unwrap();
@@ -262,6 +263,75 @@ fn named_native_commentary_uses_exact_tokens_and_preserves_raw_trace() {
     assert!(meta.contains("PLAYER Away 4 10 a4: Player a4"));
     assert!(meta.contains(joint::ATTRIBUTION));
 }
+#[test]
+fn position_commentary_uses_supplied_lineup_roles_not_batting_slots_or_player_names() {
+    let lineup = real::Lineup::read_tsv(&fixture()).unwrap();
+    let positions = lineup.positions();
+    for (id, position) in [
+        ("hp", "P"),
+        ("h1", "LF"),
+        ("h2", "CF"),
+        ("h3", "1B"),
+        ("h4", "DH"),
+        ("h5", "RF"),
+        ("h6", "C"),
+        ("h7", "3B"),
+        ("h8", "SS"),
+        ("h9", "2B"),
+    ] {
+        assert_eq!(positions[id], position);
+    }
+    for index in [7, 8, 9, 10, 11] {
+        let before = lineup.initial();
+        let t = apply(&before, lineup.event_for(&before, sample(index)).unwrap()).unwrap();
+        let frozen = t.to_bytes();
+        let mut output = Vec::new();
+        game_trace::write_commentary_with_positions(
+            std::slice::from_ref(&t),
+            &mut output,
+            &lineup.names(),
+            &positions,
+        )
+        .unwrap();
+        let text = String::from_utf8(output).unwrap();
+        let location = match index {
+            7 | 8 => "ground ball to SS",
+            9 => "fly ball to CF",
+            10 => "line drive to RF",
+            11 => "pop-up to 3B",
+            _ => unreachable!(),
+        };
+        assert!(text.lines().nth(1).unwrap().contains(location), "{text}");
+        assert_eq!(t.to_bytes(), frozen);
+        if index == 9 {
+            let mut plain = Vec::new();
+            game_trace::write_commentary_named(
+                std::slice::from_ref(&t),
+                &mut plain,
+                &lineup.names(),
+            )
+            .unwrap();
+            assert!(String::from_utf8(plain)
+                .unwrap()
+                .contains("fly ball caught by Player h2"));
+            for position in ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"] {
+                let supplied = [("h2".to_string(), position)].into_iter().collect();
+                let mut call = Vec::new();
+                game_trace::write_commentary_with_positions(
+                    std::slice::from_ref(&t),
+                    &mut call,
+                    &lineup.names(),
+                    &supplied,
+                )
+                .unwrap();
+                assert!(String::from_utf8(call)
+                    .unwrap()
+                    .contains(&format!("fly ball to {position}, caught by Player h2")));
+            }
+        }
+    }
+}
+
 #[test]
 fn unchanged_loader_sampler_versions_and_empty_name_lookup_controls() {
     let counts = [42823, 15142, 1984, 25947, 8531, 785, 6776, 1470, 82245];

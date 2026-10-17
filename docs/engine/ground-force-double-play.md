@@ -107,6 +107,21 @@ Reverse-force/tag/interference/appeal/error/rundown/caught-or-dropped ball/bunt/
 force at another base/other runner advancement/more outs/competing contexts need
 separate evidence. Existing generic legal histories keep their prior behavior.
 
+## 2026-10-17 — current held-secondary and terminal scope
+
+This dated extension supersedes the initial restrictions above, without changing
+the historical preregistration or receipts. Before masks **1/3/5/7**, outs 0/1,
+may use the same direct First-force/First-relay proof. Any Second and/or Third
+runner explicitly holds throughout, preserving identity and pitcher charge;
+there is no extra force chain, scoring or inferred advancement. The PA, two outs,
+PO/A credits, role exclusions and factual chronology are unchanged.
+
+Canonical late-bottom and actual game-ending top third outs are now allowed.
+Invalid already-winning late-bottom states and unresolved/winning continuations
+still refuse; the canonical reducer alone owns terminal/half cleanup. Parent
+expanded ground/contact grids and full-game contexts supply fresh verification
+separately from the historical counts below. No G1/P-02 signoff is implied.
+
 ## Canonical boundary and wire
 
 Add `apply_with_ground_force_double_play_facts`,canonical

@@ -1,5 +1,6 @@
 //! Versions 25 (legacy), 26 (air catch), 27 (ordinary walk-off hit facts),
-//! 28 (explicit caught-sacrifice-fly facts), and 29 (sacrifice-bunt throw facts).
+//! 28 (caught-sacrifice-fly), 29 (bunt), 30 (force relay), 31 (hit/runner tag),
+//! 32 (recovered K before First after runner advances).
 //! Little-endian, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
@@ -139,6 +140,7 @@ macro_rules! binary_enum {
         }
     };
 }
+binary_enum!(HitRunnerTagOrder { BatterAttainedCreditedBaseBeforeTag = 0 });
 binary_enum!(TeamSide { Away = 0, Home = 1 });
 binary_enum!(Half { Top = 0, Bottom = 1 });
 binary_enum!(Base { Plate = 0, First = 1, Second = 2, Third = 3 });
@@ -205,6 +207,10 @@ impl Binary for RecoveryReview {
                 putout_fielder_id.encode(out);
                 at.encode(out);
             }
+            Self::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances { putout_fielder_id } => {
+                6u8.encode(out);
+                putout_fielder_id.encode(out);
+            }
         }
     }
     fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
@@ -222,6 +228,9 @@ impl Binary for RecoveryReview {
             5 => Ok(Self::ThirdStrikeBatterAfterFirstThrow {
                 putout_fielder_id: Binary::decode(reader)?,
                 at: Binary::decode(reader)?,
+            }),
+            6 => Ok(Self::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances {
+                putout_fielder_id: Binary::decode(reader)?,
             }),
             _ => Err(TransitionError::InvalidEncoding),
         }
@@ -475,6 +484,15 @@ binary_struct!(GroundForceDoublePlayFacts {
     pivot_id,
     first_receiver_id
 });
+binary_struct!(HitRunnerTagFacts {
+    batter_id,
+    runner_id,
+    attempted_base,
+    thrower_id,
+    tagger_id,
+    order,
+    home_before_tag
+});
 binary_struct!(ProtectedAwardFacts { batter_id });
 binary_struct!(SoleHomeRunFacts { batter_id });
 binary_struct!(SoleSafeHitFacts { batter_id });
@@ -501,7 +519,16 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = if self.ground_force_double_play.is_some() {
+        let mut out = if self.event.single_delivery.as_ref().is_some_and(|facts| {
+            matches!(
+                facts.recovery,
+                RecoveryReview::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances { .. }
+            )
+        }) {
+            b"BBE32".to_vec()
+        } else if self.hit_runner_tag.is_some() {
+            b"BBE31".to_vec()
+        } else if self.ground_force_double_play.is_some() {
             b"BBE30".to_vec()
         } else if self.sacrifice_bunt_throw.is_some() {
             b"BBE29".to_vec()
@@ -532,10 +559,17 @@ impl EventTransition {
         if let Some(facts) = &self.ground_force_double_play {
             facts.encode(&mut out);
         }
+        if let Some(facts) = &self.hit_runner_tag {
+            facts.encode(&mut out);
+        }
         out
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
-        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE30") {
+        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE32") {
+            (payload, 32)
+        } else if let Some(payload) = bytes.strip_prefix(b"BBE31") {
+            (payload, 31)
+        } else if let Some(payload) = bytes.strip_prefix(b"BBE30") {
             (payload, 30)
         } else if let Some(payload) = bytes.strip_prefix(b"BBE29") {
             (payload, 29)
@@ -556,6 +590,15 @@ impl EventTransition {
         let mut reader = Reader(payload);
         let before = GameState::decode(&mut reader)?;
         let mut event = Event::decode(&mut reader)?;
+        let new_recovery = event.single_delivery.as_ref().is_some_and(|facts| {
+            matches!(
+                facts.recovery,
+                RecoveryReview::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances { .. }
+            )
+        });
+        if new_recovery != (version == 32) {
+            return Err(TransitionError::InvalidEncoding);
+        }
         let after = GameState::decode(&mut reader)?;
         if version == 26 || version == 28 {
             event.ordinary_air_catch = Some(OrdinaryAirCatchFacts::decode(&mut reader)?);
@@ -580,10 +623,15 @@ impl EventTransition {
         } else {
             None
         };
+        let hit_runner_tag = if version == 31 {
+            Some(HitRunnerTagFacts::decode(&mut reader)?)
+        } else {
+            None
+        };
         if !reader.0.is_empty() {
             return Err(TransitionError::InvalidEncoding);
         }
-        Self::try_new_with_ground_force_inner(
+        Self::try_new_with_hit_runner_tag_inner(
             before,
             event,
             after,
@@ -591,6 +639,7 @@ impl EventTransition {
             caught_sacrifice_fly,
             sacrifice_bunt_throw,
             ground_force_double_play,
+            hit_runner_tag,
         )
     }
 }

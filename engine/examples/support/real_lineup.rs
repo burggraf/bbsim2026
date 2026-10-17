@@ -213,6 +213,16 @@ impl Lineup {
             .map(|p| (p.id.clone(), p.name.clone()))
             .collect()
     }
+    // Shared test modules do not all exercise presentation.
+    #[allow(dead_code)]
+    pub fn positions(&self) -> BTreeMap<String, &'static str> {
+        let labels = ["", "P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
+        self.players
+            .iter()
+            .flatten()
+            .map(|p| (p.id.clone(), labels[p.position as usize]))
+            .collect()
+    }
     pub fn write_preamble(&self, output: &mut dyn Write) -> io::Result<()> {
         self.write_preamble_with_rates(output, false)
     }

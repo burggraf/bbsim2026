@@ -35,7 +35,7 @@ pub(crate) fn validate(
         || before.score[1] > before.score[0]
         || event.kind != EventKind::PlateAppearance
         || event.sole_safe_hit.is_none()
-        || !matches!(value, 1 | 2)
+        || !matches!(value, 1..=3)
         || event.delta.outs != 0
         || event.delta.runs == 0
         || u32::from(event.delta.runs)

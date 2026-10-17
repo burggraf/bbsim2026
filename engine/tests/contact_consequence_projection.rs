@@ -205,12 +205,7 @@ fn decision(before: &GameState, family: u8, role: u8, contact: AirContact) -> Co
 }
 // Literal oracle: deliberately no canonical apply/ending/projector helper calls.
 fn expected(before: &GameState, family: u8) -> Option<GameState> {
-    if family == 2
-        && before.outs == 1
-        && before.half == Half::Top
-        && before.inning >= 9
-        && before.score[1] > before.score[0]
-    {
+    if before.half == Half::Bottom && before.inning >= 9 && before.score[1] > before.score[0] {
         return None;
     }
     let mut after = before.clone();
@@ -233,12 +228,19 @@ fn expected(before: &GameState, family: u8) -> Option<GameState> {
     if after.outs == 3 {
         after.outs = 0;
         after.bases = [None, None, None];
-        if before.half == Half::Top {
+        if before.inning >= 9
+            && ((before.half == Half::Top && after.score[1] > after.score[0])
+                || (before.half == Half::Bottom && after.score[0] != after.score[1]))
+        {
+            after.over = true;
+        } else if before.half == Half::Top {
             after.half = Half::Bottom;
         } else {
             after.half = Half::Top;
-            after.inning = before.inning.checked_add(1).unwrap();
+            after.inning = before.inning.checked_add(1)?;
         }
+    } else if before.half == Half::Bottom && before.inning >= 9 && after.score[1] > after.score[0] {
+        after.over = true;
     }
     Some(after)
 }
@@ -386,7 +388,11 @@ fn independent_state_and_accounting_cartesian_grid() {
     let mut attempts = [0; 3];
     let mut terminal = 0;
     for family in 0..3 {
-        let masks: &[u8] = if family == 0 { &[4, 5, 6, 7] } else { &[1, 5] };
+        let masks: &[u8] = match family {
+            0 => &[4, 5, 6, 7],
+            1 => &[1, 5],
+            _ => &[1, 3, 5, 7],
+        };
         for (inning, half) in [
             (2, Half::Top),
             (2, Half::Bottom),
@@ -423,9 +429,9 @@ fn independent_state_and_accounting_cartesian_grid() {
             }
         }
     }
-    assert_eq!(attempts, [15552, 2592, 5184]);
-    assert_eq!(terminal, 432);
-    println!("supplied projection grid: attempts={attempts:?};terminal Top refusals={terminal};accepted=22896");
+    assert_eq!(attempts, [15552, 2592, 10368]);
+    assert_eq!(terminal, 0);
+    println!("supplied projection grid: attempts={attempts:?};unrepresentable endings={terminal};accepted=28512");
 }
 
 #[test]
@@ -459,14 +465,18 @@ fn unsupported_states_and_unknown_facts_refuse_without_mutation() {
                     );
                     bad.score = score;
                     let supplied = decision(&bad, family, 0, AirContact::Fly);
-                    rejected(&bad, &supplied);
+                    checked(&bad, &supplied, family);
                 }
             }
         }
         if family != 0 {
             let mut occupied = before.clone();
             occupied.bases[1] = state(7, 0).bases[1].clone();
-            rejected(&occupied, &choice);
+            if family == 1 {
+                rejected(&occupied, &choice);
+            } else {
+                checked(&occupied, &choice, family);
+            }
         }
         for actor in ["foreign", "a0", "hbench", "hremoved", "h8"] {
             let mut bad = choice.clone();

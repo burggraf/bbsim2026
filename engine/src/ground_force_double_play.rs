@@ -59,8 +59,8 @@ pub(crate) fn validate(
     if event.kind != EventKind::PlateAppearance {
         return Err(TransitionError::IllegalStateChange);
     }
-    // Preserve known canonical contradictions before missing contact history or
-    // an unsupported terminal context. No guessed retirement order/credit cause.
+    // Preserve known canonical contradictions before missing contact history.
+    // No guessed retirement order or credit cause.
     rules::validate_event_shape(event)?;
     rules::validate_move_origins(&before.bases, event, Some(&defense.pitcher))?;
     let outs = rules::validate_outs(before, event)?;
@@ -127,8 +127,6 @@ pub(crate) fn validate(
         }),
     };
     if before.outs >= 2
-        || before.bases[1].is_some()
-        || (before.half == Half::Bottom && before.inning >= 9)
         || event.delta.outs != 2
         || event.delta.runs != 0
         || !event.delta.changes.is_empty()
@@ -142,6 +140,7 @@ pub(crate) fn validate(
                 (m.from, m.to),
                 (Base::Plate, Destination::Out)
                     | (Base::First, Destination::Out)
+                    | (Base::Second, Destination::Second)
                     | (Base::Third, Destination::Third)
             )
         })
@@ -151,7 +150,6 @@ pub(crate) fn validate(
                     || out.kind != ThirdOutKind::BatterBeforeFirst
                     || !out.home_before_out.is_empty()
             }))
-        || rules::ending(before, event, outs)? != rules::Ending::Continue
     {
         return Err(TransitionError::UnsupportedRule);
     }

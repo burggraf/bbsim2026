@@ -785,8 +785,13 @@ fn viewer_air_calls_name_bound_types_actors_and_held_runners_without_mutation() 
                     for (i, runner) in before.bases.iter().enumerate() {
                         if let Some(runner) = runner {
                             assert!(text.contains(&format!(
-                                "{} holds at {}.",
+                                "{} {} {}.",
                                 runner.player_id,
+                                if outs == 2 {
+                                    "is stranded at"
+                                } else {
+                                    "holds at"
+                                },
                                 ["first", "second", "third"][i]
                             )));
                         }

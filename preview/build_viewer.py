@@ -101,7 +101,7 @@ def rating_panel(source, real):
         posterior.append('<tr class="role-posterior">'+''.join('<td>'+html.escape(v)+'</td>' for v in values)+'</tr>')
     labels=['K','BB','HBP','1B','2B','3B','HR','ROE','Contact out']
     header=lambda values:'<tr>'+''.join('<th>'+html.escape(v)+'</th>' for v in values)+'</tr>'
-    return ('<details id="player-probabilities" open><summary>Player-specific probabilities — hindsight pilot</summary>'
+    return ('<details id="player-probabilities"><summary>Player-specific probabilities — hindsight pilot</summary>'
             '<p>Fixed Dirichlet prior strength200 per role; generalized-log5 means, not calibrated or predictive. '
             'N is included terminal-event participant observations, not official PA/BF. Data weight shows shrinkage. '
             'No effective-handedness, park or opponent-adjusted fit; fielding/contact conditionals remain pooled.</p>'
@@ -111,19 +111,98 @@ def rating_panel(source, real):
             '<div style="overflow-x:auto"><table><thead>'+header(['Role','Player','N','Data weight',*labels])+'</thead><tbody>'+''.join(posterior)+'</tbody></table></div></details></details>')
 
 
+def native_state_fields(debug, summary):
+    """Read only the generated engine-debug-v1 state shape, never event/reducer logic."""
+    if not re.search(r'\b(?:teams|TeamState|batting_order|next_batter|pitcher)\b', debug):
+        return None  # Legacy inspection stubs have no team metadata at all.
+    identifier = r'[A-Za-z0-9-]{1,64}'
+    state = re.fullmatch(
+        r'GameState \{\s*inning: ([0-9]+),\s*half: (Top|Bottom),\s*outs: ([0-2]),'
+        r'\s*score: \[\s*([0-9]+),\s*([0-9]+),\s*\],\s*teams: \[(.*?)\],'
+        r'\s*bases: \[(.*?)\],\s*over: (true|false),\s*\}', debug, re.DOTALL)
+    if not state:
+        raise ValueError('Unsupported or partial native GameState')
+    inning, half, outs, away, home, team_text, base_text, over = state.groups()
+    if not 1 <= int(inning) <= 65535 or max(int(away), int(home)) > 4294967295:
+        raise ValueError('Native clock/score out of range')
+    team_pattern = (r'\s*TeamState \{\s*batting_order: \[((?:\s*"' + identifier + r'",){9})\s*\],'
+                    r'\s*next_batter: ([0-8]),\s*pitcher: "(' + identifier + r')",'
+                    r'\s*dh_slot: (?:None|Some\(\s*[0-8],\s*\)),\s*dh_must_bat: (?:true|false),'
+                    r'\s*bench: \[\s*\],\s*removed: \[\s*\],\s*\},')
+    teams = list(re.finditer(team_pattern, team_text))
+    if len(teams) != 2 or ''.join(t.group() for t in teams).strip() != team_text.strip():
+        raise ValueError('Expected two complete generated native teams')
+    teams = [(tuple(re.findall(r'"(' + identifier + r')"', t[1])), int(t[2]), t[3]) for t in teams]
+    identities = [p for order, _, pitcher in teams for p in (*order, pitcher)]
+    if len(set(identities)) != 20:
+        raise ValueError('Duplicate native starting identities')
+    runner_pattern = (r'\s*(?:None|Some\(\s*Runner \{\s*player_id: "(' + identifier
+                      + r')",\s*responsible_pitcher: "(' + identifier + r')",\s*\},\s*\)),')
+    runners = list(re.finditer(runner_pattern, base_text))
+    if len(runners) != 3 or ''.join(r.group() for r in runners).strip() != base_text.strip():
+        raise ValueError('Expected three complete native base slots')
+    bases = tuple((r[1], r[2]) if r[1] else None for r in runners)
+    offense = half == 'Bottom'
+    occupied = [r[0] for r in bases if r]
+    if (len(set(occupied)) != len(occupied)
+            or any(p not in teams[offense][0] for p in occupied)
+            or any(r and r[1] != teams[1-offense][2] for r in bases)):
+        raise ValueError('Native bases disagree with closed starting teams')
+    base_summary = ' '.join(f'{i}=' + (f'{r[0]} (charged to {r[1]})' if r else 'empty')
+                            for i, r in enumerate(bases, 1))
+    expected = (f'{half} {inning} | Outs: {outs} | Away {away} - Home {home} | '
+                f'Bases: {base_summary} | Game over: {over}')
+    if summary != expected:
+        raise ValueError('Native state and summary disagree')
+    return dict(inning=int(inning), half=half, outs=int(outs), score=(int(away), int(home)),
+                teams=teams, bases=tuple(r[0] if r else '-' for r in bases), over=over == 'true')
+
+
+def prefix_line_scores(source, states):
+    section = re.search(r'^Line score \(observed innings\):\nInning([^\n]+)\n'
+                        r'Away\s+([^|\n]+)\| ([0-9]+)\nHome\s+([^|\n]+)\| ([0-9]+)$', source, re.MULTILINE)
+    if 'Line score (observed innings):' not in source:
+        return None
+    if not section:
+        raise ValueError('Malformed native line score')
+    if not states:
+        return None
+    prefixes = [{}]
+    for before, after in zip(states, states[1:]):
+        cells = prefixes[-1].copy()
+        side = int(before['half'] == 'Bottom')
+        deltas = [a-b for a, b in zip(after['score'], before['score'])]
+        if min(deltas) < 0 or deltas[1-side] != 0:
+            raise ValueError('Native score changes disagree with batting half')
+        key = before['inning'], side
+        cells[key] = cells.get(key, 0) + deltas[side]
+        if tuple(sum(v for (_, s), v in cells.items() if s == side) for side in range(2)) != after['score']:
+            raise ValueError('Prefix line score does not reconcile to native score')
+        prefixes.append(cells)
+    innings = sorted({n for n, _ in prefixes[-1]})
+    if section[1].split() != list(map(str, innings)):
+        raise ValueError('Native line-score innings disagree with trace')
+    for side, (text, total) in enumerate([(section[2], section[3]), (section[4], section[5])]):
+        if (text.split() != [str(prefixes[-1].get((n, side), '-')) for n in innings]
+                or int(total) != states[-1]['score'][side]):
+            raise ValueError('Native final line score disagrees with trace')
+    return prefixes
+
+
 CSS = """
-*{box-sizing:border-box}body{margin:0;background:#101c25;color:#e9f0f2;font:16px system-ui,sans-serif}
-main{max-width:1060px;margin:auto;padding:30px 24px}header{display:flex;justify-content:space-between;align-items:center;gap:20px}
-h1{font-size:30px;margin:8px 0}.eyebrow{color:#9ab7b1;letter-spacing:3px;font-size:12px}.badge{padding:10px 16px;border:1px solid #425850;border-radius:30px;color:#a6e4bd}
-.intro,footer{color:#aebfc8;line-height:1.6}.frame{display:none}#frame0{display:block}.frame:target{display:block}.frame:target~#frame0{display:none}
-.score{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;background:#1a2b38;border:1px solid #304756;border-radius:16px;padding:22px;margin:24px 0;text-align:center}
-.team{color:#aac1d0;font-size:13px;letter-spacing:3px}.runs{font-size:60px;font-weight:750;line-height:1.2}.status{color:#a6e4bd;font-weight:600}
-.layout{display:grid;grid-template-columns:1.3fr 1fr;gap:24px}.field,.play{background:#182c2b;border:1px solid #34504a;border-radius:16px;padding:24px}.play{background:#1a2b38;border-color:#304756}
-svg{display:block;width:100%;height:auto;max-height:390px}.play h2{font-size:23px;line-height:1.4}.progress{color:#a6e4bd;font-size:13px;text-transform:uppercase;letter-spacing:2px}
-nav{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}a{display:inline-block;text-decoration:none;color:#e9f0f2;background:#2a414f;border:1px solid #466373;border-radius:8px;padding:12px 16px}a.primary{background:#b6eb91;color:#142719;border-color:#b6eb91;font-weight:700}a:focus-visible{outline:3px solid #ffda77;outline-offset:4px}a:hover{filter:brightness(1.15)}
-footer{font-size:13px;margin-top:26px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px ui-monospace,monospace;line-height:1.6;background:#15242f;border-radius:12px;padding:20px}summary{cursor:pointer;color:#b6eb91;padding:16px 0}
-.game-log{margin-top:24px;border:1px solid #304756;border-radius:12px;padding:0 18px}.game-log-scroll{max-height:520px;overflow-y:auto;overscroll-behavior:contain;padding:0 12px 12px}.game-log-entry{border-top:1px solid #304756;padding:12px 0}.game-log-entry h3{font-size:17px}.game-log-entry pre{margin:8px 0}.game-log-entry summary{font-size:13px}.radio-call{line-height:1.55;margin:8px 0}.state-recap{font-size:13px;color:#aebfc8;line-height:1.6;margin:8px 0}.game-log-scroll:focus-visible{outline:3px solid #ffda77}
-@media(max-width:720px){.layout{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}.runs{font-size:44px}.score{padding:16px}.status{font-size:13px}main{padding:20px 14px}}
+*{box-sizing:border-box}body{margin:0;background:#101c25;color:#edf4f6;font:16px system-ui,sans-serif}
+main{max-width:1180px;margin:auto;padding:26px 28px}header{display:flex;justify-content:space-between;align-items:center;gap:20px;border-bottom:1px solid #344651;padding-bottom:18px}
+h1{font-size:28px;letter-spacing:-1px;margin:6px 0}.eyebrow,.progress{color:#90c8c4;letter-spacing:2px;font-size:11px;text-transform:uppercase}.badge{padding:8px 12px;border:1px solid #425850;border-radius:6px;color:#b6e9d2;font-size:12px}
+.intro,footer{color:#afc0c8;line-height:1.6}.notice{font-size:13px;margin:14px 0}.frame{display:none}#frame0{display:block}.frame:target{display:block}.frame:target~#frame0{display:none}
+.score{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;background:#172934;border:1px solid #354b58;border-radius:12px;overflow:hidden;margin:18px 0}
+.team-score{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-top:3px solid var(--accent)}.away{--accent:#6ed3d0}.home{--accent:#f1c96c}.team{font-size:16px;font-weight:650}.side-label{display:block;font-size:10px;letter-spacing:2px;color:#afc0c8;margin-bottom:4px}.runs{font:700 40px ui-monospace,monospace}.status{align-self:center;text-align:center;padding:12px 20px;color:#b6e9d2;font-size:14px;font-weight:650}.status small{display:block;font-weight:400;color:#afc0c8;margin-top:5px}
+.layout{display:grid;grid-template-columns:1fr 1.15fr;gap:20px}.field,.play{min-width:0;background:#142b29;border:1px solid #34504a;border-radius:12px;padding:22px}.field{background:radial-gradient(ellipse at 50% 65%,#254f3c,#122c29 75%)}.play{background:#172934;border-color:#354b58;display:flex;flex-direction:column}.field svg{display:block;width:100%;max-height:240px;margin:0 auto}.field-caption{text-align:center;color:#a7c6b7;font-size:11px;letter-spacing:1px;margin:8px 0}.base-list{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.base-list div{min-width:0;background:#102522;padding:9px;border-radius:6px;font-size:12px;overflow-wrap:anywhere}.base-list span{display:block;color:#a4bdb3;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}.matchup{display:grid;grid-template-columns:1fr 1fr;gap:16px;border-bottom:1px solid #354b58;padding-bottom:18px;margin-bottom:20px}.matchup strong{display:block;font-size:21px;margin:6px 0;overflow-wrap:anywhere}.matchup small{color:#afc0c8}.play h2{font-size:22px;line-height:1.5;margin:8px 0 20px;overflow-wrap:anywhere}.ready{color:#afc0c8;line-height:1.5}.final-label{font-size:24px;color:#f1c96c;margin-bottom:14px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:18px}a{display:inline-block;text-decoration:none;color:#edf4f6;background:#263f4d;border:1px solid #466373;border-radius:6px;padding:10px 13px;font-size:13px}a.primary{background:#b6eb91;color:#142719;border-color:#b6eb91;font-weight:700}a:focus-visible,summary:focus-visible{outline:3px solid #ffda77;outline-offset:4px}a:hover{filter:brightness(1.15)}
+.line-score-wrap{overflow-x:auto;margin:16px 0}.line-score{width:100%;border-collapse:collapse;font:13px ui-monospace,monospace;background:#14242e}.line-score caption{text-align:left;font:11px system-ui,sans-serif;color:#afc0c8;letter-spacing:1px;text-transform:uppercase;padding:8px 0}.line-score th,.line-score td{padding:10px;text-align:center;border-bottom:1px solid #30434f;white-space:nowrap}.line-score th:first-child{text-align:left}.line-score .total{font-weight:bold;color:#f1c96c;border-left:1px solid #30434f}
+.lineups{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:28px 0}.lineup{min-width:0;border:1px solid #354b58;border-top:3px solid var(--accent);border-radius:8px;background:#152631;padding:18px}.lineup h3{font-size:18px;margin:0 0 12px}.lineup table{border-collapse:collapse;width:100%;font-size:14px}.lineup th,.lineup td{text-align:left;padding:8px 6px;border-bottom:1px solid #2a404d}.lineup th{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#afc0c8}.lineup td:first-child{color:#afc0c8;width:26px}.lineup td:nth-child(2){font:12px ui-monospace,monospace;width:42px}.lineup small{display:block;color:#afc0c8;font-size:10px;margin-top:3px}.current-marker{display:none;font-size:10px;color:#f1c96c;margin-left:8px}.starter{font-size:13px;margin:16px 0 0;line-height:1.8;color:#afc0c8}.starter strong{color:#edf4f6}.lineups-title{grid-column:1/-1;margin:0;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#afc0c8}
+footer{font-size:12px;margin-top:26px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,monospace;line-height:1.6;background:#15242f;border-radius:8px;padding:18px}summary{cursor:pointer;color:#b6eb91;padding:16px 0}#model-details,#player-probabilities,#provenance{border-top:1px solid #304756;font-size:13px}#player-probabilities table{font-size:12px;border-spacing:10px}
+.game-log{margin-top:24px;border:1px solid #304756;border-radius:8px;padding:0 18px}.game-log-scroll{max-height:520px;overflow-y:auto;overscroll-behavior:contain;padding:0 12px 12px}.game-log-entry{border-top:1px solid #304756;padding:12px 0}.game-log-entry h3{font-size:17px}.game-log-entry pre{margin:8px 0}.game-log-entry summary{font-size:13px}.radio-call{line-height:1.55;margin:8px 0}.state-recap{font-size:13px;color:#afc0c8;line-height:1.6;margin:8px 0}.game-log-scroll:focus-visible{outline:3px solid #ffda77}
+@media(max-width:720px){main{padding:18px 12px}.layout,.lineups{grid-template-columns:1fr}header{align-items:flex-start}.badge{display:none}h1{font-size:24px}.team-score{padding:12px 9px;gap:8px}.team{font-size:12px}.runs{font-size:30px}.status{padding:10px;font-size:12px}.score{grid-template-columns:1fr 86px 1fr}.side-label{font-size:9px;letter-spacing:1px}.field,.play{padding:16px}.matchup strong{font-size:18px}.play h2{font-size:20px}.line-score th,.line-score td{padding:8px}.lineups{gap:16px}.lineups-title{grid-column:auto}}
 """
 
 
@@ -162,6 +241,10 @@ def build_viewer(source: str) -> str:
     intro = ('Fictional equal teams, using the pooled 2019 league baseline. This is a visual simulation replay, '
              'not yet realistic team matchups or managerial gameplay.')
     experiment = ''
+    lineups = ''
+    positions = ['', 'P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
+    names = {} if real is None else {p[3]: p[4] for p in real[1]}
+    player_positions = {} if real is None else {p[3]: positions[int(p[2])] for p in real[1]}
     if is_joint_record(source):
         start = re.search(r'^(?:TRACE FORMAT:|COMMENTARY FORMAT:|Play [0-9]+ \|)', source, re.MULTILINE)
         preamble = source[:start.start()]
@@ -176,18 +259,21 @@ def build_viewer(source: str) -> str:
                  'not fitted player abilities or effective matchup hands. Closed starting roster: '
                  'no substitutions or eligible bench/bullpen claim; starting pitchers stay all game. '
                  'Coarse positional assignments are not historical ball locations or fielding skill.')
-        positions = ['','P','C','1B','2B','3B','SS','LF','CF','RF','DH']
         tables = []
-        for side in ['Away','Home']:
-            rows = sorted((p for p in real[1] if p[0] == side),key=lambda p:int(p[1]))
-            cells = ''.join('<tr class="starting-player">'
-                + ''.join(f'<td>{escape(v)}</td>' for v in [p[1] if p[1]!='0' else 'Pitcher',
-                           positions[int(p[2])],p[4],p[3]])+'</tr>' for p in rows)
-            tables.append(f'<h3>{escape(real[0][side])} — {side}</h3><table><thead><tr>'
-                          '<th>Batting slot</th><th>Position</th><th>Name</th><th>Source ID</th>'
-                          f'</tr></thead><tbody>{cells}</tbody></table>')
-        experiment += ('<details id="starting-lineups"><summary>Recorded starting lineups and positions</summary>'
-                       + ''.join(tables) + '</details>')
+        for side in ['Away', 'Home']:
+            rows = sorted((p for p in real[1] if p[0] == side), key=lambda p: int(p[1]))
+            cells = ''.join(f'<tr class="starting-player" data-player="{p[3]}">'
+                           f'<td>{p[1]}</td><td>{positions[int(p[2])]}</td>'
+                           f'<td class="lineup-hitter">{escape(p[4])}<span class="current-marker">Up next</span>'
+                           '</td></tr>' for p in rows[1:])
+            pitcher = rows[0]
+            tables.append(f'<div class="lineup {side.lower()}"><h3>{escape(real[0][side])}</h3>'
+                          '<table><thead><tr><th scope="col">Order</th><th scope="col">Pos</th>'
+                          f'<th scope="col">Hitter</th></tr></thead><tbody>{cells}</tbody></table>'
+                          f'<div class="starting-player"><p class="starter">Starting pitcher · '
+                          f'<strong>{escape(pitcher[4])}</strong></p></div></div>')
+        lineups = ('<section id="starting-lineups" class="lineups" aria-label="Recorded starting lineups and positions">'
+                   '<h2 class="lineups-title">Recorded starting lineups and positions</h2>' + ''.join(tables) + '</section>')
     if is_rated_record(source):
         intro = ('Recorded Seattle–Oakland starting personnel. Player-specific, league-shrunk participant-proxy '
                  'probabilities: selected-season hindsight reconstruction, not calibrated or predictive. '
@@ -209,6 +295,7 @@ def build_viewer(source: str) -> str:
                 or [int(c.group(1)) for c in commentary] != list(range(1, count + 1))):
             raise ValueError('Expected complete ordered supported commentary per native play')
     entries = []
+    native_pairs = []
     if has_trace:
         if (re.findall(r'^TRACE FORMAT: (.+)$', source, re.MULTILINE) != ['engine-debug-v1']
                 or len(trace) != count
@@ -222,6 +309,9 @@ def build_viewer(source: str) -> str:
                                  r'Before:\n(.+?)\nEvent:\n(.+?)\nAfter:\n(.+)\n', body, re.DOTALL)
             if not parts:
                 raise ValueError('Native trace must include before, event and after snapshots')
+            before = native_state_fields(parts[3], parts[1])
+            after = native_state_fields(parts[5], parts[2])
+            native_pairs.append((before, after))
             heading = f'Play {i:02} · {record.group(2)}'
             if has_commentary:
                 call, recap = commentary[i - 1].group(2, 3)
@@ -241,7 +331,7 @@ def build_viewer(source: str) -> str:
                        + ''.join(entries))
         if real is not None:
             log_content = log_content.replace('fictional player IDs are shown.',
-                'supplied player names and source IDs are shown; raw native states keep source IDs.')
+                'supplied player names are shown; raw native states keep source IDs.')
     else:
         log_content = ('<p>Detailed native before/after snapshots are unavailable in this older record. '
                        'This is the complete supplied summary; no missing states are inferred.</p>'
@@ -250,49 +340,140 @@ def build_viewer(source: str) -> str:
                 '<div class="game-log-scroll" tabindex="0" role="region" aria-label="Full game history">'
                 + log_content + '</div></details>')
 
+    states = []
+    if any(before is not None or after is not None for before, after in native_pairs):
+        if any(before is None or after is None for before, after in native_pairs):
+            raise ValueError('Partial native team metadata across snapshots')
+        states = [native_pairs[0][0], *[after for _, after in native_pairs]]
+        for i, ((before, after), record) in enumerate(zip(native_pairs, records), 1):
+            if before != states[i-1] or before['over'] or after['over'] != (i == count):
+                raise ValueError('Native state continuity or terminal status disagrees')
+            if record[2] != f'{before["half"]} {before["inning"]}':
+                raise ValueError('Play heading disagrees with native before state')
+            status = 'GAME OVER' if after['over'] else f'Now: {after["half"]} {after["inning"]} | Outs: {after["outs"]}'
+            if (tuple(map(int, record.group(4, 5))) != after['score']
+                    or record[6] != status or record.group(7, 8, 9) != after['bases']):
+                raise ValueError('Play summary disagrees with native after state')
+            if real is not None:
+                for state in [before, after]:
+                    for side, (order, _, pitcher) in zip(['Away', 'Home'], state['teams']):
+                        roster = sorted((p for p in real[1] if p[0] == side), key=lambda p: int(p[1]))
+                        if order != tuple(p[3] for p in roster[1:]) or pitcher != roster[0][3]:
+                            raise ValueError('Native team disagrees with closed starting roster')
+        initial = states[0]
+        frames[0] = ('Game ready', *initial['score'],
+                     f'{initial["half"]} {initial["inning"]} · {initial["outs"]} outs', initial['bases'])
+    prefixes = prefix_line_scores(source, states)
+
+    def current_matchup(state):
+        if state is None or state['over']:
+            return None
+        side = int(state['half'] == 'Bottom')
+        order, cursor, _ = state['teams'][side]
+        return order[cursor], state['teams'][1-side][2]
+
+    lineup_css = ''
+    if states and lineups:
+        initial_matchup = current_matchup(states[0])
+        if initial_matchup:
+            selector = f'#starting-lineups [data-player="{initial_matchup[0]}"]'
+            lineup_css += selector + '{background:#294537}' + selector + ' .current-marker{display:inline}'
+        lineup_css += ('.frame:target~#starting-lineups [data-player]{background:transparent}'
+                       '.frame:target~#starting-lineups .current-marker{display:none}')
+        for i, state in enumerate(states):
+            matchup = current_matchup(state)
+            if matchup:
+                selector = f'#frame{i}:target~#starting-lineups [data-player="{matchup[0]}"]'
+                lineup_css += selector + '{background:#294537}' + selector + ' .current-marker{display:inline}'
+
+    def line_score(index):
+        if prefixes is None:
+            return '<p class="state-recap">Line score unavailable in this record.</p>'
+        cells = prefixes[index]
+        innings = sorted({n for n, _ in cells} | {states[0]['inning']})
+        headings = ''.join(f'<th scope="col">{n}</th>' for n in innings)
+        rows = []
+        for side, name in enumerate(['Away', 'Home']):
+            values = ''.join(f'<td data-side="{name}" data-inning="{n}">{cells.get((n, side), "—")}</td>' for n in innings)
+            rows.append(f'<tr><th scope="row">{escape(labels[side])}</th>{values}'
+                        f'<td class="total">{states[index]["score"][side]}</td></tr>')
+        return ('<div class="line-score-wrap"><table class="line-score"><caption>Line score · through this play</caption>'
+                '<thead><tr><th scope="col">Team</th>' + headings + '<th scope="col">R</th></tr></thead>'
+                '<tbody>' + ''.join(rows) + '</tbody></table></div>')
+
     def frame(index):
         description, away, home, status, bases = frames[index]
+        state = states[index] if states else None
+        matchup = current_matchup(state)
+        identity = ''
+        upcoming = ''
+        if matchup:
+            batter, pitcher = matchup
+            identity = f' data-batter="{batter}" data-pitcher="{pitcher}"'
+            if index:
+                upcoming = ('<p class="up-next">Up next: '
+                            f'<strong>{escape(names.get(batter, batter))}</strong> vs '
+                            f'<strong>{escape(names.get(pitcher, pitcher))}</strong></p>')
+        # Completed-play actors come from its before-state, not the next lineup cursor.
+        played = current_matchup(states[index-1]) if states and index else matchup
+        if played:
+            batter, pitcher = played
+            current = (f'<div class="matchup" data-play-batter="{batter}" data-play-pitcher="{pitcher}">'
+                       f'<div><div class="progress">{"Batter · play " + str(index) if index else "At bat"}</div>'
+                       f'<strong>{escape(names.get(batter, batter))}</strong><small>{escape(player_positions.get(batter, ""))}</small></div>'
+                       '<div><div class="progress">Pitching</div>'
+                       f'<strong>{escape(names.get(pitcher, pitcher))}</strong><small>Starting pitcher</small></div></div>')
+        else:
+            current = '<p class="state-recap">Current matchup unavailable — native team cursors not supplied.</p>'
+        if state and state['over']:
+            status = f'Final · GAME OVER · {state["outs"]} outs'
+            current = '<div class="final-label">Final</div>' + current
+        base_labels = []
         markers = []
         for name, player, (x, y) in zip(["First", "Second", "Third"], bases,
                                        [(315, 240), (200, 125), (85, 240)]):
             occupied = player != "-"
-            label = player if occupied else "empty"
+            label = names.get(player, player) if occupied else "empty"
+            base_labels.append(f'<div><span>{name} base</span>{escape(label) if occupied else "—"}</div>')
             color = "#ffda77" if occupied else "#dae7dc"
             markers.append(f'<g role="img" aria-label="{name} base: {escape(label)}">'
                            f'<rect x="{x-9}" y="{y-9}" width="18" height="18" '
                            f'transform="rotate(45 {x} {y})" fill="{color}"/>'
                            f'<text x="{x}" y="{y-23}" text-anchor="middle" '
-                           f'fill="{color}" font-size="13">{escape(label)}</text></g>')
+                           f'fill="{color}" font-size="13">{name}</text></g>')
         next_link = (f'<a class="primary" href="#frame{index+1}">Next play →</a>' if index < count
                      else '<a class="primary" href="#frame0">Replay game →</a>')
         previous = f'<a href="#frame{max(index-1, 0)}">← Previous</a>'
-        stats = ('<details open><summary>Final line score and supplied-credit statistics</summary>'
+        stats = ('<details><summary>Final line score and supplied-credit statistics</summary>'
                  f'<pre>{escape(source[final.start():])}</pre></details>') if index == count else ""
-        return f'''<section class="frame" id="frame{index}" data-away="{away}" data-home="{home}">
-<div class="score"><div><div class="team">{escape(labels[0])}</div><div class="runs">{away}</div></div>
-<div class="status">{escape(status)}<br><small>Play {index} / {count}</small></div>
-<div><div class="team">{escape(labels[1])}</div><div class="runs">{home}</div></div></div>
-<div class="layout"><div class="field"><svg viewBox="0 0 400 400" aria-label="Baseball field">
-<path d="M200 355L40 195Q200 -15 360 195Z" fill="#2c674c"/>
-<path d="M200 355L85 240L200 125L315 240Z" fill="#b18a5f"/>
-<path d="M200 355L85 240L200 125L315 240Z" fill="none" stroke="#f3ecda" stroke-width="2"/>
-<circle cx="200" cy="240" r="18" fill="#c8a179"/>
+        return f'''<section class="frame" id="frame{index}" data-away="{away}" data-home="{home}"{identity}>
+<div class="score"><div class="team-score away"><div class="team"><span class="side-label">Away{' · Batting' if state and not state['over'] and state['half']=='Top' else ''}</span>{escape(labels[0])}</div><div class="runs">{away}</div></div>
+<div class="status">{escape(status)}<small>Play {index} / {count}</small></div>
+<div class="team-score home"><div class="team"><span class="side-label">Home{' · Batting' if state and not state['over'] and state['half']=='Bottom' else ''}</span>{escape(labels[1])}</div><div class="runs">{home}</div></div></div>
+<div class="layout"><div class="field"><svg viewBox="0 0 400 400" role="img" aria-label="Schematic base occupancy">
+<path d="M200 355L40 195Q200 -15 360 195Z" fill="#28513c"/>
+<path d="M200 355L85 240L200 125L315 240Z" fill="#866d4e"/>
+<path d="M200 355L85 240L200 125L315 240Z" fill="none" stroke="#e6e0c9" stroke-width="2"/>
 <path d="M192 350H208V359L200 365L192 359Z" fill="#f4eee2"/>
-{''.join(markers)}</svg></div>
-<div class="play"><div class="progress">{'First pitch' if index == 0 else 'Recorded play '+str(index)}</div>
-<h2>{escape(description)}</h2><p>Advance through the actual Rust-engine record. The field and score show the state after each play.</p>
-<nav>{next_link}{previous}<a href="#frame0">Restart</a><a href="#frame{count}">Final result</a></nav></div></div>{stats}</section>'''
+{''.join(markers)}</svg><p class="field-caption">SCHEMATIC · BASE OCCUPANCY ONLY</p>
+<div class="base-list">{''.join(base_labels)}</div></div>
+<div class="play">{current}<div class="progress">{'Game ready' if index == 0 else 'Last completed play · '+str(index)}</div>
+<h2>{escape(description)}</h2>{upcoming}
+<nav aria-label="Recorded game navigation">{next_link}{previous}<a href="#frame0">Restart</a><a href="#frame{count}">Final result</a></nav></div></div>{line_score(index)}{stats}</section>'''
+
 
     # Put the initial frame last so native CSS :target hides it when another
     # frame is selected. No browser JavaScript, outcomes, server or dependencies.
     body = "\n".join(frame(i) for i in [*range(1, count + 1), 0])
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Baseball Simulator — visible engine preview</title><style>{CSS}</style></head>
+<title>{escape(labels[0])} vs {escape(labels[1])} — Baseball Simulator</title><style>{CSS}{lineup_css}</style></head>
 <body><main><header><div><div class="eyebrow">2019 BASEBALL · ENGINE PREVIEW</div>
-<h1>Baseball Simulator</h1></div><div class="badge">Offline · Rust-engine replay</div></header>
-<p class="intro">{escape(intro)}</p>
-<p class="intro">{escape(metadata)}</p>{experiment}{body}{game_log}
+<h1>{'Seattle at Oakland' if real else 'Baseball Simulator'}</h1></div><div class="badge">Generated exhibition · Offline replay</div></header>
+<p class="intro notice">Experimental generated exhibition · coarse advancement · starters stay all game · partial supplied-credit statistics. Not calibrated or predictive.</p>
+{body}{lineups}
+<details id="provenance"><summary>Experiment limitations and native metadata</summary><p class="intro">{escape(intro)}</p><p class="intro">{escape(metadata)}</p></details>
+{experiment}{game_log}
 <footer>Read-only playback: the browser does not generate outcomes. Statistics are supplied-credit totals, not a complete official box. No accuracy or finished-product claim.</footer>
 </main></body></html>'''
 

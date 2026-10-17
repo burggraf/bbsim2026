@@ -164,7 +164,12 @@ fn main() -> io::Result<()> {
     if options.trace {
         game_trace::write(&log, &mut output)?;
         if let Some(lineup) = &lineup {
-            game_trace::write_commentary_named(&log, &mut output, &lineup.names())?;
+            game_trace::write_commentary_with_positions(
+                &log,
+                &mut output,
+                &lineup.names(),
+                &lineup.positions(),
+            )?;
         } else {
             game_trace::write_commentary(&log, &mut output)?;
         }

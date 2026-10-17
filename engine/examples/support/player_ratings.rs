@@ -70,11 +70,6 @@ impl Ratings {
         base: &preview::Baseline,
         lineup: &real::Lineup,
     ) -> Result<Self, String> {
-        if base.counts != COUNTS
-            || *base.probabilities() != *preview::Baseline::from_counts(COUNTS)?.probabilities()
-        {
-            return Err("rating league baseline mismatch".into());
-        }
         if text
             .chars()
             .any(|c| c.is_control() && c != '\n' && c != '\t')
@@ -139,11 +134,29 @@ impl Ratings {
             let array: [u64; 9] = values
                 .try_into()
                 .map_err(|_| "expected nine rating counts")?;
+            counts.insert(key.to_string(), array);
+        }
+        Self::from_counts(counts, base, &roles(lineup))
+    }
+    /// Reuse the same validated arithmetic for an explicitly supplied full-game role set.
+    pub fn from_counts(
+        counts: BTreeMap<String, [u64; 9]>,
+        base: &preview::Baseline,
+        required: &BTreeSet<String>,
+    ) -> Result<Self, String> {
+        if base.counts != COUNTS
+            || *base.probabilities() != *preview::Baseline::from_counts(COUNTS)?.probabilities()
+        {
+            return Err("rating league baseline mismatch".into());
+        }
+        if counts.keys().cloned().collect::<BTreeSet<_>>() != *required {
+            return Err("rating role/identity set differs from required personnel".into());
+        }
+        for array in counts.values() {
             if array.iter().zip(COUNTS).any(|(n, max)| *n > max) {
                 return Err("rating count exceeds source cohort".into());
             }
-            exposure(array)?;
-            counts.insert(key.to_string(), array);
+            exposure(*array)?;
         }
         Ok(Self { counts })
     }

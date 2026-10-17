@@ -10,6 +10,7 @@ mod contact;
 mod ground;
 mod ground_force_double_play;
 mod ground_muff;
+mod hit_runner_tag;
 mod pitch;
 mod protected_award;
 mod reducer;
@@ -22,6 +23,7 @@ mod walkoff_hit;
 pub use ground_force_double_play::{
     apply_with_ground_force_double_play_facts, GroundForceDoublePlayFacts,
 };
+pub use hit_runner_tag::{apply_with_hit_runner_tag_facts, HitRunnerTagFacts, HitRunnerTagOrder};
 pub use reducer::{
     apply, apply_with_caught_sacrifice_fly_facts, apply_with_sacrifice_bunt_throw_facts,
     apply_with_walkoff_hit_facts,
@@ -353,6 +355,11 @@ pub enum RecoveryReview {
         putout_fielder_id: String,
         at: Destination,
     },
+    /// Catcher throw retires the eligible PA batter before First, after all
+    /// named handling advances by before-runners have reached their final bases.
+    RecoveredThirdStrikeBatterBeforeFirstAfterAdvances {
+        putout_fielder_id: String,
+    },
 }
 /// One legal-delivery episode and its supplied WP/PB units; not complete PA/game coverage.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -542,6 +549,7 @@ pub struct EventTransition {
     caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
     sacrifice_bunt_throw: Option<SacrificeBuntThrowFacts>,
     ground_force_double_play: Option<GroundForceDoublePlayFacts>,
+    hit_runner_tag: Option<HitRunnerTagFacts>,
 }
 
 impl std::fmt::Debug for EventTransition {
@@ -562,6 +570,9 @@ impl std::fmt::Debug for EventTransition {
         }
         if let Some(facts) = &self.ground_force_double_play {
             transition.field("ground_force_double_play", facts);
+        }
+        if let Some(facts) = &self.hit_runner_tag {
+            transition.field("hit_runner_tag", facts);
         }
         transition.finish()
     }
@@ -826,6 +837,30 @@ impl EventTransition {
         sacrifice_bunt_throw: Option<SacrificeBuntThrowFacts>,
         ground_force_double_play: Option<GroundForceDoublePlayFacts>,
     ) -> Result<Self, TransitionError> {
+        Self::try_new_with_hit_runner_tag_inner(
+            before,
+            event,
+            after,
+            walkoff_hit,
+            caught_sacrifice_fly,
+            sacrifice_bunt_throw,
+            ground_force_double_play,
+            None,
+        )
+    }
+
+    // Keep the native supplemental-facts constructor chain and one canonical validator.
+    #[allow(clippy::too_many_arguments)]
+    fn try_new_with_hit_runner_tag_inner(
+        before: GameState,
+        event: Event,
+        after: GameState,
+        walkoff_hit: Option<WalkoffHitFacts>,
+        caught_sacrifice_fly: Option<CaughtSacrificeFlyFacts>,
+        sacrifice_bunt_throw: Option<SacrificeBuntThrowFacts>,
+        ground_force_double_play: Option<GroundForceDoublePlayFacts>,
+        hit_runner_tag: Option<HitRunnerTagFacts>,
+    ) -> Result<Self, TransitionError> {
         rules::validate_snapshot(&before)?;
         rules::validate_snapshot(&after)?;
         if before.over {
@@ -841,6 +876,7 @@ impl EventTransition {
             caught_sacrifice_fly.as_ref(),
             sacrifice_bunt_throw.as_ref(),
             ground_force_double_play.as_ref(),
+            hit_runner_tag.as_ref(),
         )?;
         rules::validate_fielding_review(&event)?;
         let expected_slot = (before.teams[offense].next_batter + u8::from(is_pa)) % 9;
@@ -988,7 +1024,12 @@ impl EventTransition {
         {
             return Err(TransitionError::IllegalCredit);
         }
-        rules::validate_hit_value_with_walkoff(&before, &event, walkoff_hit.as_ref())?;
+        rules::validate_hit_value_with_facts(
+            &before,
+            &event,
+            walkoff_hit.as_ref(),
+            hit_runner_tag.as_ref(),
+        )?;
         rules::validate_strikeout_eligibility(&before, &event)?;
         if count(CreditKind::Walk)
             + count(CreditKind::HitByPitch)
@@ -1045,6 +1086,7 @@ impl EventTransition {
             caught_sacrifice_fly,
             sacrifice_bunt_throw,
             ground_force_double_play,
+            hit_runner_tag,
         })
     }
     pub fn before(&self) -> &GameState {

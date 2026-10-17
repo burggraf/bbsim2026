@@ -7,6 +7,26 @@ fictional equal teams use the experimental pooled 2019 baseline. The separate
 Seattle–Oakland starting-lineup opt-in below retains pooled probabilities, not
 real-player ratings. No managerial choices or accuracy claim yet.
 
+The dark ballpark screen puts gameplay first: a compact team scorebug, current
+half/inning/outs, schematic named base occupancy, and the displayed play's batter
+and pitcher. Frame zero shows **At bat / Pitching** from the initial native state;
+completed plays show their actors from the native before-state, matching the call.
+A separate **Up next** line uses the selected after-state's lineup cursor, including
+pitcher changes across half innings. Scores, outs and bases remain after-play
+snapshots. Final frames retain the last play's actors but advertise no next batter
+and do not fabricate three stored outs.
+
+Seattle–Oakland modes show both nine-hitter batting orders once, with separate
+starting pitchers and an **Up next** indicator that also works without JavaScript.
+The line score shows only the selected prefix: unplayed halves are dashes, not
+invented zeroes; future runs/innings are not revealed. It reconciles to the supplied
+native final line score. Probability, limitations/provenance and full-log panels
+start closed below gameplay; the verbatim raw trace and final statistics remain
+available. This is still a generated exhibition with coarse advancement, starters
+staying all game and partial supplied-credit statistics—not a realism milestone.
+The diamond is schematic, not ball flight, contact geometry or factual fielder
+positions. No pitch counts, player statistics or runner outcomes are invented.
+
 ## Run the interactive preview
 
 From the repository root, with the previously audited internal baseline present:
@@ -84,7 +104,13 @@ No new dependencies or simulation-core/sampler changes.
 
 The original static viewer remains available, without JavaScript or a server.
 `--trace` adds the detailed native log; without it, older records show their full
-summary with an explicit notice that detailed before/after snapshots are absent:
+summary with an explicit notice that detailed before/after snapshots are absent.
+Older summaries/toy traces without any native team fields explicitly show current
+matchup and prefix line score unavailable. Present-but-partial/malformed native
+team metadata is rejected rather than guessed. The bounded extractor accepts the
+current generated `engine-debug-v1` state shape (closed starting orders, empty
+bench/removed lists), not arbitrary Rust Debug text or the canonical codec:
+
 
 ```sh
 cargo run --manifest-path engine/Cargo.toml --example generated_game -- \
@@ -121,11 +147,21 @@ python3 -Werror -m preview.serve --baseline /tmp/bbsim-preview-2019-counts.csv \
 
 The configured-only **Seattle–Oakland starting-lineup experiment** selector adds
 `model=real`; no query still selects the default. Generate/New game preserve the
-selected mode and seed semantics. Expand **Recorded starting lineups and
-positions** for batting slots, positions, names and source IDs. Native radio
-calls show supplied names with `[source_id]`; raw states/statistic keys retain
-IDs. Expand the assumptions/provenance panel for the complete Rust preamble.
-Field markers retain short source IDs, linked by that roster panel.
+selected mode and seed semantics. **Recorded starting lineups and positions**
+is visible below the field, with nine batting slots/positions/names per
+team and a separate starter. Source IDs are not displayed in the normal game view. The native upcoming batter is marked **Up next**;
+that indicator clears at Final. Base labels show supplied names with accessible
+base/occupant text; identities remain distinct even when names match. Native radio
+calls and recaps show supplied names, without bracketed source IDs. A caught
+strikeout is called as strike three, without catcher-credit bookkeeping; runners
+who do not advance on an inning-ending play are described as stranded, not holding.
+Air and ground contact calls include the actual supplied lineup position (for
+example, “fly ball to LF, caught by …” or “ground ball to SS, fielded by …”).
+Position labels describe the modeled fielding assignment, not measured ball
+coordinates, depth or a player's usual position. Without supplied positions,
+commentary omits the location rather than guessing.
+Raw technical states/metadata/statistic keys retain IDs. Expand the
+assumptions/provenance panel for the complete Rust preamble.
 
 Deterministic coarse actors: catcher2 receives K; shortstop6 throws to first
 baseman3 on ground outs and receives ROE; center8/right9/third5 take held
@@ -179,8 +215,9 @@ python3 -Werror -m preview.serve --baseline /tmp/bbsim-preview-2019-counts.csv \
 ```
 
 Open `http://127.0.0.1:8765/?model=rated&seed=1`. Choose the player pilot or pooled
-starting-lineup experiment with the same seed. **Player-specific probabilities —
-hindsight pilot** shows18 batter/starter matchup distributions and20 role
+starting-lineup experiment with the same seed. Expand the initially closed
+**Player-specific probabilities — hindsight pilot** panel below gameplay for
+18 batter/starter matchup distributions and20 role
 posterior means/component SDs, included participant counts and data weights.
 N is **not official PA/BF**. Fixed prior strength200 per role is provisional,
 not tuned or proven best; sparse/zero counts shrink toward positive pooled rates.

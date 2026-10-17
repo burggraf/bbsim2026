@@ -439,7 +439,7 @@ fn unknown_contradictory_and_ineligible_declared_facts_never_become_fallback() {
 }
 
 #[test]
-fn bottom9_none_is_unsupported_fallback_but_provided_facts_remain_hard_refusal() {
+fn bottom9_none_retains_legacy_fallback_and_supplied_facts_follow_native_legality() {
     let mut before = state(5, 0);
     before.inning = 9;
     before.half = Half::Bottom;
@@ -461,9 +461,44 @@ fn bottom9_none_is_unsupported_fallback_but_provided_facts_remain_hard_refusal()
         assert_eq!(got.disposition, Disposition::TerminalApiUnsupported);
         assert_eq!(got.realized, ProxyClass::Remaining);
         assert_eq!(got.transition, original);
-        let facts = decision(*class, AirContact::Fly);
+        let mut facts = decision(*class, AirContact::Fly);
+        let expected = consequence::project(&before, &facts).unwrap();
+        let got = adapt(
+            &before,
+            sample(),
+            &original,
+            &bytes,
+            DIGEST,
+            word(*class, 5),
+            Some(&facts),
+        )
+        .unwrap();
+        assert_eq!(got.disposition, Disposition::Projected);
+        assert_eq!(got.selection.class, *class);
+        assert_eq!(got.realized, *class);
+        assert_eq!(got.transition, expected);
+        assert_eq!(got.transition.after().over, *class == ProxyClass::Sf);
+        assert_eq!(
+            got.transition.event().delta.runs,
+            u8::from(*class == ProxyClass::Sf)
+        );
+        assert_eq!(
+            got.transition.event().delta.outs,
+            if *class == ProxyClass::Gidp { 2 } else { 1 }
+        );
+        match &mut facts {
+            ContactDecision::CaughtSacrificeFly { facts, .. } => {
+                facts.retouch = SacrificeFlyRetouch::Unknown
+            }
+            ContactDecision::SacrificeBunt(facts) => {
+                facts.judgment = SacrificeBuntJudgment::Unknown
+            }
+            ContactDecision::GroundForceDoublePlay(facts) => {
+                facts.pivot_id = facts.first_receiver_id.clone()
+            }
+        }
         let expected =
-            consequence::project(&before, &facts).expect_err("terminal fixture unsupported");
+            consequence::project(&before, &facts).expect_err("invalid supplied terminal facts");
         assert_eq!(
             error(adapt(
                 &before,

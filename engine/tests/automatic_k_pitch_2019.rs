@@ -2497,6 +2497,12 @@ fn wire_delivery(facts: &SingleDeliveryFacts) -> Vec<u8> {
             wire_string(&mut bytes, putout_fielder_id);
             bytes.push(wire_destination(*at));
         }
+        RecoveryReview::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances {
+            putout_fielder_id,
+        } => {
+            bytes.push(6);
+            wire_string(&mut bytes, putout_fielder_id);
+        }
     }
     bytes
 }

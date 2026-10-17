@@ -66,8 +66,14 @@ fn compact(state: &GameState) -> String {
     )
 }
 
-fn call(t: &EventTransition) -> String {
+fn call(t: &EventTransition, positions: &std::collections::BTreeMap<String, &str>) -> String {
     let e = t.event();
+    let location = |player: &str| {
+        positions
+            .get(player)
+            .map(|p| format!(" to {p}"))
+            .unwrap_or_default()
+    };
     let batter = e
         .participants
         .batter
@@ -81,8 +87,14 @@ fn call(t: &EventTransition) -> String {
     };
     let result = if let Some(f) = &e.ordinary_ground_throw {
         format!(
-            "ground ball to {}, the throw to {} — {batter} is out at first!",
-            f.thrower_id, f.receiver_id
+            "ground ball{}{}, the throw to {} — {batter} is out at first!",
+            location(&f.thrower_id),
+            if positions.contains_key(&f.thrower_id) {
+                format!(", fielded by {}", f.thrower_id)
+            } else {
+                format!(" to {}", f.thrower_id)
+            },
+            f.receiver_id
         )
     } else if let Some(f) = &e.ordinary_air_catch {
         let contact = match f.contact {
@@ -90,15 +102,22 @@ fn call(t: &EventTransition) -> String {
             AirContact::LineDrive => "line drive",
             AirContact::PopUp => "pop-up",
         };
-        format!("{contact} caught by {} — {batter} is out!", f.fielder_id)
-    } else if let Some(f) = &e.caught_strikeout {
         format!(
-            "strike three! {batter} is out; {} receives the strike.",
-            f.catcher_id
+            "{contact}{}{} caught by {} — {batter} is out!",
+            location(&f.fielder_id),
+            if positions.contains_key(&f.fielder_id) {
+                ","
+            } else {
+                ""
+            },
+            f.fielder_id
         )
+    } else if e.caught_strikeout.is_some() {
+        format!("strike three! {batter} is out.")
     } else if let Some(f) = &e.muffed_ground_ball {
         format!(
-            "ground ball, mishandled by {}! {batter} reaches first on the error.",
+            "ground ball{}, mishandled by {}! {batter} reaches first on the error.",
+            location(&f.fielder_id),
             f.fielder_id
         )
     } else if e.kind == EventKind::OutOfParkHomeRun {
@@ -168,7 +187,12 @@ fn call(t: &EventTransition) -> String {
                 .iter()
                 .any(|m| m.runner.player_id == r.player_id)
             {
-                text.push_str(&format!(" {} holds at {}.", r.player_id, base_name(base)));
+                let action = if t.before().outs + e.delta.outs == 3 {
+                    "is stranded at"
+                } else {
+                    "holds at"
+                };
+                text.push_str(&format!(" {} {action} {}.", r.player_id, base_name(base)));
             }
         }
     }
@@ -192,6 +216,16 @@ pub fn write_commentary_named(
     output: &mut dyn Write,
     names: &std::collections::BTreeMap<String, String>,
 ) -> io::Result<()> {
+    write_commentary_with_positions(log, output, names, &std::collections::BTreeMap::new())
+}
+
+/// Positions are supplied lineup assignments, not measured contact locations.
+pub fn write_commentary_with_positions(
+    log: &[EventTransition],
+    output: &mut dyn Write,
+    names: &std::collections::BTreeMap<String, String>,
+    positions: &std::collections::BTreeMap<String, &str>,
+) -> io::Result<()> {
     let display = |text: &str| {
         if names.is_empty() {
             return text.to_string();
@@ -203,7 +237,7 @@ pub fn write_commentary_named(
             let token = part
                 .trim_end_matches(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'));
             if let Some(name) = names.get(token) {
-                result.push_str(&format!("{name} [{token}]"));
+                result.push_str(name);
             } else {
                 result.push_str(token);
             }
@@ -213,7 +247,12 @@ pub fn write_commentary_named(
     };
     writeln!(output, "COMMENTARY FORMAT: radio-v1")?;
     for (i, t) in log.iter().enumerate() {
-        writeln!(output, "CALL PLAY {}: {}", i + 1, display(&call(t)))?;
+        writeln!(
+            output,
+            "CALL PLAY {}: {}",
+            i + 1,
+            display(&call(t, positions))
+        )?;
         writeln!(
             output,
             "RECAP PLAY {}: Before: {} → After: {}",

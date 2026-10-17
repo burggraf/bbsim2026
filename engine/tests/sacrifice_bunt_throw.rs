@@ -397,7 +397,9 @@ fn missing_unknown_wrong_units_participants_charges_and_geometry_refuse() {
     let event = action(&bottom, &supplied);
     for inning in 9..=u16::MAX {
         bottom.inning = inning;
-        rejected(&bottom, &event, &supplied);
+        let t = apply_with_sacrifice_bunt_throw_facts(&bottom, event.clone(), supplied.clone())
+            .unwrap();
+        assert_eq!(t.after(), &after(&bottom));
     }
 }
 #[test]

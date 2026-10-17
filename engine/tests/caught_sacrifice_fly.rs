@@ -141,6 +141,8 @@ fn expected_after(before: &GameState) -> GameState {
     after.outs += 1;
     after.bases[2] = None;
     after.teams[offense].next_batter = (after.teams[offense].next_batter + 1) % 9;
+    after.over =
+        before.half == Half::Bottom && before.inning >= 9 && after.score[1] > after.score[0];
     after
 }
 fn rejected(before: &GameState, event: &Event, facts: &CaughtSacrificeFlyFacts) {
@@ -303,7 +305,7 @@ fn absent_context_preserves_legacy_generic_sf_and_held_air_without_certification
     assert_eq!(held.after().bases, before.bases);
 }
 #[test]
-fn unknown_or_wrong_facts_causes_credits_geometry_and_terminal_contexts_refuse() {
+fn unknown_or_wrong_facts_refuse_and_late_qualifying_sacrifices_end_the_game() {
     let before = state(4, 0, Half::Top, 0, true);
     let event = action(&before, AirContact::Fly, true);
     let good = facts(&before);
@@ -403,7 +405,9 @@ fn unknown_or_wrong_facts_causes_credits_geometry_and_terminal_contexts_refuse()
     let facts = facts(&bottom);
     for inning in 9..=u16::MAX {
         bottom.inning = inning;
-        rejected(&bottom, &event, &facts);
+        let t =
+            apply_with_caught_sacrifice_fly_facts(&bottom, event.clone(), facts.clone()).unwrap();
+        assert_eq!(t.after(), &expected_after(&bottom));
     }
 }
 #[test]

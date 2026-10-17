@@ -386,9 +386,9 @@ pub(crate) fn validate_held_batter_before_first(
 }
 
 /// Determine the batter-runner's carried charge, not who faced this PA.
-/// Rule 9.16(g): a lone runner retired by a fielder's choice is replaced by
-/// the batter with that runner's responsibility. More complex chains need
-/// additional play facts; movement-vector order is not a scoring fact.
+/// Rule 9.16(g): one retired runner is replaced by the batter on First with
+/// that runner's responsibility; additional runners may hold behind this force.
+/// More complex chains need facts; movement-vector order is not a scoring fact.
 pub(crate) fn batter_charge<'a>(
     before: &'a GameState,
     event: &Event,
@@ -396,7 +396,18 @@ pub(crate) fn batter_charge<'a>(
     caught_sacrifice_fly: Option<&super::CaughtSacrificeFlyFacts>,
     sacrifice_bunt_throw: Option<&super::SacrificeBuntThrowFacts>,
     ground_force_double_play: Option<&super::GroundForceDoublePlayFacts>,
+    hit_runner_tag: Option<&super::HitRunnerTagFacts>,
 ) -> Result<&'a str, TransitionError> {
+    if let Some(facts) = hit_runner_tag {
+        if walkoff_hit.is_some()
+            || caught_sacrifice_fly.is_some()
+            || sacrifice_bunt_throw.is_some()
+            || ground_force_double_play.is_some()
+        {
+            return Err(TransitionError::UnsupportedRule);
+        }
+        super::hit_runner_tag::validate(before, event, facts)?;
+    }
     if let Some(facts) = ground_force_double_play {
         if walkoff_hit.is_some() || caught_sacrifice_fly.is_some() || sacrifice_bunt_throw.is_some()
         {
@@ -432,7 +443,7 @@ pub(crate) fn batter_charge<'a>(
     super::pitch::validate(before, event)?;
     let current = before.teams[1 - before.half.offense()].pitcher.as_str();
     if event.kind == EventKind::FieldersChoice {
-        if before.bases.iter().flatten().count() != 1
+        if (before.bases.iter().flatten().count() != 1 && before.bases[0].is_none())
             || event.delta.moves.len() != 2
             || event.delta.outs != 1
             || event.delta.runs != 0
@@ -449,7 +460,7 @@ pub(crate) fn batter_charge<'a>(
             .iter()
             .enumerate()
             .find_map(|(i, r)| r.as_ref().map(|r| (i, r)))
-            .expect("one occupied base");
+            .expect("validated occupied retirement base");
         let base = [Base::First, Base::Second, Base::Third][index];
         if !event
             .delta
@@ -757,6 +768,36 @@ pub(crate) fn move_destinations(
     Ok(bases)
 }
 
+/// Continuous bounded episodes cannot move a survivor past a held or advancing leader.
+pub(crate) fn validate_nonpassing_runners(
+    before: &GameState,
+    event: &Event,
+) -> Result<(), TransitionError> {
+    let mut trailing_destination = 0;
+    for (index, runner) in before.bases.iter().enumerate() {
+        let Some(runner) = runner else { continue };
+        let destination = event
+            .delta
+            .moves
+            .iter()
+            .find(|m| m.runner.player_id == runner.player_id)
+            .map(|m| m.to);
+        let rank = match destination {
+            None => index + 1,
+            Some(Destination::Out) => continue,
+            Some(Destination::First) => 1,
+            Some(Destination::Second) => 2,
+            Some(Destination::Third) => 3,
+            Some(Destination::Home) => 4,
+        };
+        if rank < trailing_destination {
+            return Err(TransitionError::UnsupportedRule);
+        }
+        trailing_destination = rank;
+    }
+    Ok(())
+}
+
 /// Represented retirement conservation; does not infer a retirement's cause/order.
 pub(crate) fn validate_outs(before: &GameState, event: &Event) -> Result<u8, TransitionError> {
     let outs_made = u8::try_from(
@@ -896,6 +937,18 @@ pub(crate) fn validate_hit_value_with_walkoff(
     event: &Event,
     walkoff_hit: Option<&super::WalkoffHitFacts>,
 ) -> Result<(), TransitionError> {
+    validate_hit_value_with_facts(before, event, walkoff_hit, None)
+}
+
+pub(crate) fn validate_hit_value_with_facts(
+    before: &GameState,
+    event: &Event,
+    walkoff_hit: Option<&super::WalkoffHitFacts>,
+    hit_runner_tag: Option<&super::HitRunnerTagFacts>,
+) -> Result<(), TransitionError> {
+    if let Some(facts) = hit_runner_tag {
+        return super::hit_runner_tag::validate(before, event, facts);
+    }
     let Some(value) = hit_value_credit(event)? else {
         return if walkoff_hit.is_some() {
             Err(TransitionError::UnsupportedRule)

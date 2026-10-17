@@ -173,6 +173,10 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
     }
     let recovery_automatic = automatic_recovery_out(before, event, facts);
     let automatic = automatic_out_only(before, event, facts) || recovery_automatic;
+    let before_first_after_advances = matches!(
+        facts.recovery,
+        RecoveryReview::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances { .. }
+    );
     let after_first_throw = match &facts.recovery {
         RecoveryReview::ThirdStrikeBatterAfterFirstThrow { at, .. } => {
             if event.delta.outs != 1
@@ -209,6 +213,7 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
         })
     }) || (facts.context == DeliveryContext::UncaughtThirdStrike
         && !automatic
+        && !before_first_after_advances
         && !event.delta.moves.iter().any(|m| {
             m.from == Base::Plate
                 && (m.to == Destination::First
@@ -283,6 +288,104 @@ fn qualification(before: &GameState, event: &Event, facts: &SingleDeliveryFacts)
     } else {
         Some(false)
     }
+}
+
+fn recovered_before_first_advances(
+    before: &GameState,
+    event: &Event,
+    facts: &SingleDeliveryFacts,
+    putout_fielder_id: &str,
+) -> Result<(), TransitionError> {
+    let batter = event
+        .participants
+        .batter
+        .as_deref()
+        .ok_or(TransitionError::IllegalCredit)?;
+    let defense = &before.teams[1 - before.half.offense()];
+    if facts.context != DeliveryContext::UncaughtThirdStrike
+        || event.kind != EventKind::PlateAppearance
+        || crate::rules::strikeout_first_ineligible(before, event)
+        || event.delta.outs != 1
+        || !event.delta.moves.iter().any(|m| {
+            m.from == Base::Plate && m.to == Destination::Out && m.runner.player_id == batter
+        })
+        || putout_fielder_id == facts.catcher_id
+        || !crate::rules::fielding_eligible(defense, putout_fielder_id)
+        || units(event, CreditKind::Putout) != 1
+        || units(event, CreditKind::Assist) != 1
+        || event.delta.credits.iter().any(|c| {
+            (c.kind == CreditKind::Putout && c.player_id != putout_fielder_id)
+                || (c.kind == CreditKind::Assist && c.player_id != facts.catcher_id)
+                || !matches!(
+                    c.kind,
+                    CreditKind::PlateAppearance
+                        | CreditKind::Strikeout
+                        | CreditKind::AtBat
+                        | CreditKind::NoHit
+                        | CreditKind::Run
+                        | CreditKind::WildPitch
+                        | CreditKind::PassedBall
+                        | CreditKind::Putout
+                        | CreditKind::Assist
+                )
+        })
+        || facts.advances.is_empty()
+    {
+        return Err(TransitionError::IllegalCredit);
+    }
+    for (index, advance) in facts.advances.iter().enumerate() {
+        if facts.advances[index + 1..]
+            .iter()
+            .any(|a| a.runner_id == advance.runner_id)
+            || !event.delta.moves.iter().any(|m| {
+                m.from != Base::Plate
+                    && m.runner.player_id == advance.runner_id
+                    && m.to == advance.reached
+                    && destination_rank(m.to).is_some_and(|rank| rank > base_rank(m.from))
+            })
+        {
+            return Err(TransitionError::IllegalCredit);
+        }
+    }
+    if event.delta.moves.iter().any(|m| {
+        m.from != Base::Plate
+            && !facts
+                .advances
+                .iter()
+                .any(|a| a.runner_id == m.runner.player_id && a.reached == m.to)
+    }) {
+        return Err(TransitionError::IllegalCredit);
+    }
+    if before.outs == 2 {
+        let third = event
+            .delta
+            .third_out
+            .as_ref()
+            .ok_or(TransitionError::DeltaMismatch)?;
+        if third.runner_id != batter
+            || third.kind != crate::ThirdOutKind::BatterBeforeFirst
+            || event.delta.moves.iter().any(|m| {
+                m.to == Destination::Home && !third.home_before_out.contains(&m.runner.player_id)
+            })
+        {
+            return Err(TransitionError::DeltaMismatch);
+        }
+    }
+    if !event.delta.changes.is_empty()
+        || event.two_out_contact.is_some()
+        || event.balk.is_some()
+        || event.ordinary_ground_throw.is_some()
+        || event.caught_strikeout.is_some()
+        || event.protected_award.is_some()
+        || event.sole_home_run.is_some()
+        || event.sole_safe_hit.is_some()
+        || event.muffed_ground_ball.is_some()
+        || event.ordinary_air_catch.is_some()
+    {
+        return Err(TransitionError::UnsupportedRule);
+    }
+    crate::rules::validate_nonpassing_runners(before, event)?;
+    Ok(())
 }
 
 fn recovery_facts(
@@ -626,6 +729,12 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
             }
         }
     }
+    if let RecoveryReview::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances {
+        putout_fielder_id,
+    } = &facts.recovery
+    {
+        recovered_before_first_advances(before, event, facts, putout_fielder_id)?;
+    }
     recovery_facts(before, event, facts)?;
     let _ = stolen_base_history(before, event, facts)?;
     if let Some(qualified) = qualification(before, event, facts) {
@@ -657,6 +766,7 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
         || matches!(
             facts.recovery,
             RecoveryReview::ThirdStrikeBatterAfterFirstThrow { .. }
+                | RecoveryReview::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances { .. }
         ))
         && ordinary_winning_run(before, event)
     {

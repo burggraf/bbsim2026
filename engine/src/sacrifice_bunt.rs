@@ -3,7 +3,7 @@
 use crate::{
     accounting::{FieldingContribution, RbiContribution},
     rules, Base, CreditKind, Destination, Event, EventKind, EventTransition, FieldingReview,
-    GameState, Half, TransitionError,
+    GameState, TransitionError,
 };
 
 /// Supplied scorer judgment, not inferred from endpoints, tactics or SH credits.
@@ -109,8 +109,7 @@ pub(crate) fn validate(
     crate::balk::preflight(before, event)?;
     crate::pitch::preflight(before, event)?;
     crate::contact::validate(before, event)?;
-    if (before.half == Half::Bottom && before.inning >= 9)
-        || before.outs >= 2
+    if before.outs >= 2
         || before.bases[1].is_some()
         || event.delta.outs != 1
         || event.delta.runs != 0
