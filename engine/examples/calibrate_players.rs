@@ -302,6 +302,28 @@ fn qualifies(biases: &[Bias]) -> bool {
         _ => true,
     })
 }
+fn hit_mix_qualifies(values: &[Bias], baseline: &[Bias]) -> bool {
+    values
+        .iter()
+        .filter(|b| [3, 4].contains(&b.category))
+        .all(|b| {
+            baseline
+                .iter()
+                .find(|old| old.role == b.role && old.category == b.category)
+                .is_some_and(|old| {
+                    b.mae <= 0.01
+                        && b.maximum <= 0.03
+                        && b.mae <= old.mae
+                        && b.maximum <= old.maximum
+                })
+        })
+}
+fn hit_mix_guardrails(vs_v2: [f64; 3]) -> bool {
+    vs_v2.iter().all(|x| x.is_finite())
+        && vs_v2[1] <= vs_v2[0]
+        && vs_v2[0] <= vs_v2[2]
+        && vs_v2[0] <= 0.001
+}
 fn bias_csv(data: &Data, values: &[Bias]) -> String {
     let mut out =
         "role,category,players,mae_rate,max_abs_rate,worst_id,worst_signed_rate\n".to_owned();
@@ -694,10 +716,11 @@ fn run(input: &Path, output: &Path) -> AnyResult<()> {
     println!("{result}");
     Ok(())
 }
-fn tree_effects(data: &Data, model: &Tree) -> String {
+fn tree_effects(data: &Data, model: &Tree, hit_mix: bool) -> String {
     let rates: [f64; 8] = std::array::from_fn(|n| model.nodes[n].league[0]);
+    let version = if hit_mix { 3 } else { 2 };
     let mut text = format!(
-        "key\tvalue\nformat\tplayer-calibration-tree-candidate-v2\nleague_nodes\t{}\n",
+        "key\tvalue\nformat\tplayer-calibration-tree-candidate-v{version}\nleague_nodes\t{}\n",
         rates
             .iter()
             .map(f64::to_string)
@@ -727,6 +750,7 @@ fn fit_tree(
     validation: &[Row],
     league: [f64; 9],
     output: &Path,
+    hit_mix: bool,
 ) -> AnyResult<(Tree, [[f64; 2]; 8])> {
     let mut model = Tree::neutral(
         tree::league_nodes(league)?,
@@ -754,6 +778,10 @@ fn fit_tree(
         let mut table="node,batter_strength,pitcher_strength,converged,iterations,max_correction,train_qualified,validation_conditional_nll\n".to_owned();
         for b in [1.0, 5.0, 20.0, 200.0] {
             for p in [1.0, 5.0, 20.0, 200.0] {
+                let frozen = if node < 5 { 20.0 } else { 200.0 };
+                if hit_mix && node != 6 && [b, p] != [frozen, frozen] {
+                    continue;
+                }
                 match fit(
                     &risks,
                     data.batters.len(),
@@ -788,13 +816,21 @@ fn fit_tree(
                                 Some(b.category) == category && [0, 1, 6, 9].contains(&b.category)
                             })
                             .all(|(b, old)| b.mae <= old.mae && b.maximum <= old.maximum);
-                        let eligible = relative
-                            && qualifies(
-                                &trial_bias
-                                    .into_iter()
-                                    .filter(|x| Some(x.category) == category)
-                                    .collect::<Vec<_>>(),
-                            );
+                        let eligible = if hit_mix && node == 6 {
+                            write_new(
+                                &output.join(format!("hit-mix-{b}-{p}-training-effects.tsv")),
+                                &tree_effects(data, &trial, true),
+                            )?;
+                            hit_mix_qualifies(&trial_bias, &reference_bias)
+                        } else {
+                            relative
+                                && qualifies(
+                                    &trial_bias
+                                        .into_iter()
+                                        .filter(|x| Some(x.category) == category)
+                                        .collect::<Vec<_>>(),
+                                )
+                        };
                         let mut loss = 0.0;
                         let mut n = 0.0;
                         for row in validation {
@@ -832,7 +868,28 @@ fn fit_tree(
     }
     Ok((model, strengths))
 }
-fn run_tree(input: &Path, output: &Path) -> AnyResult<()> {
+fn frozen_v2(model: &Tree, pairs: &[Pair]) -> AnyResult<Tree> {
+    let risks = pairs
+        .iter()
+        .map(|p| tree::risk(p, 6))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    let mut result = model.clone();
+    result.nodes[6] = fit(
+        &risks,
+        model.nb(),
+        model.np(),
+        model.nodes[6].league,
+        [200.0, 200.0],
+        5000,
+        1e-8,
+    )?
+    .model;
+    Ok(result)
+}
+fn run_tree(input: &Path, output: &Path, hit_mix: bool) -> AnyResult<()> {
     let data = read(input)?;
     let training: Vec<_> = data.rows.iter().filter(|r| r.fold >= 2).cloned().collect();
     let validation: Vec<_> = data.rows.iter().filter(|r| r.fold == 1).cloned().collect();
@@ -849,15 +906,32 @@ fn run_tree(input: &Path, output: &Path) -> AnyResult<()> {
     for q in league.batters.iter_mut().chain(&mut league.pitchers) {
         *q = league.league;
     }
-    let (selected, strengths) = fit_tree(&data, &train, &validation, baseline.league, output)?;
+    let (selected, strengths) =
+        fit_tree(&data, &train, &validation, baseline.league, output, hit_mix)?;
+    let label = if hit_mix {
+        "outcome-tree-hit-mix-v3"
+    } else {
+        "outcome-tree-v2"
+    };
     write_new(
         &output.join("selection-before-test.json"),
-        &format!("{{\"candidate\":\"outcome-tree-v2\",\"strengths\":{strengths:?}}}\n"),
+        &format!("{{\"candidate\":\"{label}\",\"strengths\":{strengths:?}}}\n"),
     )?;
     write_new(
         &output.join("training-effects.tsv"),
-        &tree_effects(&data, &selected),
+        &tree_effects(&data, &selected, hit_mix),
     )?;
+    let v2 = if hit_mix {
+        Some(frozen_v2(&selected, &train)?)
+    } else {
+        None
+    };
+    if let Some(model) = &v2 {
+        write_new(
+            &output.join("v2-training-effects.tsv"),
+            &tree_effects(&data, model, false),
+        )?;
+    }
     let selected_test = score(&selected, &test);
     let league_test = score(&league, &test);
     let baseline_test = score(&baseline, &test);
@@ -865,13 +939,20 @@ fn run_tree(input: &Path, output: &Path) -> AnyResult<()> {
     let joint_test = score(&old_joint, &test);
     let mut table = "candidate,n,nll,brier,observed,expected\n".to_owned();
     for (name, s) in [
-        ("outcome-tree-v2", selected_test),
+        (label, selected_test),
         ("league", league_test),
         ("fixed200", baseline_test),
         ("joint-20-20", joint_test),
     ] {
         table += &format!(
             "{name},{},{},{},\"{:?}\",\"{:?}\"\n",
+            s.n, s.nll, s.brier, s.observed, s.expected
+        );
+    }
+    if let Some(model) = &v2 {
+        let s = score(model, &test);
+        table += &format!(
+            "outcome-tree-v2,{},{},{},\"{:?}\",\"{:?}\"\n",
             s.n, s.nll, s.brier, s.observed, s.expected
         );
     }
@@ -882,7 +963,9 @@ fn run_tree(input: &Path, output: &Path) -> AnyResult<()> {
     )?;
     let vs_league = difference(&selected, &league, &test);
     let vs_baseline = difference(&selected, &baseline, &test);
-    let guardrails = vs_league[2] < 0.0 && vs_baseline[0] <= 0.01;
+    let vs_v2 = v2.as_ref().map(|model| difference(&selected, model, &test));
+    let guardrails =
+        vs_league[2] < 0.0 && vs_baseline[0] <= 0.01 && vs_v2.is_none_or(hit_mix_guardrails);
     let all = aggregate(&data.rows);
     let full_baseline = Model::from_counts(&all, nb, np, [200.0, 200.0])?;
     let mut full = Tree::neutral(tree::league_nodes(full_baseline.league)?, nb, np)?;
@@ -918,7 +1001,20 @@ fn run_tree(input: &Path, output: &Path) -> AnyResult<()> {
         .zip(&old_bias)
         .filter(|(b, _)| [0, 1, 6, 9].contains(&b.category))
         .all(|(b, old)| b.mae <= old.mae && b.maximum <= old.maximum);
-    let reconstruction = qualifies(&full_bias) && no_worse;
+    let mut reconstruction = qualifies(&full_bias) && no_worse;
+    if hit_mix {
+        let v2_full = frozen_v2(&full, &all)?;
+        reconstruction &= hit_mix_qualifies(&full_bias, &old_bias)
+            && hit_mix_qualifies(&full_bias, &biases(&v2_full, &all));
+        write_new(
+            &output.join("v2-full-effects.tsv"),
+            &tree_effects(&data, &v2_full, false),
+        )?;
+        write_new(
+            &output.join("v2-full-bias.csv"),
+            &bias_csv(&data, &biases(&v2_full, &all)),
+        )?;
+    }
     write_new(&output.join("full-bias.csv"), &bias_csv(&data, &full_bias))?;
     write_new(
         &output.join("baseline-bias.csv"),
@@ -926,11 +1022,14 @@ fn run_tree(input: &Path, output: &Path) -> AnyResult<()> {
     )?;
     write_new(
         &output.join("full-effects.tsv"),
-        &tree_effects(&data, &full),
+        &tree_effects(&data, &full, hit_mix),
     )?;
     let variation = ensembles(&data, &full, &all, output)?;
     let accepted = guardrails && reconstruction && variation;
-    let result=format!("{{\"candidate\":\"outcome-tree-v2\",\"strengths\":{strengths:?},\"reused_test_benchmark\":true,\"test_nll_difference_vs_league\":{vs_league:?},\"test_nll_difference_vs_fixed200\":{vs_baseline:?},\"heldout_guardrails\":{guardrails},\"full_reconstruction\":{reconstruction},\"variation\":{variation},\"accepted\":{accepted}}}\n");
+    let extra = vs_v2
+        .map(|value| format!(",\"test_nll_difference_vs_v2\":{value:?}"))
+        .unwrap_or_default();
+    let result=format!("{{\"candidate\":\"{label}\",\"strengths\":{strengths:?},\"reused_test_benchmark\":true,\"test_nll_difference_vs_league\":{vs_league:?},\"test_nll_difference_vs_fixed200\":{vs_baseline:?}{extra},\"heldout_guardrails\":{guardrails},\"full_reconstruction\":{reconstruction},\"variation\":{variation},\"accepted\":{accepted}}}\n");
     write_new(&output.join("selection.json"), &result)?;
     println!("{result}");
     Ok(())
@@ -939,6 +1038,42 @@ fn run_tree(input: &Path, output: &Path) -> AnyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hit_mix_requires_separate_bounds_and_no_worse_baseline_for_both_roles() {
+        let make = |maximum| {
+            (0..2)
+                .flat_map(|role| {
+                    (3..=4).map(move |category| Bias {
+                        role,
+                        category,
+                        players: 1,
+                        mae: 0.01,
+                        maximum,
+                        worst: 0,
+                        signed: maximum,
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
+        let old = make(0.04);
+        let exact = make(0.03);
+        assert!(hit_mix_qualifies(&exact, &old));
+        let over = make(0.0300000001);
+        assert!(qualifies(&over)); // The previous acceptance never constrained 1B/2B.
+        assert!(!hit_mix_qualifies(&over, &old));
+        for i in 0..4 {
+            let mut bad = make(0.02);
+            bad[i].mae = 0.0100000001;
+            assert!(!hit_mix_qualifies(&bad, &old));
+            let mut stricter = make(0.04);
+            stricter[i].maximum = 0.019;
+            assert!(!hit_mix_qualifies(&make(0.02), &stricter));
+        }
+        assert!(hit_mix_guardrails([-0.002, -0.004, 0.0]));
+        assert!(hit_mix_guardrails([0.001, 0.0, 0.002]));
+        assert!(!hit_mix_guardrails([0.0010000001, 0.0, 0.002]));
+        assert!(!hit_mix_guardrails([f64::NAN, 0.0, 0.002]));
+    }
     #[test]
     fn literal_hyphenated_participant_is_not_filtered_and_bad_grain_refuses() {
         let path = std::env::temp_dir().join(format!(
@@ -975,12 +1110,20 @@ mod tests {
 }
 fn main() {
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 3 && !(args.len() == 4 && args[3] == "--tree-v2") {
-        eprintln!("Usage: calibrate_players INPUT.tsv NEW_OUTPUT_DIRECTORY [--tree-v2]");
+    if args.len() != 3
+        && !(args.len() == 4 && ["--tree-v2", "--hit-mix-v3"].contains(&args[3].as_str()))
+    {
+        eprintln!(
+            "Usage: calibrate_players INPUT.tsv NEW_OUTPUT_DIRECTORY [--tree-v2|--hit-mix-v3]"
+        );
         std::process::exit(2);
     }
     let result = if args.len() == 4 {
-        run_tree(Path::new(&args[1]), Path::new(&args[2]))
+        run_tree(
+            Path::new(&args[1]),
+            Path::new(&args[2]),
+            args[3] == "--hit-mix-v3",
+        )
     } else {
         run(Path::new(&args[1]), Path::new(&args[2]))
     };

@@ -1,5 +1,7 @@
 """Independent probability and game-cluster arithmetic, not a second Rust fit."""
 import math
+from pathlib import Path
+import tempfile
 import unittest
 from audits import player_calibration_review as review
 
@@ -46,6 +48,39 @@ class CalibrationReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):review.encode_tree(model,{**counts,'batter:missing':[0]*9},'a'*64,'b'*64)
         with self.assertRaises(ValueError):review.encode_tree(model,counts,'a'*63,'b'*64)
         with self.assertRaises(ValueError):review.encode_tree(review.read_effects(text(),ROLES),counts,'a'*64,'b'*64)
+
+    def test_v3_candidate_selection_refuses_incomplete_matrix_before_scoring(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            (root/'tree-node-6.csv').write_text('node,batter_strength,pitcher_strength,converged,iterations,max_correction,train_qualified,validation_conditional_nll\n6,1,1,true,1,0.0,true,0.5\n')
+            with self.assertRaisesRegex(ValueError,'Invalid hit-mix candidate matrix'):
+                review.audit_hit_mix_selection([],{},root,[[20,20]]*8)
+            header='node,batter_strength,pitcher_strength,converged,iterations,max_correction,train_qualified,validation_conditional_nll\n'
+            matrix=header+''.join(f'6,{b},{p},true,1,0.0,true,0.5\n' for b in [1,5,20,200] for p in [1,5,20,200])
+            (root/'tree-node-6.csv').write_text(matrix.replace('6,1,1,','6,1.9,1,',1))
+            with self.assertRaisesRegex(ValueError,'Invalid hit-mix candidate matrix'):
+                review.audit_hit_mix_selection([],{},root,[[20,20]]*8)
+
+    def test_v3_candidate_has_distinct_version_and_cannot_export_as_v2(self):
+        source=text(True).replace('tree-candidate-v2','tree-candidate-v3')
+        model=review.read_effects(source,ROLES)
+        self.assertEqual(model['version'],'player-calibration-tree-candidate-v3')
+        self.assertEqual(review.predict(model,'b','p'),review.predict(review.read_effects(text(True),ROLES),'b','p'))
+        with self.assertRaises(ValueError):review.encode_tree(model,{key:[0]*9 for key in ROLES},'a'*64,'b'*64)
+
+    def test_v3_bounds_are_separate_from_v2_and_do_not_round_failures(self):
+        baseline={(role,k):dict(mae=.02,maximum=.05) for role in ['batter','pitcher'] for k in ['single','double']}
+        good={key:dict(mae=.01,maximum=.03) for key in baseline}
+        self.assertTrue(review.hit_mix_qualifies(good,baseline))
+        for key in good:
+            bad={k:dict(v) for k,v in good.items()};bad[key]['maximum']=.0300000001
+            self.assertFalse(review.hit_mix_qualifies(bad,baseline))
+            old={k:dict(v) for k,v in baseline.items()};old[key]['mae']=.009
+            self.assertFalse(review.hit_mix_qualifies(good,old))
+        self.assertTrue(review.hit_mix_guardrails([.001,0,.002]))
+        self.assertFalse(review.hit_mix_guardrails([.0010000001,0,.002]))
+        self.assertFalse(review.hit_mix_guardrails([math.nan,0,.002]))
+        self.assertFalse(review.hit_mix_guardrails([.001,.002,0]))
 
     def test_statistical_rejection_does_not_get_rounded_into_a_pass(self):
         self.assertFalse(review.guardrails([-.013,-.019,-.007],[.010389,.007,.013]))

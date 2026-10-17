@@ -136,3 +136,20 @@ fn all_nine_source_categories_have_exact_conditional_risk_sets() {
     assert_eq!(tree::risk(&only_k, 0).unwrap().unwrap().counts, [10, 0]);
     assert!(tree::risk(&only_k, 1).unwrap().is_none());
 }
+
+#[test]
+fn changing_only_hit_mix_preserves_all_other_outcomes_and_total_hits() {
+    let model = tree::Tree::neutral([0.2, 0.1, 0.05, 0.3, 0.2, 0.01, 0.2, 0.02], 1, 1).unwrap();
+    let original = model.probabilities(0, 0);
+    for rate in [0.001, 0.05, 0.5, 0.999] {
+        let mut changed = model.clone();
+        changed.nodes[6].batters[0] = [rate, 1.0 - rate];
+        let q = changed.probabilities(0, 0);
+        for k in [0, 1, 2, 5, 6, 7, 8] {
+            assert_eq!(q[k], original[k]);
+        }
+        assert!((q[3] + q[4] - original[3] - original[4]).abs() < 1e-12);
+        assert!(q.iter().all(|p| *p > 0.0 && *p < 1.0));
+        assert!((q.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+    }
+}

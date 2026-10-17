@@ -25,7 +25,7 @@ def read_effects(text,required):
         if len(cells)!=2 or not all(cells) or cells[0] in fields:raise ValueError('Invalid/duplicate calibration field')
         fields[cells[0]]=cells[1]
     version=fields.pop('format',None)
-    tree=version=='player-calibration-tree-candidate-v2'
+    tree=version in ['player-calibration-tree-candidate-v2','player-calibration-tree-candidate-v3']
     if not tree and version!='player-calibration-candidate-v1':raise ValueError('Unsupported calibration version')
     if not tree:
         candidate=fields.pop('candidate',None)
@@ -38,7 +38,7 @@ def read_effects(text,required):
         return q
     league=vector(rates)
     if set(fields)!=set(required):raise ValueError('Calibration role identity set mismatch')
-    return dict(tree=tree,league=league,profiles={key:vector(value) for key,value in fields.items()})
+    return dict(version=version,tree=tree,league=league,profiles={key:vector(value) for key,value in fields.items()})
 
 
 def predict(model,batter,pitcher):
@@ -66,6 +66,18 @@ def cluster_difference(games):
 def guardrails(league,baseline):
     return (len(league)==len(baseline)==3 and all(math.isfinite(x) for x in [*league,*baseline])
         and league[1]<=league[0]<=league[2]<0 and baseline[1]<=baseline[0]<=baseline[2] and baseline[0]<=.01)
+
+
+def hit_mix_qualifies(bias,baseline):
+    return all(bias[role,k]['mae']<=.01 and bias[role,k]['maximum']<=.03
+        and bias[role,k]['mae']<=baseline[role,k]['mae']
+        and bias[role,k]['maximum']<=baseline[role,k]['maximum']
+        for role in ['batter','pitcher'] for k in ['single','double'])
+
+
+def hit_mix_guardrails(vs_v2):
+    return (len(vs_v2)==3 and all(math.isfinite(x) for x in vs_v2)
+        and vs_v2[1]<=vs_v2[0]<=vs_v2[2] and vs_v2[0]<=.001)
 
 
 def _close(a,b,label,tolerance=1e-10):
@@ -108,6 +120,41 @@ def _bias(counts,expected):
     return output
 
 
+def audit_hit_mix_selection(pairs,training,result_dir,strengths):
+    table=result_dir/'tree-node-6.csv'
+    pins={str(table):outcome.digest(table)}
+    with table.open(newline='') as stream:rows=list(csv.DictReader(stream,strict=True))
+    grid=[(b,p) for b in [1,5,20,200] for p in [1,5,20,200]]
+    try:actual=[(float(r['batter_strength']),float(r['pitcher_strength'])) for r in rows]
+    except (KeyError,ValueError) as error:raise ValueError('Invalid hit-mix candidate matrix') from error
+    if actual!=grid or any(r['node']!='6' for r in rows):raise ValueError('Invalid hit-mix candidate matrix')
+    train_pairs=[r for r in pairs if r[0]>=2]
+    baseline=_baseline(training);expected,_,_=_moments(baseline,train_pairs,training)
+    reference=_bias(training,expected);best=None;best_loss=math.inf;receipts=[]
+    for row,(b,p) in zip(rows,grid):
+        if row['converged']=='false':
+            receipts.append(dict(strengths=[b,p],converged=False));continue
+        if row['converged']!='true' or not 1<=int(row['iterations'])<=5000 or not 0<=float(row['max_correction'])<=1e-8:raise ValueError('Invalid hit-mix convergence receipt')
+        path=result_dir/f'hit-mix-{b}-{p}-training-effects.tsv';pins[str(path)]=outcome.digest(path)
+        model=read_effects(path.read_text(),training)
+        if model['version']!='player-calibration-tree-candidate-v3':raise ValueError('Invalid hit-mix candidate version')
+        expected,_,_=_moments(model,train_pairs,training)
+        bias=_bias(training,expected);qualified=hit_mix_qualifies(bias,reference)
+        if row['train_qualified'] not in ['true','false'] or (row['train_qualified']=='true')!=qualified:raise ValueError('Hit-mix training qualification mismatch')
+        loss=0.0;n=0
+        for fold,_,batter,pitcher,c in pairs:
+            if fold!=1 or c[3]+c[4]==0:continue
+            q=predict(model,batter,pitcher);yes=q[4]/(q[3]+q[4]);size=c[3]+c[4]
+            loss-=c[4]*math.log(yes)+c[3]*math.log1p(-yes);n+=size
+        if n==0:raise ValueError('Empty hit-mix validation risk set')
+        loss/=n;_close(float(row['validation_conditional_nll']),loss,'hit-mix validation conditional loss')
+        receipts.append(dict(strengths=[b,p],converged=True,qualified=qualified,validation_nll=loss,
+            bias={role+':'+k:bias[role,k] for role in ['batter','pitcher'] for k in ['single','double']}))
+        if qualified and loss<best_loss-1e-10:best=[b,p];best_loss=loss
+    if best is None or strengths[6]!=best:raise ValueError('Hit-mix selection mismatch')
+    return pins,receipts
+
+
 def audit(events,source_report,input_dir,result_dir,output):
     if output.exists():raise ValueError('Refusing existing calibration audit')
     if output.resolve().is_relative_to(Path(__file__).resolve().parents[1]):raise ValueError('Audit output must be outside repository')
@@ -132,6 +179,19 @@ def audit(events,source_report,input_dir,result_dir,output):
                 for k,x in enumerate(c):training[key][k]+=x
     model=read_effects((result_dir/'full-effects.tsv').read_text(),counts)
     trained=read_effects((result_dir/'training-effects.tsv').read_text(),counts)
+    if model['version']!=trained['version']:raise ValueError('Calibration training/full version mismatch')
+    hit_mix=model['version']=='player-calibration-tree-candidate-v3'
+    v2_trained=v2_full=None
+    if hit_mix:
+        for filename in ['v2-training-effects.tsv','v2-full-effects.tsv','v2-full-bias.csv','selection-before-test.json','tree-node-6.csv']:
+            path=result_dir/filename;paths.append(path);before[str(path)]=outcome.digest(path)
+        v2_trained=read_effects((result_dir/'v2-training-effects.tsv').read_text(),counts)
+        v2_full=read_effects((result_dir/'v2-full-effects.tsv').read_text(),counts)
+        for candidate,reference in [(trained,v2_trained),(model,v2_full)]:
+            if reference['version']!='player-calibration-tree-candidate-v2':raise ValueError('Invalid frozen v2 reference')
+            if candidate['league']!=reference['league']:raise ValueError('Changed hit-mix league')
+            for key in counts:
+                if any(candidate['profiles'][key][i]!=reference['profiles'][key][i] for i in range(8) if i!=6):raise ValueError('Changed frozen tree node')
     full_league=_league([report['counts'][k] for k in KEYS]);train_league=_baseline(training)['league']
     for fx,league in [(model,full_league),(trained,train_league)]:
         rates=[sum(league[k] for k in yes)/sum(league[k] for k in risk) for yes,risk in zip(YES,RISK)] if fx['tree'] else league
@@ -143,6 +203,7 @@ def audit(events,source_report,input_dir,result_dir,output):
             n=sum(c[k] for k in RISK[i]) if trained['tree'] else sum(c)
             if n==0:_close(rate,trained['league'][i],'cold-start conditional neutral',1e-15)
     baseline=_baseline(training);neutral=dict(baseline,profiles={key:baseline['league'] for key in counts})
+    games_v2=defaultdict(lambda:[0.0,0])
     games_base=defaultdict(lambda:[0.0,0]);games_league=defaultdict(lambda:[0.0,0]);observed=[0]*9;expected=[0.0]*9;n=0;loss=0.0;brier=0.0
     for fold,game,b,p,c in pairs:
         if fold!=0:continue
@@ -150,13 +211,26 @@ def audit(events,source_report,input_dir,result_dir,output):
         one=-sum(x*math.log(y) for x,y in zip(c,q));loss+=one
         sq=sum(x*x for x in q);brier+=sum(c[k]*(sq+1-2*q[k]) for k in range(9))
         for k in range(9):observed[k]+=c[k];expected[k]+=size*q[k]
-        for model_q,groups in [(qb,games_base),(ql,games_league)]:
+        references=[(qb,games_base),(ql,games_league)]
+        if hit_mix:references.append((predict(v2_trained,b,p),games_v2))
+        for model_q,groups in references:
             groups[game][0]+=one+sum(x*math.log(y) for x,y in zip(c,model_q));groups[game][1]+=size
     vs_league=cluster_difference(list(games_league.values()));vs_baseline=cluster_difference(list(games_base.values()))
     selection=json.loads((result_dir/'selection.json').read_text(),object_pairs_hook=unique_object)
     for key,value in [('test_nll_difference_vs_league',vs_league),('test_nll_difference_vs_fixed200',vs_baseline)]:
         for x,y in zip(selection[key],value):_close(x,y,key)
-    label='outcome-tree-v2' if trained['tree'] else selection['candidate']
+    label='outcome-tree-hit-mix-v3' if hit_mix else 'outcome-tree-v2' if trained['tree'] else selection['candidate']
+    vs_v2=cluster_difference(list(games_v2.values())) if hit_mix else None
+    if hit_mix:
+        for x,y in zip(selection['test_nll_difference_vs_v2'],vs_v2):_close(x,y,'versus frozen v2')
+        strengths=selection['strengths']
+        if len(strengths)!=8 or any(pair!=([20,20] if i<5 else [200,200]) for i,pair in enumerate(strengths) if i!=6) or strengths[6] not in [[b,p] for b in [1,5,20,200] for p in [1,5,20,200]]:raise ValueError('Changed frozen hit-mix strengths')
+        pretest=json.loads((result_dir/'selection-before-test.json').read_text(),object_pairs_hook=unique_object)
+        if pretest!={'candidate':label,'strengths':strengths}:raise ValueError('Hit-mix pretest selection mismatch')
+        candidate_pins,candidate_receipts=audit_hit_mix_selection(pairs,training,result_dir,strengths)
+        for path,digest in candidate_pins.items():
+            if path not in before:paths.append(Path(path))
+            before[path]=digest
     with (result_dir/'test.csv').open(newline='') as stream:
         rows=list(csv.DictReader(stream,strict=True))
     selected=next(r for r in rows if r['candidate']==label)
@@ -165,7 +239,10 @@ def audit(events,source_report,input_dir,result_dir,output):
         for x,y in zip(json.loads(selected[field]),values):_close(x,y,field,1e-8)
     e,v,minimum=_moments(model,pairs,counts);old_e,_,_=_moments(_baseline(counts),pairs,counts)
     bias=_bias(counts,e);old_bias=_bias(counts,old_e)
-    for filename,reference in [('full-bias.csv',bias),('baseline-bias.csv',old_bias)]:
+    v2_bias=_bias(counts,_moments(v2_full,pairs,counts)[0]) if hit_mix else None
+    bias_reports=[('full-bias.csv',bias),('baseline-bias.csv',old_bias)]
+    if hit_mix:bias_reports.append(('v2-full-bias.csv',v2_bias))
+    for filename,reference in bias_reports:
         with (result_dir/filename).open(newline='') as stream:rows=list(csv.DictReader(stream,strict=True))
         if len(rows)!=20:raise ValueError('Incomplete bias report')
         for row in rows:
@@ -177,6 +254,13 @@ def audit(events,source_report,input_dir,result_dir,output):
         if category in ['strikeout','walk','home_run','hits']:
             reconstruction&=item['mae']<=.01 and item['maximum']<=.03 and item['mae']<=old_bias[role,category]['mae'] and item['maximum']<=old_bias[role,category]['maximum']
         elif category in ['hbp','triple','roe']:reconstruction&=item['mae']<=.005 and item['maximum']<=.02
+    if hit_mix:
+        reconstruction &= hit_mix_qualifies(bias,old_bias) and hit_mix_qualifies(bias,v2_bias)
+        for _,_,b,p,_ in pairs:
+            for candidate,reference in [(trained,v2_trained),(model,v2_full)]:
+                q=predict(candidate,b,p);old=predict(reference,b,p)
+                for k in [0,1,2,5,6,7,8]:_close(q[k],old[k],'frozen nonmix outcome',1e-12)
+                _close(q[3]+q[4],old[3]+old[4],'singles+doubles conservation',1e-12)
     histories={key:[[] for _ in KEYS] for key in counts};seen=set();totals=defaultdict(lambda:[0]*9)
     with (result_dir/'ensembles.csv').open(newline='') as stream:
         for row in csv.DictReader(stream,strict=True):
@@ -199,7 +283,7 @@ def audit(events,source_report,input_dir,result_dir,output):
             if not (mean_ok and sd_ok):variance_failures.append([key,KEYS[k]])
             variation&=mean_ok and sd_ok
     if len(seen)!=9*len(counts):raise ValueError('Incomplete variation population')
-    gates=guardrails(vs_league,vs_baseline)
+    gates=guardrails(vs_league,vs_baseline) and (not hit_mix or hit_mix_guardrails(vs_v2))
     for key,value in [('heldout_guardrails',gates),('full_reconstruction',reconstruction),('variation',variation),('accepted',gates and reconstruction and variation)]:
         if selection[key]!=value:raise ValueError('Calibration acceptance disposition mismatch')
     if {str(p):outcome.digest(p) for p in paths}!=before:raise ValueError('Calibration evidence changed during independent audit')
@@ -208,6 +292,8 @@ def audit(events,source_report,input_dir,result_dir,output):
         vs_league=vs_league,vs_fixed200=vs_baseline,full_minimum_probability=minimum,cold_training_profiles=cold,
         role_profiles=len(counts),variation_cells=len(seen),ensemble_rows=200*len(counts),variation_failures=variance_failures,
         full_bias={role+':'+category:value for (role,category),value in bias.items()},pins=before)
+    if hit_mix:
+        result['vs_v2']=vs_v2;result['candidate_receipts']=candidate_receipts
     with output.open('x') as stream:json.dump(result,stream,sort_keys=True,indent=2);stream.write('\n')
     return result
 
@@ -218,7 +304,7 @@ STRENGTHS='20,20;20,20;20,20;20,20;20,20;200,200;200,200;200,200'
 def encode_tree(model,counts,audit_sha,selection_sha):
     from preview import real_lineup as real
     from preview import player_ratings as ratings
-    if not model['tree'] or not counts or any(key not in model['profiles'] or len(c)!=9 or any(type(x) is not int or not 0<=x<=cap for x,cap in zip(c,ratings.COUNTS)) for key,c in counts.items()):raise ValueError('Invalid closed tree role/count population')
+    if not model['tree'] or model.get('version')!='player-calibration-tree-candidate-v2' or not counts or any(key not in model['profiles'] or len(c)!=9 or any(type(x) is not int or not 0<=x<=cap for x,cap in zip(c,ratings.COUNTS)) for key,c in counts.items()):raise ValueError('Invalid closed tree role/count population')
     if any(len(h)!=64 or any(c not in '0123456789abcdef' for c in h) for h in [audit_sha,selection_sha]):raise ValueError('Invalid tree evidence digest')
     fields=dict(format='closed-opponent-tree-ratings-v2',model='outcome-tree-player-proxy-v2-development',
         opportunity_report_sha256=ratings.REPORT_SHA,snapshot_sha256=real.SNAPSHOT_SHA,supplement_sha256=real.SUPPLEMENT_SHA,
