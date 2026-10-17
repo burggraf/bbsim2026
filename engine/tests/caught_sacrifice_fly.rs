@@ -553,7 +553,7 @@ fn known_canonical_contradictions_precede_unknown_handling_evidence() {
     );
 }
 #[test]
-fn completed_half_sf_does_not_expand_positive_er_or_restore_unknown_fielding() {
+fn completed_reviewed_sf_half_earns_run_without_restoring_unknown_fielding() {
     let mut start = state(0, 0, Half::Top, 0, true);
     start.inning = 1;
     let mut triple = action(&start, AirContact::Fly, false);
@@ -582,7 +582,7 @@ fn completed_half_sf_does_not_expand_positive_er_or_restore_unknown_fielding() {
     let stats = derive_accounting(&log).unwrap();
     let pitcher = &start.teams[1].pitcher;
     assert_eq!(stats.runs, [1, 0]);
-    assert_eq!(stats.pitchers[1][pitcher].earned_runs, None);
+    assert_eq!(stats.pitchers[1][pitcher].earned_runs, Some(1));
     assert_eq!(stats.pitchers[1][pitcher].runs_allowed, 1);
     assert_eq!(
         stats.batters[0][&log[1].event().participants.batter.clone().unwrap()].classified_rbi,

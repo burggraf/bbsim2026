@@ -194,7 +194,15 @@ outs, not 5.2 decimal innings. Inherited runs stay charged to the responsible
 pitcher. Notes list recorded 2B/3B/HR, IBB, HBP, SH/SF, GDP, SB/CS, CI, errors,
 passed balls, wild pitches and balks when present. BB includes intentional walks;
 IBB is a subset, not an additional walk. Unknown scoring cells remain `?`,
-including team totals affected by them; this does not invent official AB/RBI/ER,
+including team totals affected by them. Fully observed, completed halves with
+explicit whole-chance no-misplay review now have numeric ER even with sacrifices,
+runner advances or pitching changes; inherited runs stay with their responsible
+pitcher. Zero errors alone is insufficient: passed balls and unsupported
+error/interference histories still require reconstruction. Some automatic
+uncaught-third-strike/held-runner events retain unknown whole-chance review;
+this correction does not invent that missing review even with no E/PB credits.
+See the shared
+[accounting contract](../engine/accounting.md). This does not invent official AB/RBI/ER,
 pitcher wins/losses/saves, pitch counts, or season averages. Names and all values
 come from the retained game and canonical accounting, not the source game's box.
 

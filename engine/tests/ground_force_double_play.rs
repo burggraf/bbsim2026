@@ -901,7 +901,7 @@ fn positive_completed_half_er_control_and_prior_unknowns_are_not_repaired() {
     let stats = accounting::derive_accounting(&log).unwrap();
     assert_eq!(stats.runs, [2, 0]);
     assert_eq!(stats.pitchers[1]["hp"].runs_allowed, 2);
-    assert_eq!(stats.pitchers[1]["hp"].earned_runs, None);
+    assert_eq!(stats.pitchers[1]["hp"].earned_runs, Some(2));
     assert_eq!(stats.classified_fielding[1]["h1"].putouts, Some(2));
     assert_eq!(stats.classified_fielding[1]["h3"].assists, Some(2));
     let unknown = completed_half(start.clone(), true, false);

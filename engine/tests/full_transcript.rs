@@ -389,6 +389,221 @@ fn radio_line_score_refuses_empty_incomplete_and_discontinuous_logs_without_outp
     }
 }
 
+fn append_er_play(
+    log: &mut Vec<EventTransition>,
+    play: impl FnOnce(&GameState, &[String; 9]) -> Result<full_game::ResolvedPlay, String>,
+) {
+    let state = log.last().map_or_else(
+        || {
+            let (mut state, _, _) = fixture();
+            state.inning = 1;
+            state.outs = 0;
+            state.score = [0, 0];
+            state.bases = [None, None, None];
+            state
+        },
+        |last| last.after().clone(),
+    );
+    let team = &state.teams[1 - state.half.offense()];
+    let fielders = std::array::from_fn(|i| {
+        if i == 0 {
+            team.pitcher.clone()
+        } else {
+            team.batting_order[i - 1].clone()
+        }
+    });
+    let transition = play(&state, &fielders).unwrap().transition().clone();
+    assert_eq!(
+        EventTransition::from_bytes(&transition.to_bytes()).unwrap(),
+        transition
+    );
+    log.push(transition);
+}
+
+#[test]
+fn reviewed_errorless_halves_earn_runs_across_modern_mechanisms() {
+    use full_game::Ordinary::*;
+    for case in 0..10 {
+        let mut log = Vec::new();
+        append_er_play(&mut log, |s, f| full_game::ordinary(s, f, Walk));
+        match case {
+            0 => append_er_play(&mut log, |s, f| {
+                full_game::contact(
+                    s,
+                    f,
+                    full_game::ContactDecision::SacrificeBunt(SacrificeBuntThrowFacts {
+                        batter_id: s.teams[0].batting_order[usize::from(s.teams[0].next_batter)]
+                            .clone(),
+                        advancing_runner_id: s.bases[0].as_ref().unwrap().player_id.clone(),
+                        thrower_id: f[0].clone(),
+                        receiver_id: f[2].clone(),
+                        judgment: SacrificeBuntJudgment::SacrificingOwnChance,
+                    }),
+                )
+            }),
+            1 => append_er_play(&mut log, |s, f| {
+                full_game::air_advance(s, f, AirContact::Fly, 9, Base::First, false)
+            }),
+            2 => {
+                for _ in 0..2 {
+                    append_er_play(&mut log, |s, f| {
+                        full_game::runner(s, f, full_game::RunnerDecision::WildPitch)
+                    });
+                }
+                append_er_play(&mut log, |s, f| {
+                    full_game::air_advance(s, f, AirContact::Fly, 9, Base::Third, false)
+                });
+            }
+            3 | 5 => append_er_play(&mut log, |s, f| {
+                full_game::runner(
+                    s,
+                    f,
+                    full_game::RunnerDecision::Steal {
+                        origin: Base::First,
+                        target: Destination::Second,
+                        caught: case == 5,
+                    },
+                )
+            }),
+            4 => append_er_play(&mut log, |s, f| {
+                full_game::runner(
+                    s,
+                    f,
+                    full_game::RunnerDecision::Pickoff {
+                        origin: Base::First,
+                        caught: false,
+                    },
+                )
+            }),
+            6 => {
+                append_er_play(&mut log, |s, f| full_game::ordinary(s, f, Walk));
+                append_er_play(&mut log, |s, f| {
+                    full_game::runner(s, f, full_game::RunnerDecision::WildPitch)
+                });
+            }
+            7 => append_er_play(&mut log, |s, f| full_game::ground_out(s, f, 3)),
+            8 => append_er_play(&mut log, |s, f| {
+                full_game::contact(
+                    s,
+                    f,
+                    full_game::ContactDecision::GroundForceDoublePlay(GroundForceDoublePlayFacts {
+                        batter_id: s.teams[0].batting_order[usize::from(s.teams[0].next_batter)]
+                            .clone(),
+                        forced_runner_id: s.bases[0].as_ref().unwrap().player_id.clone(),
+                        initial_fielder_id: f[5].clone(),
+                        pivot_id: f[3].clone(),
+                        first_receiver_id: f[2].clone(),
+                    }),
+                )
+            }),
+            9 => append_er_play(&mut log, |s, f| {
+                full_game::hit(
+                    s,
+                    f,
+                    full_game::HitDecision {
+                        value: 2,
+                        position: 9,
+                        runners: [Some(Destination::Out), None, None],
+                        tag: Some(full_game::TagAttempt {
+                            origin: Base::First,
+                            attempted_base: Destination::Home,
+                            home_before_tag: vec![],
+                        }),
+                    },
+                )
+            }),
+            _ => unreachable!(),
+        }
+        if case != 2 {
+            append_er_play(&mut log, |s, f| full_game::ordinary(s, f, HomeRun(7)));
+        }
+        while log.last().unwrap().after().half == Half::Top {
+            append_er_play(&mut log, |s, f| full_game::ordinary(s, f, CalledStrikeout));
+        }
+        let expected = match case {
+            2 | 5 | 8 => 1,
+            6 => 3,
+            _ => 2,
+        };
+        let stats = accounting::derive_accounting(&log).unwrap();
+        assert_eq!(
+            stats.pitchers[1]["hp"].runs_allowed, expected,
+            "case {case}"
+        );
+        assert_eq!(
+            stats.pitchers[1]["hp"].earned_runs,
+            Some(expected),
+            "case {case}"
+        );
+        assert_eq!(stats.runs, [expected, 0]);
+
+        let mut unknown = log.clone();
+        let mut event = unknown[0].event().clone();
+        event.fielding_review = FieldingReview::Unknown;
+        unknown[0] = apply(unknown[0].before(), event).unwrap();
+        assert_eq!(
+            accounting::derive_accounting(&unknown).unwrap().pitchers[1]["hp"].earned_runs,
+            None,
+            "unknown review case {case}"
+        );
+        assert_eq!(
+            accounting::derive_accounting(&log[1..]).unwrap().pitchers[1]["hp"].earned_runs,
+            None,
+            "late origin case {case}"
+        );
+        assert_eq!(
+            accounting::derive_accounting(&log[..log.len() - 1])
+                .unwrap()
+                .pitchers[1]["hp"]
+                .earned_runs,
+            None,
+            "unfinished case {case}"
+        );
+    }
+}
+
+#[test]
+fn errorless_er_does_not_treat_zero_errors_as_no_passed_ball() {
+    for passed in [false, true] {
+        let mut log = Vec::new();
+        append_er_play(&mut log, |s, f| {
+            full_game::ordinary(s, f, full_game::Ordinary::Walk)
+        });
+        append_er_play(&mut log, |s, f| {
+            full_game::runner(
+                s,
+                f,
+                if passed {
+                    full_game::RunnerDecision::PassedBall
+                } else {
+                    full_game::RunnerDecision::WildPitch
+                },
+            )
+        });
+        append_er_play(&mut log, |s, f| {
+            full_game::ordinary(s, f, full_game::Ordinary::HomeRun(7))
+        });
+        for _ in 0..3 {
+            append_er_play(&mut log, |s, f| {
+                full_game::ordinary(s, f, full_game::Ordinary::CalledStrikeout)
+            });
+        }
+        let stats = accounting::derive_accounting(&log).unwrap();
+        assert_eq!(
+            stats.fielders[1]
+                .values()
+                .map(|f| f.credited_errors)
+                .sum::<u32>(),
+            0
+        );
+        assert_eq!(stats.pitchers[1]["hp"].runs_allowed, 2);
+        assert_eq!(
+            stats.pitchers[1]["hp"].earned_runs,
+            if passed { None } else { Some(2) }
+        );
+    }
+}
+
 fn render_box_score(steps: &[full_simulation::Step], names: &BTreeMap<String, String>) -> String {
     let mut text = Vec::new();
     full_transcript::write_box_score(
@@ -577,11 +792,11 @@ fn radio_box_score_keeps_pitcher_entry_order_inherited_runs_and_base_three_ip() 
     let section = "Oakland Athletics — Pitching";
     assert_eq!(
         box_cells(&text, section, "Name Home p"),
-        ["0.0", "0", "1", "?", "1", "0", "0", "1"]
+        ["0.0", "0", "1", "1", "1", "0", "0", "1"]
     );
     assert_eq!(
         box_cells(&text, section, "First Reliever"),
-        ["0.1", "1", "1", "?", "0", "1", "1", "2"]
+        ["0.1", "1", "1", "1", "0", "1", "1", "2"]
     );
     assert_eq!(
         box_cells(&text, section, "Second Reliever"),
@@ -589,7 +804,7 @@ fn radio_box_score_keeps_pitcher_entry_order_inherited_runs_and_base_three_ip() 
     );
     assert_eq!(
         box_cells(&text, section, "Totals"),
-        ["9.0", "1", "2", "?", "1", "27", "1", "29"]
+        ["9.0", "1", "2", "2", "1", "27", "1", "29"]
     );
     assert!(text.find("First Reliever").unwrap() < text.find("Second Reliever").unwrap());
 }

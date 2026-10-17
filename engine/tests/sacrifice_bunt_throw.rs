@@ -773,7 +773,7 @@ fn completed_half_has_positive_er_control_and_never_repairs_prior_none_fielding(
     let stats = derive_accounting(&log).unwrap();
     assert_eq!(stats.runs, [2, 0]);
     assert_eq!(stats.pitchers[1]["hp"].runs_allowed, 2);
-    assert_eq!(stats.pitchers[1]["hp"].earned_runs, None);
+    assert_eq!(stats.pitchers[1]["hp"].earned_runs, Some(2));
     assert_eq!(stats.classified_fielding[1]["h1"].putouts, Some(3));
     assert_eq!(stats.classified_fielding[1]["h3"].assists, Some(3));
     single.sole_safe_hit = None;

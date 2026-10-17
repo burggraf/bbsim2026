@@ -301,7 +301,8 @@ fn complete_physical_log_preserves_actor_local_missing_hit_coverage() {
     assert!(a.batters[0]
         .iter()
         .all(|(id, b)| b.classified_hits == Some(u32::from(id != "away5"))));
-    assert_eq!(a.pitchers[1]["home_starter"].earned_runs, None);
+    // Missing retirement classification does not undo whole-chance review.
+    assert_eq!(a.pitchers[1]["home_starter"].earned_runs, Some(8));
     assert!(a.fielders.iter().all(|f| f.is_empty()));
     let incomplete = classified
         .iter()
@@ -1885,7 +1886,7 @@ fn reviewed_simple_hbp_certifies_literal_earned_run() {
 }
 
 #[test]
-fn safe_hit_er_keeps_missing_value_review_origin_and_end_unknown() {
+fn safe_hit_er_needs_review_origin_and_end_but_not_hit_value() {
     for half in [Half::Top, Half::Bottom] {
         // Existing canonical value>1 guard rejects missing whole-play review;
         // use a legal Single for the fold-level uncertainty controls.
@@ -1936,7 +1937,7 @@ fn safe_hit_er_keeps_missing_value_review_origin_and_end_unknown() {
         assert_eq!(
             derive_accounting(&unclassified).unwrap().pitchers[1 - half.offense()][pitcher]
                 .earned_runs,
-            None
+            Some(1)
         );
         assert_eq!(
             derive_accounting(&log[hit_index + 1..]).unwrap().pitchers[1 - half.offense()][pitcher]
@@ -2172,7 +2173,7 @@ fn station_hits_certify_all_observed_masks_outs_and_halves() {
 }
 
 #[test]
-fn legal_nonstation_hit_keeps_earned_runs_unknown() {
+fn reviewed_legal_nonstation_hit_earns_runs_without_station_geometry() {
     for half in [Half::Top, Half::Bottom] {
         let log = station_hit_half(1, 0, half, 1, true);
         let a = derive_accounting(&log).unwrap();
@@ -2182,7 +2183,7 @@ fn legal_nonstation_hit_keeps_earned_runs_unknown() {
             "away_pitcher"
         };
         assert_eq!(a.pitchers[1 - half.offense()][pitcher].runs_allowed, 3);
-        assert_eq!(a.pitchers[1 - half.offense()][pitcher].earned_runs, None);
+        assert_eq!(a.pitchers[1 - half.offense()][pitcher].earned_runs, Some(3));
     }
 }
 
@@ -2412,7 +2413,7 @@ fn bound_ground_er_certifies_observed_masks_outs_halves_and_held_vectors() {
 }
 
 #[test]
-fn bound_ground_er_does_not_repair_missing_evidence_history_or_completion() {
+fn ground_er_requires_review_history_and_completion_not_throw_facts() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..3 {
             let (clean, ground_index) = clean_ground_half(7, outs, half, true, true);
@@ -2440,7 +2441,11 @@ fn bound_ground_er_does_not_repair_missing_evidence_history_or_completion() {
                     .collect();
                 assert_eq!(
                     derive_accounting(&log).unwrap().pitchers[side][&pitcher].earned_runs,
-                    None
+                    if missing == 0 {
+                        Some(if outs == 2 { 1 } else { 5 })
+                    } else {
+                        None
+                    }
                 );
             }
             // Keep a positive charged run in this segment. Dropping its only
@@ -2652,7 +2657,7 @@ fn exact_forced_award_er_has_literal_observed_mask_out_half_and_award_lines() {
 }
 
 #[test]
-fn forced_award_er_keeps_nonexact_and_missing_evidence_unknown() {
+fn reviewed_award_er_allows_nonexact_advances_but_requires_review_and_history() {
     for half in [Half::Top, Half::Bottom] {
         for kind in [CreditKind::Walk, CreditKind::HitByPitch] {
             for mask in [1, 2] {
@@ -2660,7 +2665,7 @@ fn forced_award_er_keeps_nonexact_and_missing_evidence_unknown() {
                 let p = &derive_accounting(&log).unwrap().pitchers[1 - half.offense()]
                     [&log[0].before().teams[1 - half.offense()].pitcher];
                 assert_eq!(p.runs_allowed, mask.count_ones() + 3);
-                assert_eq!(p.earned_runs, None);
+                assert_eq!(p.earned_runs, Some(mask.count_ones() + 3));
             }
             let (clean, index) = forced_award_half(7, 1, half, kind, true, true, false);
             let pitcher = clean[index].event().participants.pitcher.clone();
@@ -2687,7 +2692,7 @@ fn forced_award_er_keeps_nonexact_and_missing_evidence_unknown() {
                     .collect();
                 assert_eq!(
                     derive_accounting(&log).unwrap().pitchers[side][&pitcher].earned_runs,
-                    None
+                    if missing == 1 { Some(6) } else { None }
                 );
             }
             let start = usize::from(half == Half::Bottom) * 3;
@@ -2715,7 +2720,7 @@ fn forced_award_er_keeps_nonexact_and_missing_evidence_unknown() {
 }
 
 #[test]
-fn reviewed_generic_contact_is_not_yet_an_errorless_play_proof() {
+fn whole_chance_review_certifies_errorless_contact_without_retirement_classification() {
     let clean = reviewed_homer_half(1);
     let log: Vec<_> = clean
         .iter()
@@ -2734,7 +2739,7 @@ fn reviewed_generic_contact_is_not_yet_an_errorless_play_proof() {
         .collect();
     assert_eq!(
         derive_accounting(&log).unwrap().pitchers[1]["home_starter"].earned_runs,
-        None
+        Some(1)
     );
 }
 
@@ -3300,7 +3305,7 @@ fn bound_caught_k_er_has_literal_observed_lines_in_384_hold_and_order_frames() {
 }
 
 #[test]
-fn bound_caught_k_er_does_not_repair_missing_facts_review_origin_or_completion() {
+fn caught_k_er_requires_review_origin_and_completion_not_catch_facts() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..3 {
             let (clean, index) = clean_caught_half(7, outs, half, true, true, true);
@@ -3321,7 +3326,14 @@ fn bound_caught_k_er_does_not_repair_missing_facts_review_origin_or_completion()
                 log[position] = replacement;
                 let a = derive_accounting(&log).unwrap();
                 assert!(a.pitchers[side][pitcher].runs_allowed > 0);
-                assert_eq!(a.pitchers[side][pitcher].earned_runs, None);
+                assert_eq!(
+                    a.pitchers[side][pitcher].earned_runs,
+                    if missing == 0 {
+                        Some(if outs == 2 { 1 } else { 5 })
+                    } else {
+                        None
+                    }
+                );
                 assert_eq!(a.runs, derive_accounting(&clean).unwrap().runs);
                 assert_eq!(a.fielders, derive_accounting(&clean).unwrap().fielders);
             }
@@ -3546,7 +3558,7 @@ fn exact_imposed_balk_er_has_literal_observed_lines_in_168_order_frames() {
 }
 
 #[test]
-fn exact_imposed_balk_er_keeps_partial_review_origin_and_completion_unknown() {
+fn reviewed_balk_er_requires_review_origin_and_completion_not_occurrence_classification() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..3 {
             let (clean, index) = clean_imposed_balk_half(7, outs, half, true, true, false, 1);
@@ -3578,7 +3590,14 @@ fn exact_imposed_balk_er_keeps_partial_review_origin_and_completion_unknown() {
                 log[position] = t;
                 let a = derive_accounting(&log).unwrap();
                 assert_eq!(a.pitchers[side][pitcher].runs_allowed, 5);
-                assert_eq!(a.pitchers[side][pitcher].earned_runs, None);
+                assert_eq!(
+                    a.pitchers[side][pitcher].earned_runs,
+                    if matches!(missing, 1 | 2) {
+                        None
+                    } else {
+                        Some(5)
+                    }
+                );
             }
             let late: Vec<_> = clean[start..]
                 .iter()
@@ -3832,7 +3851,7 @@ fn sole_safe_hit_er_has_literal_observed_lines_in_1152_legal_policy_frames() {
 }
 
 #[test]
-fn sole_safe_hit_er_keeps_nonstation_missing_review_cause_and_history_unknown() {
+fn nonstation_hit_er_requires_review_and_history_not_exclusive_rbi_cause() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..3 {
             let (clean, index) = clean_sole_safe_hit_half(7, outs, half, 1, false, true, true);
@@ -3860,7 +3879,10 @@ fn sole_safe_hit_er_keeps_nonstation_missing_review_cause_and_history_unknown() 
                 log[position] = t;
                 let a = derive_accounting(&log).unwrap();
                 assert_eq!(a.pitchers[side][pitcher].runs_allowed, 6);
-                assert_eq!(a.pitchers[side][pitcher].earned_runs, None);
+                assert_eq!(
+                    a.pitchers[side][pitcher].earned_runs,
+                    if missing == 0 { Some(6) } else { None }
+                );
                 if missing == 3 {
                     assert_eq!(
                         log[index]
@@ -4275,7 +4297,7 @@ fn literal_reviewed_game_missing_facts_preserve_physics_not_complete_scoring() {
         assert_eq!(a.classified_fielding[0], expected.classified_fielding[0]);
         assert_eq!(
             a.pitchers[1]["home_starter"].earned_runs,
-            if missing == 3 { Some(5) } else { None }
+            if missing == 1 { None } else { Some(5) }
         );
         let batter = clean[index].event().participants.batter.as_ref().unwrap();
         assert_eq!(

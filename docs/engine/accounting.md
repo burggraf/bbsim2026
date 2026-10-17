@@ -2,6 +2,32 @@
 
 `engine/src/accounting.rs` folds **validated, contiguous** `EventTransition`s without reading `after.score` to build inning lines. It counts named `Run` credits and reconciles the result against the end-minus-start score. `None` in an inning line means the half was not in this log; `Some(0)` means it was observed with zero runs. `complete_game` requires an empty 1st/top 0–0 start and a terminal last state; it **does not** imply complete source credits or an official box.
 
+**Reviewed errorless-half ER correction (2026-10-17):** a fully observed,
+legally completed half now certifies its charged runs as earned when every play
+has whole-chance `FieldingReview::NoMisplay`. This explicit assertion covers
+all chances, including prior foul chances, errors, passed balls, interference
+and obstruction; it is **not** inferred from an empty E column. Canonical
+validation rejects contradictory Error/PB/InterferenceAward credits or a PB
+event with `NoMisplay`. Pure validated substitutions have no play, movement,
+credit or scoring chance and do not invalidate the half's review.
+
+MLB [Rule9.16(a),(g)](https://baseballrulesacademy.com/official-rule/mlb/9-16-earned-runs-runs-allowed/)
+and the [earned-run glossary](https://www.mlb.com/glossary/standard-stats/earned-run)
+do not require extra hit-value, RBI or named PO/A facts to reach this conclusion.
+Sacrifices, unequal hit advances, steals/pickoffs, multiple WP advances, balks,
+double plays, pitching changes and walk-offs no longer independently cause ER
+unknowns. Runs remain on their carried responsible pitcher, not the pitcher
+present when the runner scores. Review, observed origin and legal completion
+are still required; prior uncertain positive contributions remain irreversible.
+AB/RBI, hit and fielding coverage remain independent and may still be unknown.
+
+The older errorless-play whitelists described below and in their linked historical
+checkpoint documents are **superseded for wholly reviewed errorless halves only**.
+Their narrower causal/geometry tests remain unchanged for error-affected inning
+reconstruction. PB, errors, interference, unreviewed or partial histories do not
+become assumed earned runs. This is not complete Rule9.16 reconstruction, official
+box certification or E-03/G1 completion. `docs/PROGRESS.md` owns fresh verification.
+
 The fold builds player batting credits (PA, classified AB where possible, hit, walk, HBP, sacrifices, interference, strikeout, run, RBI, SB/CS), pitching outs, batters faced, classified AB against, credited hits/walks/strikeouts, runs allowed, and fielding putouts/assists/errors/passed balls. Outs are charged to the current pitcher; **runs are charged to the scoring runner's carried responsible pitcher**, including after a relief appearance and pinch-runner substitution. A physically completed but legally void third-out home crossing is not a run. Fielding credits do not create phantom offensive batter rows. Stat-credit validation rejects a fielder not on the defense, an active DH credited with PO/A/E/PB, a current pitcher credited with PB, a hit not attributed to the batter, false steal advances, duplicate hit/walk/strikeout outcomes, excessive putouts and RBI credits.
 
 **Reviewed clean-scoring prefix before an empty-base muff:** [The prefix extension](clean-prefix-empty-muff-er.md) retains an observed fully reviewed clean prefix, first bound empty-base muff at zero/one actual outs, unchanged pitcher/no personnel, exact suffix/virtual-clock proof and legal completion. Already scored clean runs remain earned; reconstruction is seeded once with those prefix runs, all charged to the same defense/pitcher. Later muffs neither reseed actual totals nor relabel an actor's earlier clean scoring. Missing history/review, occupied first muff, other misplays/personnel/relief and prior unknown totals remain unknown. The separate first-two-out certificate still requires a zero-run prefix. Physical/stat credits, RBI/fielding coverage, canonical/codec/producer and API stay unchanged; live evidence is in PROGRESS.
@@ -58,7 +84,7 @@ The fold builds player batting credits (PA, classified AB where possible, hit, w
 
 **Conservative ER checkpoint (2019 Rule 9.16, `BBE10`):** `Event.fielding_review` is required. `Unknown` preserves absent source evidence; `NoMisplay` is an explicit scorer/source assertion that **all** fielding chances, including muffed foul flies, were reviewed and no error, passed ball, interference or obstruction occurred. An absence of Error credits is not such a review. Contradictory Error/PassedBall/InterferenceAward credits or a passed-ball event kind are rejected with `NoMisplay`. Existing F-02 fixtures remain `Unknown`.
 
-The fold certifies positive earned runs only for a **completed, fully observed clean half**: the log starts at the empty 1st/top 0–0 state or contains its preceding half boundary, and every event has `NoMisplay` plus one of the narrow proven shapes (out-of-park HR, lone batter K-out, lone walk-to-first, [bounded station hits and simple HBP](clean-safe-pa-er.md), [reviewed bound ordinary ground retirements](clean-ground-er.md), [exact reviewed BB/HBP forced awards](clean-forced-award-er.md), one-base wild-pitch advance, validated lone-runner FC, or substitution). A later zero-out/empty-base segment start is not proof of an observed boundary; it could follow an unobserved solo HR or earlier missed chances. A reviewed HR walk-off can complete a half. Any uncertain charged run makes that pitcher's segment ER `None`, and a later clean half cannot restore a known total. Runs stay charged to carried responsible pitchers, including inherited runners. A pitcher with **zero charged runs in the segment** has ER `Some(0)` even when other players' ER is unknown; this says nothing about an unobserved portion of the game. Generic contact, errors, passed balls and interference still require full scorer reconstruction; even `NoMisplay` does not yet certify generic plays.
+The fold certifies positive earned runs for a **completed, fully observed clean half**: the log starts at the empty 1st/top 0–0 state or contains its preceding half boundary, and every non-substitution event explicitly has `NoMisplay` (see the 2026-10-17 correction above). A later zero-out/empty-base segment start is not proof of an observed boundary; it could follow an unobserved solo HR or earlier missed chances. A legally reviewed walk-off can complete a half. Any uncertain charged run makes that pitcher's segment ER `None`, and a later clean half cannot restore a known total. Runs stay charged to carried responsible pitchers, including inherited runners. A pitcher with **zero charged runs in the segment** has ER `Some(0)` even when other players' ER is unknown; this says nothing about an unobserved portion of the game. Errors, passed balls, interference and unknown review still require supported scorer reconstruction; generic contact with whole-chance `NoMisplay` no longer needs a separate mechanism whitelist for errorless-half ER.
 
 Thirteen additional accounting regressions/properties cover reviewed vs unreviewed plays, each missing-review position, WP vs PB, error-before-HR uncertainty, inherited runs, unfinished/partial halves, observed boundaries, cumulative uncertainty, generic contact, clean walk-offs, contradictory review facts and codec review roundtrip. Raw red/green logs remain outside Git at `/tmp/bbsim-e03-{unreviewed-red,fielding-review-red,segment-red,accounting-green}.log`; fresh full-suite/review evidence is tracked in [PROGRESS.md](../PROGRESS.md).
 

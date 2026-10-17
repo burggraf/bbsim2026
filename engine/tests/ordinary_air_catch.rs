@@ -242,7 +242,7 @@ fn fully_observed_clean_scoring_half_counts_air_catches_without_er_uncertainty()
 }
 
 #[test]
-fn missing_air_facts_or_review_cannot_repair_positive_er() {
+fn errorless_er_requires_whole_chance_review_not_air_catch_details() {
     for (facts, review) in [
         (false, FieldingReview::NoMisplay),
         (true, FieldingReview::Unknown),
@@ -250,7 +250,15 @@ fn missing_air_facts_or_review_cannot_repair_positive_er() {
         let log = scoring_half(facts, review);
         let folded = derive_accounting(&log).unwrap();
         assert_eq!(folded.pitchers[1]["home-pitcher"].runs_allowed, 1);
-        assert_eq!(folded.pitchers[1]["home-pitcher"].earned_runs, None);
+        assert_eq!(
+            folded.pitchers[1]["home-pitcher"].earned_runs,
+            if review == FieldingReview::NoMisplay {
+                Some(1)
+            } else {
+                None
+            }
+        );
+        assert_eq!(folded.classified_fielding[1]["home-5"].putouts, None);
     }
 }
 

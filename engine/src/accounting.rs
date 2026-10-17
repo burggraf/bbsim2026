@@ -438,8 +438,8 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             lost_muff_outs = 0;
             half_runs.clear();
         }
-        // SF/bunt advancement is not the older held-air/ground clean-ER proof.
-        // Positive-prefix Rule 9.16 expansion requires its own contract/evidence.
+        // Error-affected reconstruction still needs the older bounded geometry;
+        // whole-chance review alone cannot reconstruct a misplayed inning.
         let clean = transition.caught_sacrifice_fly_facts().is_none()
             && transition.sacrifice_bunt_throw_facts().is_none()
             && clean_play(before, event);
@@ -488,7 +488,10 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         } else {
             unearned_half &= clean;
         }
-        clean_half &= clean;
+        // NoMisplay explicitly reviews all chances, not just recorded errors.
+        // A canonical substitution contains no play, credit or scoring chance.
+        clean_half &= event.kind == EventKind::Substitution
+            || event.fielding_review == FieldingReview::NoMisplay;
         let offense = before.half.offense();
         let defense = 1 - offense;
         let unchanged_personnel = event.delta.changes.is_empty()
