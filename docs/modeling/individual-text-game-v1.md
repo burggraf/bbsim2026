@@ -244,6 +244,32 @@ full check additionally found a test-only nonexistent `HomeRun` credit variant;
 the correct existing oracle is `Hit` plus `OutOfParkHomeRun`. These are explicit
 implementation/harness failures, not hidden baseball or statistical failures.
 
+## Workload/context manager follow-up (2019 only)
+
+The complete text game uses `workload-context-2019-v2`, not a fixed27/6PA or
+seventh-inning hook. See the [manager contract](text-game-manager-v2.md) for
+preregistered heuristics, verification status andlimits. The existing v1cast
+uses individual role means with an explicit mean-only disclosure. To use the
+already-audited training outing distributions, export a separate v2cast:
+
+```sh
+python3 -B -m preview.pitching_cast \
+  /tmp/bbsim-player-opportunities/report-first.json \
+  /tmp/bbsim-lineup-readiness/report-first.json \
+  /tmp/bbsim-bullpen-readiness/report-first.json \
+  /tmp/bbsim-pitcher-workload/report-null-fixed-first.json \
+  /tmp/bbsim-text-game-manager-v2/cast-empirical.tsv --empirical
+```
+
+The exporter refuses existing output paths. These are private local inputs,
+not bundled data. Substitute that new cast path in the existing text-game command
+anduse `--seed 67 --format radio`. Do not overwrite prior cast/scientific artifacts.
+A separate manager RNG samples one stable outing budget per pitcher entry;
+individual batter/current-pitcher probabilities andoutcome RNG remain separate.
+Score/performance andknown no-hit context can alter the hook; no no-hitter is
+promised. Other seasons, measured fatigue/pitch counts, verified bullpen rest
+andfull managerial/historical usage fidelity remain unsupported.
+
 ### Pre-review verification (boundary correction follows)
 
 `proc_52d6` exited0 in661s (15:12:32–15:23:31UTC), using

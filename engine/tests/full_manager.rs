@@ -38,8 +38,8 @@ fn tsv(away: &[(&str, &str)], home: &[(&str, &str)]) -> String {
         for (rank, (id, name)) in pitchers.iter().enumerate() {
             rows.push((format!("cast:{side}:{rank}:{id}"), (*name).to_owned()));
             rows.push((format!("pitcher:{id}"), "0,0,0,0,0,0,0,0,0".to_owned()));
-            rows.push((format!("workload:start:{id}"), "0,1".to_owned()));
-            rows.push((format!("workload:relief:{id}"), "0,1".to_owned()));
+            rows.push((format!("workload:start:{id}"), "27,1".to_owned()));
+            rows.push((format!("workload:relief:{id}"), "6,1".to_owned()));
         }
     }
     rows.sort();
@@ -53,8 +53,8 @@ fn tsv(away: &[(&str, &str)], home: &[(&str, &str)]) -> String {
     text
 }
 
-fn cast() -> Cast {
-    Cast::read_tsv(&tsv(
+fn cast_text() -> String {
+    tsv(
         &[
             ("gonzm005", "Marco Gonzales"),
             ("strih001", "Hunter Strickland"),
@@ -65,8 +65,11 @@ fn cast() -> Cast {
             ("dullr001", "Ryan Dull"),
             ("wendj001", "J.B. Wendelken"),
         ],
-    ))
-    .unwrap()
+    )
+}
+
+fn cast() -> Cast {
+    Cast::read_tsv(&cast_text()).unwrap()
 }
 
 fn team(prefix: &str, pitcher: &str, dh: bool) -> TeamState {
@@ -261,6 +264,191 @@ fn advance(log: &mut Vec<EventTransition>, before: &mut GameState, make: fn(&Gam
     log.push(transition);
 }
 
+fn strikeout(before: &GameState) -> Event {
+    let mut action = out_pa(before);
+    let batter = action.participants.batter.as_ref().unwrap().clone();
+    action
+        .delta
+        .credits
+        .push(credit(&batter, CreditKind::Strikeout));
+    action
+}
+
+fn six_innings(cast: &Cast, known_hits: bool) -> (GameState, Vec<EventTransition>) {
+    let mut before = cast.prepare(&state(1, Half::Top, true)).unwrap();
+    let mut log = Vec::new();
+    for _ in 0..36 {
+        advance(
+            &mut log,
+            &mut before,
+            if known_hits { strikeout } else { out_pa },
+        );
+    }
+    assert_eq!((before.inning, before.half), (7, Half::Top));
+    (before, log)
+}
+
+#[test]
+fn individual_role_mean_controls_hooks_without_a_fixed_27_pa_target() {
+    let low = Cast::read_tsv(&cast_text().replace(
+        "workload:start:fierm001\t27,1",
+        "workload:start:fierm001\t4,2",
+    ))
+    .unwrap();
+    let high = cast();
+    let mut before = low.prepare(&state(1, Half::Top, true)).unwrap();
+    let mut log = Vec::new();
+    advance(&mut log, &mut before, out_pa);
+    assert_eq!(low.next_change(&before, &log).unwrap(), None);
+    advance(&mut log, &mut before, out_pa);
+    assert!(low.next_change(&before, &log).unwrap().is_some());
+    assert_eq!(high.next_change(&before, &log).unwrap(), None);
+}
+
+#[test]
+fn no_hit_extension_needs_known_hits_full_origin_and_stops_at_workload_limit() {
+    let cast = Cast::read_tsv(&cast_text().replace(
+        "workload:start:fierm001\t27,1",
+        "workload:start:fierm001\t18,1",
+    ))
+    .unwrap();
+    let (mut before, mut log) = six_innings(&cast, true);
+    assert_eq!(cast.next_change(&before, &log).unwrap(), None);
+    let (mut partial, mut segment) = (before.clone(), log[3..].to_vec());
+    for _ in 0..6 {
+        advance(&mut segment, &mut partial, strikeout);
+    }
+    assert!(cast.next_change(&partial, &segment).unwrap().is_some());
+    let (unknown, unclassified) = six_innings(&cast, false);
+    assert!(cast.next_change(&unknown, &unclassified).unwrap().is_some());
+    for _ in 0..18 {
+        advance(&mut log, &mut before, strikeout);
+    }
+    assert_eq!((before.inning, before.half), (10, Half::Top));
+    assert!(cast.next_change(&before, &log).unwrap().is_some());
+}
+
+#[test]
+fn loader_refuses_missing_selected_role_and_inconsistent_workload_denominators() {
+    for value in ["0,0", "1,0", "1,2430", "4503599627370497,1"] {
+        assert!(
+            Cast::read_tsv(&cast_text().replace(
+                "workload:start:fierm001\t27,1",
+                &format!("workload:start:fierm001\t{value}")
+            ))
+            .is_err(),
+            "{value}"
+        );
+    }
+}
+
+#[test]
+fn struggling_starter_hook_and_low_leverage_extension_have_boundary_controls() {
+    let cast = cast();
+    let mut before = cast.prepare(&state(1, Half::Top, true)).unwrap();
+    let mut log = Vec::new();
+    for _ in 0..7 {
+        advance(&mut log, &mut before, walk);
+    }
+    assert_eq!(before.score, [4, 0]);
+    advance(&mut log, &mut before, out_pa);
+    assert_eq!(cast.next_change(&before, &log).unwrap(), None);
+    advance(&mut log, &mut before, out_pa);
+    assert!(cast.next_change(&before, &log).unwrap().is_some());
+    let cast = Cast::read_tsv(&cast_text().replace(
+        "workload:start:fierm001\t27,1",
+        "workload:start:fierm001\t18,1",
+    ))
+    .unwrap();
+    for lead in [3, 4] {
+        let mut initial = state(1, Half::Top, true);
+        initial.score[1] = lead;
+        let mut before = cast.prepare(&initial).unwrap();
+        let mut log = Vec::new();
+        for _ in 0..36 {
+            advance(&mut log, &mut before, out_pa);
+        }
+        assert_eq!(
+            cast.next_change(&before, &log).unwrap().is_some(),
+            lead == 3
+        );
+        if lead == 4 {
+            for _ in 0..6 {
+                advance(&mut log, &mut before, out_pa);
+            }
+            assert!(cast.next_change(&before, &log).unwrap().is_some());
+        }
+    }
+}
+
+fn empirical_text() -> String {
+    let old = cast_text();
+    let mut text = old
+        .replace("closed-pitching-cast-v1", "closed-pitching-cast-v2")
+        .replace("pa-mean-closed-cast-v1", "empirical-pa-closed-cast-v2");
+    for line in old.lines().filter_map(|s| s.strip_prefix("workload:")) {
+        let (key, value) = line.split_once('\t').unwrap();
+        text.push_str(&format!(
+            "usage:{key}\t{}\n",
+            value.split(',').next().unwrap()
+        ));
+    }
+    text
+}
+
+#[test]
+fn empirical_sample_endpoints_reconcile_and_use_one_supplied_entry_word() {
+    let text = empirical_text()
+        .replace(
+            "workload:start:fierm001\t27,1",
+            "workload:start:fierm001\t6,3",
+        )
+        .replace(
+            "usage:start:fierm001\t27\n",
+            "usage:start:fierm001\t0,2,4\n",
+        );
+    let cast = Cast::read_tsv(&text).unwrap();
+    assert_eq!(full_manager::POLICY_VERSION, "workload-context-2019-v2");
+    assert!(cast.workload_mode().starts_with("empirical"));
+    assert!(self::cast().workload_mode().contains("v1 fallback"));
+    let mut before = cast.prepare(&state(1, Half::Top, true)).unwrap();
+    let mut log = Vec::new();
+    advance(&mut log, &mut before, out_pa);
+    assert!(cast
+        .next_change_with_word(&before, &log, 0)
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        cast.next_change_with_word(&before, &log, u64::MAX).unwrap(),
+        None
+    );
+    advance(&mut log, &mut before, out_pa);
+    assert!(cast
+        .next_change_with_word(&before, &log, 1 << 63)
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        cast.next_change_with_word(&before, &log, u64::MAX).unwrap(),
+        None
+    );
+    for bad in ["0,2", "0,2,5", "4,2,0", "-", "0,2,18446744073709551616"] {
+        assert!(
+            Cast::read_tsv(&text.replace(
+                "usage:start:fierm001\t0,2,4",
+                &format!("usage:start:fierm001\t{bad}")
+            ))
+            .is_err(),
+            "{bad}"
+        );
+    }
+    assert!(Cast::read_tsv(&text.replace("usage:start:fierm001\t0,2,4\n", "")).is_err());
+    assert!(Cast::read_tsv(&text.replace("usage:start:fierm001", "usage:start:unknown")).is_err());
+    assert!(
+        Cast::read_tsv(&text.replace("closed-pitching-cast-v2", "closed-pitching-cast-v1"))
+            .is_err()
+    );
+}
+
 #[test]
 fn loader_checks_pinned_provenance_structure_and_only_exposes_cast_names() {
     let text = tsv(
@@ -334,7 +522,9 @@ fn prepare_adds_only_recorded_nonstarters_and_rejects_personnel_conflicts() {
 #[test]
 fn pitch_changes_use_logged_pa_only_keep_runner_charges_and_obey_relief_threshold() {
     let cast = cast();
-    let mut before = cast.prepare(&state(1, Half::Top, true)).unwrap();
+    let mut initial = state(1, Half::Top, true);
+    initial.score[1] = 100; // Isolate workload counting from the struggling-start hook.
+    let mut before = cast.prepare(&initial).unwrap();
     let mut log = Vec::new();
     for _ in 0..26 {
         advance(&mut log, &mut before, walk);
@@ -413,7 +603,7 @@ fn pitch_changes_use_logged_pa_only_keep_runner_charges_and_obey_relief_threshol
 }
 
 #[test]
-fn boundary_change_starts_in_seventh_and_no_reserve_keeps_current_pitcher() {
+fn seventh_inning_boundary_alone_does_not_hook_and_exhaustion_keeps_current() {
     let cast = cast();
     let mut before = cast.prepare(&state(6, Half::Bottom, true)).unwrap();
     let mut log = Vec::new();
@@ -421,15 +611,7 @@ fn boundary_change_starts_in_seventh_and_no_reserve_keeps_current_pitcher() {
         advance(&mut log, &mut before, out_pa);
     }
     assert_eq!((before.inning, before.half), (7, Half::Top));
-    assert_eq!(
-        cast.next_change(&before, &log)
-            .unwrap()
-            .unwrap()
-            .after()
-            .teams[1]
-            .pitcher,
-        "dullr001"
-    );
+    assert_eq!(cast.next_change(&before, &log).unwrap(), None);
 
     let starters_only = Cast::read_tsv(&tsv(
         &[("gonzm005", "Marco Gonzales")],
@@ -454,11 +636,15 @@ fn boundary_change_starts_in_seventh_and_no_reserve_keeps_current_pitcher() {
 
 #[test]
 fn no_dh_pitcher_change_replaces_the_pitching_batting_slot() {
-    let cast = cast();
-    let mut before = cast.prepare(&state(6, Half::Bottom, false)).unwrap();
+    let cast = Cast::read_tsv(&cast_text().replace(
+        "workload:start:fierm001\t27,1",
+        "workload:start:fierm001\t1,1",
+    ))
+    .unwrap();
+    let mut before = cast.prepare(&state(1, Half::Top, false)).unwrap();
     let mut log = Vec::new();
-    for _ in 0..3 {
-        advance(&mut log, &mut before, out_pa);
+    for _ in 0..2 {
+        advance(&mut log, &mut before, walk);
     }
     let transition = cast.next_change(&before, &log).unwrap().unwrap();
     assert_eq!(transition.after().teams[1].pitcher, "dullr001");

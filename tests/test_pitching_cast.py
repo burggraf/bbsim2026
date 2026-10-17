@@ -48,6 +48,24 @@ class CastTests(unittest.TestCase):
         self.assertIn('workload:relief:hr3\t0,1\n',text);self.assertIn('pitcher:hr3\t0,0,0,0,0,0,0,0,0\n',text)
         self.assertIn('availability_basis\trecorded nonstarters assumed available at start; not verified eligibility\n',text)
         self.assertNotIn('probabilities\t',text);self.assertEqual(p,before)
+    def test_empirical_export_retains_training_outings_zero_counts_and_legacy_bytes(self):
+        p=parts();legacy=cast.encode(*p);before=copy.deepcopy(p)
+        text=cast.encode(*p,empirical=True)
+        self.assertIn('format\tclosed-pitching-cast-v2\n',text)
+        self.assertIn('policy\tempirical-pa-closed-cast-v2\n',text)
+        self.assertIn('usage:start:ap\t26\n',text)
+        self.assertIn('usage:relief:ap\t-\n',text)
+        self.assertIn('usage:relief:ar0\t0,8\n',text)
+        self.assertIn('usage:relief:hr3\t0\n',text)
+        self.assertEqual(p,before)
+        for player in p[3]['players']:
+            player['outing_rows'].append(dict(game_id='held-out-'+player['player_id'], role='start',training=False,terminal_pa=999))
+            player['outing_rows'].reverse()
+        self.assertEqual(cast.encode(*p,empirical=True),text)
+        self.assertEqual(cast.encode(*p),legacy)
+        for line in legacy.splitlines():
+            if not line.startswith(('format\t','policy\t')):self.assertIn(line+'\n',text)
+
     def test_exact_rational_longer_first_order_and_stable_id_ties(self):
         text=cast.encode(*parts());rows=[line.split('\t')[0].split(':')[-1] for line in text.splitlines() if line.startswith('cast:Away:')]
         self.assertEqual(rows,['ap','ar0','ar1','ar3','ar2'])
@@ -89,6 +107,10 @@ class CastTests(unittest.TestCase):
             with patch.object(ratings,'REPORT_SHA',pins[0]),patch.object(real,'REPORT_SHA',pins[1]),patch.object(cast,'BULLPEN_SHA',pins[2]),patch.object(cast,'WORKLOAD_SHA',pins[3]):
                 text=cast.export(*inputs,root/'first');repeat=cast.export(*inputs,root/'repeat')
                 self.assertEqual(text,repeat);self.assertEqual((root/'first').read_bytes(),text.encode())
+                empirical=cast.export(*inputs,root/'empirical',empirical=True)
+                self.assertEqual(empirical,cast.export(*inputs,root/'empirical-repeat',empirical=True))
+                self.assertIn('format\tclosed-pitching-cast-v2\n',empirical)
+                self.assertEqual((root/'empirical').read_bytes(),empirical.encode())
             self.assertEqual(tuple(real.digest(p) for p in inputs),pins)
     def test_cli_is_explicit_and_existing_output_never_succeeds_silently(self):
         import subprocess,sys

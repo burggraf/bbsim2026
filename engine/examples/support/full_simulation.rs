@@ -605,6 +605,9 @@ pub fn simulate_with_probabilities(
         None => initial.clone(),
     };
     let mut rng = Rng::new(seed);
+    // Manager draws must not consume or shift the outcome RNG stream.
+    let mut manager_rng = Rng::new(seed ^ 0x6d61_6e61_6765_7232);
+    let mut entries: [(String, u64); 2] = std::array::from_fn(|_| (String::new(), 0));
     let mut steps = Vec::new();
     let mut draws = Vec::new();
     let mut log = Vec::new();
@@ -614,8 +617,12 @@ pub fn simulate_with_probabilities(
                 "seed {seed}: explicit 10000-event resource limit; no winner fabricated"
             ));
         }
+        let side = 1 - state.half.offense();
+        if cast.is_some() && entries[side].0 != state.teams[side].pitcher {
+            entries[side] = (state.teams[side].pitcher.clone(), manager_rng.next_u64());
+        }
         let step = if let Some(change) = cast
-            .map(|cast| cast.next_change(&state, &log))
+            .map(|cast| cast.next_change_with_word(&state, &log, entries[side].1))
             .transpose()?
             .flatten()
         {

@@ -191,3 +191,14 @@ WP/PB unit. With no before-runners choose safe reach/recovered hold .50/.50. The
 new conditional weights resolve previously unspecified child policy, not fitted
 rates or acceptance tolerances. All eligible recovered advances use the new typed
 native chronology; missing/invalid chronology refuses rather than becoming HOLD.
+
+## 2026-10-17 — manager v2 supersedes the initial fixed hook
+
+The initial27/6PA/seventh-boundary manager policy above is superseded for the
+complete text game by [workload/context v2](text-game-manager-v2.md). Seed67
+exposed an unconditional6IP hook despite18BF/0H/0BB; this correction uses the
+already-audited individual role workloads and bounded, explicitly provisional
+context rules. No PA probabilities, scientific tolerances or historical records
+are retuned. V1 cast bytes remain supported as an individual-mean fallback; an
+explicit empirical v2 export adds training outing spread. Actual verification
+and remaining fidelity limits are tracked only in [PROGRESS](../PROGRESS.md).

@@ -1,7 +1,7 @@
 //! Bounded pitching changes from one explicitly assumed, recorded cast.
 use bbsim_engine::{
-    apply, Delta, Event, EventKind, EventTransition, FieldingReview, GameState, Participants,
-    PersonnelChange, TeamSide,
+    accounting::derive_accounting, apply, Delta, Event, EventKind, EventTransition, FieldingReview,
+    GameState, Participants, PersonnelChange, TeamSide,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -28,6 +28,26 @@ const SOURCE_CAST: [&[(&str, &str)]; 2] = [
     ],
 ];
 
+pub const POLICY_VERSION: &str = "workload-context-2019-v2";
+
+#[derive(Clone, Debug)]
+struct Workload {
+    pa_sum: u64,
+    outings: u64,
+    samples: Option<Vec<u64>>,
+}
+impl Workload {
+    fn mean_limit(&self) -> u64 {
+        self.pa_sum.div_ceil(self.outings).max(1)
+    }
+    fn budget(&self, word: u64) -> u64 {
+        self.samples.as_ref().map_or_else(
+            || self.mean_limit(),
+            |samples| samples[((u128::from(word) * samples.len() as u128) >> 64) as usize].max(1),
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Pitcher {
     id: String,
@@ -40,6 +60,8 @@ pub struct Cast {
     teams: [Vec<Pitcher>; 2],
     names: BTreeMap<String, String>,
     ability_counts: BTreeMap<String, [u64; 9]>,
+    workloads: BTreeMap<(String, bool), Workload>,
+    empirical: bool,
 }
 
 impl Cast {
@@ -82,6 +104,14 @@ impl Cast {
             }
         }
 
+        let empirical = match (
+            fields.remove("format").as_deref(),
+            fields.remove("policy").as_deref(),
+        ) {
+            (Some("closed-pitching-cast-v1"), Some("pa-mean-closed-cast-v1")) => false,
+            (Some("closed-pitching-cast-v2"), Some("empirical-pa-closed-cast-v2")) => true,
+            _ => return Err("unsupported pitching cast format/policy".into()),
+        };
         for (key, expected) in [
             ("attribution", ATTRIBUTION),
             ("availability_basis", AVAILABILITY),
@@ -90,7 +120,6 @@ impl Cast {
                 "758186cceb67815573e7e109763f7be7d5e57b9ec9583bc8a3cca299d39edc88",
             ),
             ("exhaustion", "last_pitcher_stays"),
-            ("format", "closed-pitching-cast-v1"),
             (
                 "league_counts",
                 "42823,15142,1984,25947,8531,785,6776,1470,82245",
@@ -108,7 +137,6 @@ impl Cast {
                 "opportunity_report_sha256",
                 "382be5a84b3e95687e6356b00d3b1b68522f41a5c2a6a065daf876a5a4c6881e",
             ),
-            ("policy", "pa-mean-closed-cast-v1"),
             (
                 "snapshot_sha256",
                 "d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528",
@@ -133,7 +161,8 @@ impl Cast {
         let mut cast_rows: [Vec<(usize, Pitcher)>; 2] = std::array::from_fn(|_| Vec::new());
         let mut ability_counts = BTreeMap::new();
         let mut pitcher_profiles = BTreeSet::new();
-        let mut workload_profiles = BTreeSet::new();
+        let mut workloads = BTreeMap::new();
+        let mut usage = BTreeMap::new();
         for (key, value) in fields {
             let parts = key.split(':').collect::<Vec<_>>();
             match parts.as_slice() {
@@ -171,10 +200,38 @@ impl Cast {
                     }
                 }
                 ["workload", role, id] if ["start", "relief"].contains(role) && valid_id(id) => {
-                    numeric_fields(&value, 2)?;
-                    if !workload_profiles.insert(((*id).to_owned(), (*role).to_owned())) {
+                    let numbers = numeric_fields(&value, 2)?;
+                    let (pa_sum, outings) = (numbers[0], numbers[1]);
+                    if pa_sum > 1 << 52 || outings > 2429 || (outings == 0 && pa_sum != 0) {
+                        return Err("invalid pitcher workload sum/denominator".into());
+                    }
+                    if workloads
+                        .insert(
+                            ((*id).to_owned(), *role == "start"),
+                            Workload {
+                                pa_sum,
+                                outings,
+                                samples: None,
+                            },
+                        )
+                        .is_some()
+                    {
                         return Err("duplicate pitcher workload profile".into());
                     }
+                }
+                ["usage", role, id]
+                    if empirical && ["start", "relief"].contains(role) && valid_id(id) =>
+                {
+                    let samples = if value == "-" {
+                        Vec::new()
+                    } else {
+                        let n = value.split(',').count();
+                        if n > 2429 {
+                            return Err("too many workload samples".into());
+                        }
+                        numeric_fields(&value, n)?
+                    };
+                    usage.insert(((*id).to_owned(), *role == "start"), samples);
                 }
                 _ => return Err("unknown pitching cast field".into()),
             }
@@ -208,20 +265,42 @@ impl Cast {
             .collect::<BTreeSet<_>>();
         let expected_workloads = cast_ids
             .iter()
-            .flat_map(|id| {
-                [
-                    (id.clone(), "start".to_owned()),
-                    (id.clone(), "relief".to_owned()),
-                ]
-            })
+            .flat_map(|id| [(id.clone(), true), (id.clone(), false)])
             .collect::<BTreeSet<_>>();
-        if pitcher_profiles != cast_ids || workload_profiles != expected_workloads {
+        if pitcher_profiles != cast_ids
+            || workloads.keys().cloned().collect::<BTreeSet<_>>() != expected_workloads
+        {
             return Err("pitcher profiles do not match recorded cast".into());
+        }
+        if empirical {
+            if usage.keys().cloned().collect::<BTreeSet<_>>() != expected_workloads {
+                return Err("usage profiles do not match recorded cast".into());
+            }
+            for (key, samples) in usage {
+                let workload = workloads.get_mut(&key).expect("verified workload key");
+                if samples.len() as u64 != workload.outings
+                    || samples.iter().map(|n| u128::from(*n)).sum::<u128>()
+                        != u128::from(workload.pa_sum)
+                    || !samples.windows(2).all(|pair| pair[0] <= pair[1])
+                {
+                    return Err("usage samples do not reconcile with role workload".into());
+                }
+                workload.samples = Some(samples);
+            }
+        }
+        for team in &teams {
+            for (rank, pitcher) in team.iter().enumerate() {
+                if workloads[&(pitcher.id.clone(), rank == 0)].outings == 0 {
+                    return Err("missing selected pitcher workload role".into());
+                }
+            }
         }
         Ok(Self {
             teams,
             names,
             ability_counts,
+            workloads,
+            empirical,
         })
     }
 
@@ -290,11 +369,30 @@ impl Cast {
         Ok(prepared)
     }
 
-    /// Decide before the next event, using only the current accepted transition log.
+    pub fn workload_mode(&self) -> &'static str {
+        if self.empirical {
+            "empirical training outing budgets"
+        } else {
+            "individual role means (v1 fallback; no empirical spread)"
+        }
+    }
+
+    /// Compatibility caller: a supplied zero word selects the first empirical outing.
+    #[allow(dead_code)]
     pub fn next_change(
         &self,
         before: &GameState,
         log: &[EventTransition],
+    ) -> Result<Option<EventTransition>, String> {
+        self.next_change_with_word(before, log, 0)
+    }
+
+    /// Decide before the next event; the caller keeps one manager word per entry.
+    pub fn next_change_with_word(
+        &self,
+        before: &GameState,
+        log: &[EventTransition],
+        usage_word: u64,
     ) -> Result<Option<EventTransition>, String> {
         if before.over {
             return Ok(None);
@@ -320,13 +418,44 @@ impl Cast {
                     )
             })
             .count();
-        let target = if role == 0 { 27 } else { 6 };
-        let half_boundary = log.last().is_some_and(|last| {
-            last.after() == before
-                && (last.before().inning != before.inning || last.before().half != before.half)
-        });
-        if pa_count < target && !(before.inning >= 7 && half_boundary) {
+        let workload = &self.workloads[&(team.pitcher.clone(), role == 0)];
+        let mut target = workload.budget(usage_word);
+        let runs: u64 = log
+            .iter()
+            .filter(|t| t.event().participants.pitcher == team.pitcher)
+            .map(|t| u64::from(t.event().delta.runs))
+            .sum();
+        let lead = i64::from(before.score[side]) - i64::from(before.score[1 - side]);
+        let struggling = role == 0 && pa_count >= 9 && runs >= 4 && lead <= 0;
+        if !struggling && (pa_count as u64) < target {
             return Ok(None);
+        }
+        if role == 0 && runs == 0 && !struggling {
+            if lead > 3 {
+                target += 3;
+            }
+            let complete_origin = log.first().is_some_and(|t| {
+                let s = t.before();
+                s.inning == 1
+                    && s.half == bbsim_engine::Half::Top
+                    && s.outs == 0
+                    && s.bases.iter().all(Option::is_none)
+                    && s.score == [0, 0]
+            });
+            if complete_origin && !log.is_empty() {
+                let stats = derive_accounting(log)
+                    .map_err(|e| format!("manager accounting refused: {e:?}"))?;
+                if stats.pitchers[side]
+                    .get(&team.pitcher)
+                    .is_some_and(|p| p.classified_hits_allowed == Some(0))
+                {
+                    target =
+                        target.max((3 * workload.pa_sum).div_ceil(2 * workload.outings).max(1));
+                }
+            }
+            if (pa_count as u64) < target {
+                return Ok(None);
+            }
         }
         let Some(incoming) = pitchers.iter().skip(1).find(|pitcher| {
             team.bench.contains(&pitcher.id) && !team.removed.contains(&pitcher.id)

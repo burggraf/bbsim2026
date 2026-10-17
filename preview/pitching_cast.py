@@ -16,7 +16,7 @@ AVAILABILITY='recorded nonstarters assumed available at start; not verified elig
 publish=ratings.publish  # Existing fsync/exclusive-link/final-reread implementation.
 
 
-def encode(report,witness,bullpen,workloads):
+def encode(report,witness,bullpen,workloads,*,empirical=False):
     fields=dict(line.split('\t') for line in ratings.encode(report,witness).splitlines()[1:])
     if (bullpen['format']!='2019-bullpen-readiness-v1' or bullpen['game_id']!=witness['game_id']
             or bullpen['pregame_bullpen_status']!='unsupported' or workloads['format']!='2019-pitcher-workload-v1'
@@ -89,17 +89,23 @@ def encode(report,witness,bullpen,workloads):
         ordered=[starter]+sorted(set(ids)-{starter},key=lambda pid:(-means[pid],pid))
         for rank,pid in enumerate(ordered):fields[f'cast:{side}:{rank}:{pid}']=names[pid]
     if set(observed)!=selected or len(selected)!=12:raise ValueError('Missing/extra closed-cast workload identities')
+    if empirical:
+        fields.update(format='closed-pitching-cast-v2',policy='empirical-pa-closed-cast-v2')
+        for pid,p in observed.items():
+            for role in ['start','relief']:
+                samples=sorted(o['terminal_pa'] for o in p['outing_rows'] if o['training'] and o['role']==role)
+                fields[f'usage:{role}:{pid}']=','.join(map(str,samples)) if samples else '-'
     return 'key\tvalue\n'+''.join(real.literal(k)+'\t'+real.literal(v)+'\n' for k,v in sorted(fields.items()))
 
 
-def export(report,lineup,bullpen,workloads,output):
+def export(report,lineup,bullpen,workloads,output,*,empirical=False):
     if output.exists():raise ValueError('Refusing to overwrite pitching cast output')
     if output.resolve().is_relative_to(Path(__file__).resolve().parents[1]):raise ValueError('Cast output must be outside repository')
     inputs=(report,lineup,bullpen,workloads);pins=tuple(real.digest(p) for p in inputs)
     if pins!=(ratings.REPORT_SHA,real.REPORT_SHA,BULLPEN_SHA,WORKLOAD_SHA):raise ValueError('Unsupported pitching cast input digest')
     r,l,b,w=(json.loads(p.read_text(),object_pairs_hook=unique_object) for p in inputs)
     if l['format']!='2019-lineup-readiness-v1':raise ValueError('Unsupported pitching lineup report')
-    text=encode(r,l['witnesses']['primary'],b,w)
+    text=encode(r,l['witnesses']['primary'],b,w,empirical=empirical)
     publish(text,inputs,pins,output)
     return text
 
@@ -107,7 +113,8 @@ def export(report,lineup,bullpen,workloads,output):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ['report','lineup','bullpen','workloads','output']:parser.add_argument(name,type=Path)
-    args=parser.parse_args();text=export(args.report,args.lineup,args.bullpen,args.workloads,args.output)
+    parser.add_argument('--empirical',action='store_true',help='Export v2 training-outing budgets for the complete-game manager')
+    args=parser.parse_args();text=export(args.report,args.lineup,args.bullpen,args.workloads,args.output,empirical=args.empirical)
     print(f'Exported30 ability vectors and12 pitcher workloads: {len(text.encode())} bytes; SHA256 {real.digest(args.output)}')
 
 
