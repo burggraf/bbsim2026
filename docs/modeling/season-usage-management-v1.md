@@ -175,6 +175,32 @@ No new dependency, UI, injury generator, exact-usage quota, outcome-model refit 
 source-data repair is needed for this scope. Roster/stint coverage remains an
 evidence requirement, not a reason to invent eligibility or claim fidelity.
 
+## Approved first delivery and availability decision
+
+Interview `b10ff106-df5f-409b-89c0-ec8bd811a033`: the user requires verified dated
+roster inputs before autonomous selection, and approves the ledger plus historical-
+lineup comparison first. Therefore phases 1–2 are the current delivery; phases 3–5
+remain blocked/deferred. Do not introduce inferred roster windows to bypass this.
+The first comparison measures the existing historical-lineup/closed-cast manager,
+not an implemented season-pace policy or a managed full season. Implementation,
+retained failures and measured results are in
+[the observational ledger report](season-usage-ledger-v1-results.md).
+
+Read-only source audit `/tmp/bbsim-season-usage-source-v1/` finds186,517 credited PA
+and130,270 active-pitcher outs (936 on non-PA events). Sixteen mid-PA responsibility
+switches mean terminal-participant rating profiles are not credited PA targets.
+Preserve the62-credit sacrifice discrepancy. Suspended-game participants can carry
+the original start date despite later arrival; Diekman's KCA/OAK2019-05-19 collision
+shows why observation bounds cannot establish actual dated membership.
+
+An observational ledger may record an explicit refused/failed schedule entry and
+continue collecting later completed games, but that operation changes neither
+usage nor completed-game clocks. It must mark history incomplete, preserve the gap
+and refuse to present it as complete rest/availability context. Unrecorded gaps
+still refuse chronological acceptance. Compare only source targets for accepted
+IDs; always disclose excluded IDs and matched coverage. This is not authorization
+for a stateful selection policy to continue through unknown workload history.
+
 ## Preregistered development settings — before usage-policy comparisons
 
 The user authorizes implementation and historical-usage testing. These initial

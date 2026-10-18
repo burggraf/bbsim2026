@@ -215,6 +215,15 @@ class UsageLedgerTests(unittest.TestCase):
         self.assertEqual(report['coverage']['actual_only'],1)
         self.assertEqual(report['coverage']['sim_only'],1)
 
+    def test_headline_compared_denominator_does_not_turn_unknown_into_failure(self):
+        e=game();ledger=Ledger([e]);ledger.accept(e,parsed(e),SHA);t=targets()
+        t['records'][0].update(player_id='actual-only',usage=100);t['totals']['pa']=127
+        headline=ledger.compare(t)['headline']['batter']
+        self.assertEqual(headline['count'],0)
+        self.assertEqual(headline['eligible_count'],1)
+        self.assertEqual(headline['uncompared_count'],1)
+        self.assertIsNone(headline['fraction']);self.assertIsNone(headline['passed'])
+
     def test_frozen_eighty_percent_boundary_and_aggregate_failures(self):
         games=[game(f'LAN2019040{i}0',f'2019-04-0{i}') for i in range(1,5)]
         ledger=Ledger(games);t=targets(games)

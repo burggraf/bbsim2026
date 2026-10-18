@@ -130,9 +130,9 @@ class Ledger:
                         or not set(batters)<=set(entry['role_actors'][side]['batter'])
                         or pitcher not in entry['role_actors'][side]['pitcher']):
                     raise ValueError('Invalid selected starters')
-                for role,ids in [('batter',batters),('pitcher',[pitcher])]:
-                    appeared={p['player_id'] for p in result['players'] if p['team_id']==tid and p['role']==role}
-                    if not set(ids)<=appeared:raise ValueError('Missing starting actor accounting')
+                # A selected batter can be replaced before his first PA; never invent an appearance.
+                appeared={p['player_id'] for p in result['players'] if p['team_id']==tid and p['role']=='pitcher'}
+                if pitcher not in appeared:raise ValueError('Missing starting pitcher accounting')
             accepted=deepcopy(dict(entry=entry,result=result,receipt_sha256=receipt_sha256,payload=payload))
         except (KeyError,TypeError,AttributeError,OverflowError) as error:raise ValueError('Invalid usage acceptance payload') from error
         self._accepted[gid]=accepted
@@ -228,11 +228,12 @@ class Ledger:
         for role,minimum,metric in [('batter',100,'pa'),('pitcher',60,'outs')]:
             role_rows=[r for r in rows if r['role']==role]
             eligible=[r for r in role_rows if r['actual'] is not None and r['actual']>=minimum]
-            within=sum(r['within_band'] is True for r in eligible)
+            compared=[r for r in eligible if r['deviation'] is not None]
+            within=sum(r['within_band'] is True for r in compared)
             headline[role]=dict(minimum_actual=minimum,required_fraction=0.8,
                 absolute_allowance=20 if role=='batter' else 18,relative_allowance=0.25 if role=='batter' else 0.30,
-                count=len(eligible),within=within,
-                fraction=within/len(eligible) if eligible else None,passed=within/len(eligible)>=0.8 if eligible else None)
+                eligible_count=len(eligible),uncompared_count=len(eligible)-len(compared),count=len(compared),within=within,
+                fraction=within/len(compared) if compared else None,passed=within/len(compared)>=0.8 if compared else None)
             bands[role]={band:dict(count=0,compared=0,within=0) for band in BANDS[role]}
             for r in role_rows:
                 n=r['actual'];band=('unknown' if n is None else '0' if n==0 else
