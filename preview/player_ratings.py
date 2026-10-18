@@ -15,8 +15,17 @@ COUNTS = (42823, 15142, 1984, 25947, 8531, 785, 6776, 1470, 82245)
 KAPPA = 200
 
 
-def encode(report, witness):
-    real.encode_witness(witness)  # Preserve the accepted starting-identity contract.
+def count_vector(profile):
+    counts=profile['counts']
+    if (set(counts)!=set(KEYS) or type(profile['included_pa']) is not int
+            or any(type(counts[k]) is not int or not 0<=counts[k]<=cap for k,cap in zip(KEYS,COUNTS))
+            or sum(counts.values())!=profile['included_pa']):
+        raise ValueError('Invalid player role count conservation')
+    return ','.join(str(counts[k]) for k in KEYS)
+
+
+def encode(report, witness, *, generic=False):
+    real.encode_witness(witness,generic=generic)  # Preserve the accepted starting-identity contract.
     if (report['format'] != '2019-player-opportunity-support-v1'
             or report['counts'] != dict(zip(KEYS, COUNTS))
             or report['provenance']['snapshot_sha256'] != real.SNAPSHOT_SHA
@@ -40,14 +49,7 @@ def encode(report, witness):
         for player in sorted(selected):
             if player not in profiles:
                 raise ValueError('Missing starting player role profile')
-            p = profiles[player]
-            counts = p['counts']
-            if (set(counts) != set(KEYS) or type(p['included_pa']) is not int
-                    or any(type(counts[k]) is not int or not 0 <= counts[k] <= maximum
-                           for k, maximum in zip(KEYS, COUNTS))
-                    or sum(counts.values()) != p['included_pa']):
-                raise ValueError('Invalid player role count conservation')
-            fields[f'{role}:{player}'] = ','.join(str(counts[k]) for k in KEYS)
+            fields[f'{role}:{player}'] = count_vector(profiles[player])
     return 'key\tvalue\n' + ''.join(real.literal(k)+'\t'+real.literal(v)+'\n' for k,v in fields.items())
 
 

@@ -11,13 +11,17 @@ from preview import real_lineup as real
 
 BULLPEN_SHA='758186cceb67815573e7e109763f7be7d5e57b9ec9583bc8a3cca299d39edc88'
 WORKLOAD_SHA='125768bd82ce54ead277d92301fbb7434e823a8fc4432777087c15b8e46ad2f9'
+WORKLOAD_RECIPE_SHA='512f542cee70c5824c6fff92f1278b51aad2be6a5a066db18b306091a3fae48f'
+EVENTS_SHA='ea3fd660ac87deb02c61cddf28977db59f85f9a88f77aaabc0c07ba0f1831d1a'
 POLICY='pa-mean-closed-cast-v1'
 AVAILABILITY='recorded nonstarters assumed available at start; not verified eligibility'
 publish=ratings.publish  # Existing fsync/exclusive-link/final-reread implementation.
 
 
-def encode(report,witness,bullpen,workloads,*,empirical=False):
-    fields=dict(line.split('\t') for line in ratings.encode(report,witness).splitlines()[1:])
+def encode(report,witness,bullpen,workloads,*,empirical=False,generic=False):
+    if generic and (not empirical or any(bullpen.get('target_unknown_fields',{}).values())):
+        raise ValueError('Generic cast requires empirical workloads and known appearances')
+    fields=dict(line.split('\t') for line in ratings.encode(report,witness,generic=generic).splitlines()[1:])
     if (bullpen['format']!='2019-bullpen-readiness-v1' or bullpen['game_id']!=witness['game_id']
             or bullpen['pregame_bullpen_status']!='unsupported' or workloads['format']!='2019-pitcher-workload-v1'
             or workloads['game_id']!=witness['game_id'] or workloads['basis']!=workload.BASIS):
@@ -25,7 +29,11 @@ def encode(report,witness,bullpen,workloads,*,empirical=False):
     for k,v in dict(snapshot_sha256=real.SNAPSHOT_SHA,supplement_sha256=real.SUPPLEMENT_SHA,
             opportunity_report_sha256=ratings.REPORT_SHA,lineup_report_sha256=real.REPORT_SHA,
             bullpen_report_sha256=BULLPEN_SHA,attribution=real.ATTRIBUTION).items():
-        if workloads['provenance'].get(k)!=v:raise ValueError('Unsupported pitching workload provenance')
+        if not (generic and k=='bullpen_report_sha256') and workloads['provenance'].get(k)!=v:
+            raise ValueError('Unsupported pitching workload provenance')
+    if generic and any(workloads['provenance'].get(k)!=v for k,v in
+            dict(workload_recipe_sha256=WORKLOAD_RECIPE_SHA,outcome_events_sha256=EVENTS_SHA).items()):
+        raise ValueError('Unsupported generic workload provenance')
     profiles={}
     for p in report['roles']['pitcher']['profiles']:
         pid=real.literal(p['player_id'])
@@ -46,17 +54,20 @@ def encode(report,witness,bullpen,workloads,*,empirical=False):
         team=next(t for t in bullpen['teams'] if t['side']==side)
         initial=next(t for t in witness['teams'] if t['side']==side)
         facts=team['observed_pitchers'];ids=[p['player_id'] for p in facts];starter=initial['pitcher_id']
+        if generic:team_id,n=initial['team_id'],len(facts)
+        if not 1<=n<=50:raise ValueError('Invalid closed pitching cast size')
         if (team['team_id']!=team_id or team['starter_id']!=starter or len(ids)!=n or len(set(ids))!=n
                 or starter not in ids or set(team['observed_nonstarter_pitcher_ids'])!=set(ids)-{starter}
                 or len(team['observed_nonstarter_pitcher_ids'])!=n-1):raise ValueError('Invalid closed pitching cast')
         means={};names={}
         for fact in facts:
             pid=real.literal(fact['player_id']);name=real.literal(fact['name'])
-            if (not re.fullmatch('[a-z0-9]+',pid) or pid in selected or fact['eligible_at_start'] is not None
+            if (not re.fullmatch('[a-z0-9-]+' if generic else '[a-z0-9]+',pid) or pid in selected or fact['eligible_at_start'] is not None
                     or (pid in starting and (pid!=starter or starting[pid]!=name))):raise ValueError('Invalid pitching identity/name/eligibility')
             selected.add(pid);names[pid]=name
             if pid not in profiles or pid not in observed:raise ValueError('Missing pitcher ability/workload profile')
             ability=profiles[pid];counts=ability['counts'];p=observed[pid];copied=p['ability_profile']
+            if generic and p['issues']:raise ValueError('Unresolved pitcher workload issues')
             if (not isinstance(copied,dict) or type(copied.get('included_pa')) is not int
                     or set(copied.get('counts',{}))!=set(ratings.KEYS)
                     or any(type(copied['counts'][k]) is not int for k in ratings.KEYS)
@@ -88,13 +99,23 @@ def encode(report,witness,bullpen,workloads,*,empirical=False):
                 if kind==role:means[pid]=Fraction(s,g)
         ordered=[starter]+sorted(set(ids)-{starter},key=lambda pid:(-means[pid],pid))
         for rank,pid in enumerate(ordered):fields[f'cast:{side}:{rank}:{pid}']=names[pid]
-    if set(observed)!=selected or len(selected)!=12:raise ValueError('Missing/extra closed-cast workload identities')
+    if set(observed)!=selected or (not generic and len(selected)!=12):raise ValueError('Missing/extra closed-cast workload identities')
     if empirical:
         fields.update(format='closed-pitching-cast-v2',policy='empirical-pa-closed-cast-v2')
         for pid,p in observed.items():
             for role in ['start','relief']:
                 samples=sorted(o['terminal_pa'] for o in p['outing_rows'] if o['training'] and o['role']==role)
                 fields[f'usage:{role}:{pid}']=','.join(map(str,samples)) if samples else '-'
+    if generic:
+        fields.pop('workload_report_sha256');fields.pop('bullpen_report_sha256')
+        fields.update(format='closed-pitching-cast-v3',game_id=witness['game_id'],
+            cast_sizes=','.join(str(len(next(t for t in bullpen['teams'] if t['side']==side)['observed_pitchers'])) for side in ['Away','Home']),
+            workload_recipe_sha256=WORKLOAD_RECIPE_SHA,outcome_events_sha256=EVENTS_SHA)
+        if not witness['use_dh']:
+            batters={p['player_id']:p for p in report['roles']['batter']['profiles']}
+            for pid in sorted(selected):
+                if pid not in batters:raise ValueError('Missing incoming pitcher batting profile')
+                fields['batter:'+pid]=ratings.count_vector(batters[pid])
     return 'key\tvalue\n'+''.join(real.literal(k)+'\t'+real.literal(v)+'\n' for k,v in sorted(fields.items()))
 
 

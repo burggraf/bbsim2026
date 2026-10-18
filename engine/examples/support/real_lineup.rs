@@ -19,6 +19,13 @@ struct Player {
 }
 pub struct Lineup {
     players: [Vec<Player>; 2],
+    generic: bool,
+    use_dh: bool,
+    game_id: String,
+    date: String,
+    park_id: String,
+    team_names: [String; 2],
+    team_labels: [String; 2],
 }
 impl Lineup {
     pub fn read_tsv(text: &str) -> Result<Self, String> {
@@ -43,16 +50,70 @@ impl Lineup {
                 return Err("duplicate/invalid lineup row".into());
             }
         }
-        if fields.len() != 30 {
-            return Err("missing/unknown lineup fields".into());
-        }
+        let generic = fields.get("format") == Some(&"closed-starting-lineup-v2");
+        let take = |fields: &mut BTreeMap<&str, &str>, key: &str| -> Result<String, String> {
+            fields
+                .remove(key)
+                .map(str::to_owned)
+                .ok_or_else(|| format!("missing lineup {key}"))
+        };
+        let (game_id, date, park_id, team_names, team_labels, use_dh) = if generic {
+            fields.remove("format");
+            let use_dh = match fields.remove("use_dh") {
+                Some("true") => true,
+                Some("false") => false,
+                _ => return Err("invalid lineup DH choice".into()),
+            };
+            let game_id = take(&mut fields, "game_id")?;
+            let date = take(&mut fields, "date")?;
+            let park_id = take(&mut fields, "park_id")?;
+            let names = [
+                take(&mut fields, "away_team")?,
+                take(&mut fields, "home_team")?,
+            ];
+            let labels = [
+                take(&mut fields, "away_team_id")?,
+                take(&mut fields, "home_team_id")?,
+            ];
+            if !valid_date(&date)
+                || labels
+                    .iter()
+                    .any(|id| id.len() != 3 || !id.bytes().all(|b| b.is_ascii_uppercase()))
+                || labels[0] == labels[1]
+                || !matches!(
+                    game_id.strip_prefix(&format!("{}{}", labels[1], date.replace('-', ""))),
+                    Some("0" | "1" | "2")
+                )
+            {
+                return Err("invalid lineup game/date/team identity".into());
+            }
+            (game_id, date, park_id, names, labels, use_dh)
+        } else {
+            if fields.len() != 30 {
+                return Err("missing/unknown lineup fields".into());
+            }
+            for (key, expected) in [
+                ("format", "closed-starting-lineup-v1"),
+                ("game_id", "OAK201903200"),
+                ("date", "2019-03-20"),
+                ("park_id", "TOK01"),
+                ("away_team", "Seattle Mariners"),
+                ("home_team", "Oakland Athletics"),
+            ] {
+                if fields.remove(key) != Some(expected) {
+                    return Err(format!("unsupported lineup {key}"));
+                }
+            }
+            (
+                "OAK201903200".into(),
+                "2019-03-20".into(),
+                "TOK01".into(),
+                ["Seattle Mariners".into(), "Oakland Athletics".into()],
+                ["Seattle".into(), "Oakland".into()],
+                true,
+            )
+        };
         for (key, value) in [
-            ("format", "closed-starting-lineup-v1"),
-            ("game_id", "OAK201903200"),
-            ("date", "2019-03-20"),
-            ("park_id", "TOK01"),
-            ("away_team", "Seattle Mariners"),
-            ("home_team", "Oakland Athletics"),
             ("audit_sha256", REPORT_SHA),
             ("snapshot_sha256", SNAPSHOT_SHA),
             ("supplement_sha256", SUPPLEMENT_SHA),
@@ -61,6 +122,9 @@ impl Lineup {
             if fields.remove(key) != Some(value) {
                 return Err(format!("unsupported lineup {key}"));
             }
+        }
+        if fields.len() != if use_dh { 20 } else { 18 } {
+            return Err("missing/unknown lineup fields".into());
         }
         let mut players: [Vec<Player>; 2] = std::array::from_fn(|_| Vec::new());
         let mut ids = BTreeSet::new();
@@ -85,12 +149,13 @@ impl Lineup {
             let position = number(parts[2])?;
             let id = parts[3];
             if slot > 9
-                || !(1..=10).contains(&position)
-                || (slot == 0) != (position == 1)
+                || !(1..=if use_dh { 10 } else { 9 }).contains(&position)
+                || (use_dh && (slot == 0) != (position == 1))
+                || (!use_dh && slot == 0)
                 || id.is_empty()
                 || !id
                     .bytes()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || (generic && c == b'-'))
                 || !ids.insert(id.to_string())
             {
                 return Err("invalid starting slot/position/identity".into());
@@ -104,28 +169,60 @@ impl Lineup {
         }
         for side in &mut players {
             side.sort_by_key(|p| p.slot);
-            if side.iter().map(|p| p.slot).collect::<Vec<_>>() != (0..10).collect::<Vec<_>>()
-                || side.iter().map(|p| p.position).collect::<BTreeSet<_>>() != (1..=10).collect()
+            if side.iter().map(|p| p.slot).collect::<Vec<_>>()
+                != (if use_dh { 0 } else { 1 }..10).collect::<Vec<_>>()
+                || side.iter().map(|p| p.position).collect::<BTreeSet<_>>()
+                    != (1..=if use_dh { 10 } else { 9 }).collect()
             {
                 return Err("invalid starting slot/position grain".into());
             }
         }
-        Ok(Self { players })
+        Ok(Self {
+            players,
+            generic,
+            use_dh,
+            game_id,
+            date,
+            park_id,
+            team_names,
+            team_labels,
+        })
+    }
+    #[allow(dead_code)] // Shared preview modules do not all consume game metadata.
+    pub fn game_id(&self) -> &str {
+        &self.game_id
+    }
+    #[allow(dead_code)]
+    pub fn is_generic(&self) -> bool {
+        self.generic
+    }
+    #[allow(dead_code)]
+    pub fn date(&self) -> &str {
+        &self.date
+    }
+    #[allow(dead_code)]
+    pub fn team_names(&self) -> [&str; 2] {
+        self.team_names.each_ref().map(String::as_str)
+    }
+    #[allow(dead_code)]
+    pub fn team_labels(&self) -> [&str; 2] {
+        self.team_labels.each_ref().map(String::as_str)
+    }
+    fn dh_slot(&self, side: usize) -> Option<u8> {
+        self.players[side]
+            .iter()
+            .find(|p| p.position == 10)
+            .map(|p| p.slot - 1)
     }
     pub fn initial(&self) -> GameState {
         let team = |side: usize| TeamState {
-            batting_order: std::array::from_fn(|i| self.players[side][i + 1].id.clone()),
+            batting_order: std::array::from_fn(|i| {
+                self.players[side][i + usize::from(self.use_dh)].id.clone()
+            }),
             next_batter: 0,
-            pitcher: self.players[side][0].id.clone(),
-            dh_slot: Some(
-                self.players[side]
-                    .iter()
-                    .find(|p| p.position == 10)
-                    .expect("validated DH")
-                    .slot
-                    - 1,
-            ),
-            dh_must_bat: true,
+            pitcher: self.fielder(side, 1).to_owned(),
+            dh_slot: self.dh_slot(side),
+            dh_must_bat: self.use_dh,
             bench: vec![],
             removed: vec![],
         };
@@ -155,18 +252,10 @@ impl Lineup {
             if team
                 .batting_order
                 .iter()
-                .zip(&players[1..])
+                .zip(players.iter().filter(|p| p.slot != 0))
                 .any(|(id, p)| *id != p.id)
-                || team.pitcher != players[0].id
-                || team.dh_slot
-                    != Some(
-                        players
-                            .iter()
-                            .find(|p| p.position == 10)
-                            .expect("validated DH")
-                            .slot
-                            - 1,
-                    )
+                || team.pitcher != self.fielder(side, 1)
+                || team.dh_slot != self.dh_slot(side)
                 || !team.bench.is_empty()
                 || !team.removed.is_empty()
             {
@@ -227,16 +316,24 @@ impl Lineup {
         self.write_preamble_with_rates(output, false)
     }
     pub fn write_preamble_with_rates(&self, output: &mut dyn Write, rated: bool) -> io::Result<()> {
-        writeln!(output, "LINEUP FORMAT: closed-starting-lineup-v1")?;
-        writeln!(output, "Matchup: OAK201903200 | 2019-03-20 | TOK01")?;
+        writeln!(
+            output,
+            "LINEUP FORMAT: closed-starting-lineup-v{}",
+            if self.generic { 2 } else { 1 }
+        )?;
+        writeln!(
+            output,
+            "Matchup: {} | {} | {}",
+            self.game_id, self.date, self.park_id
+        )?;
         writeln!(output, "Starting witness report SHA256: {REPORT_SHA}")?;
         writeln!(
             output,
             "Snapshot SHA256: {SNAPSHOT_SHA}; supplement SHA256: {SUPPLEMENT_SHA}"
         )?;
         for (side, team, players) in [
-            ("Away", "Seattle Mariners", &self.players[0]),
-            ("Home", "Oakland Athletics", &self.players[1]),
+            ("Away", &self.team_names[0], &self.players[0]),
+            ("Home", &self.team_names[1], &self.players[1]),
         ] {
             writeln!(output, "TEAM {side}: {team}")?;
             for p in players {
@@ -254,6 +351,28 @@ impl Lineup {
         }
         writeln!(output, "{}", joint::ATTRIBUTION)
     }
+}
+fn valid_date(value: &str) -> bool {
+    let b = value.as_bytes();
+    if b.len() != 10
+        || !value.starts_with("2019-")
+        || b[7] != b'-'
+        || b.iter()
+            .enumerate()
+            .any(|(i, c)| ![4, 7].contains(&i) && !c.is_ascii_digit())
+    {
+        return false;
+    }
+    let month = value[5..7].parse::<usize>().expect("two digits");
+    let day = value[8..10].parse::<u8>().expect("two digits");
+    month
+        .checked_sub(1)
+        .and_then(|m| {
+            [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+                .get(m)
+                .copied()
+        })
+        .is_some_and(|last| day > 0 && day <= last)
 }
 /// Strip only a standalone opt-in; preserve legacy and contact option values.
 pub fn split_options(args: &[String]) -> Result<(Vec<String>, Option<String>), String> {

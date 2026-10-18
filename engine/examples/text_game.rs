@@ -105,13 +105,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lineup = real::Lineup::read_tsv(&std::fs::read_to_string(&options["--lineup"])?)?;
     let cast =
         full_manager::Cast::read_complete_tsv(&std::fs::read_to_string(&options["--cast"])?)?;
+    match (lineup.is_generic(), cast.game_id()) {
+        (false, None) => {}
+        (true, Some(id)) if id == lineup.game_id() => {}
+        _ => return Err("lineup/cast game or format mismatch".into()),
+    }
+    let teams = lineup.team_names().map(str::to_owned);
+    let team_labels = lineup.team_labels().map(str::to_owned);
     let initial = lineup.initial();
-    let required = initial
+    let mut required: std::collections::BTreeSet<_> = initial
         .teams
         .iter()
         .flat_map(|team| team.batting_order.iter().map(|id| format!("batter:{id}")))
         .chain(cast.names().keys().map(|id| format!("pitcher:{id}")))
         .collect();
+    if initial.teams[0].dh_slot.is_none() {
+        required.extend(cast.names().keys().map(|id| format!("batter:{id}")));
+    }
     let ratings =
         ratings::Ratings::from_counts(cast.ability_counts().clone(), &baseline, &required)?;
     let calibrated = options
@@ -163,10 +173,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let draws: BTreeMap<_, _> = draws.into_iter().collect();
     let mut output = io::stdout().lock();
     if options["--format"] == "radio" {
-        writeln!(
-            output,
-            "Seattle Mariners at Oakland Athletics — radio transcript"
-        )?;
+        writeln!(output, "{} at {} — radio transcript", teams[0], teams[1])?;
+        if lineup.is_generic() {
+            writeln!(output,"Controlled historical lineup/closed cast, not season fidelity; no pinch hitting or daily eligibility. Explicit zero-count roles use the neutral prior.")?;
+        }
         writeln!(
             output,
             "Simulated exhibition | Seed: {seed} | Ratings: {}",
@@ -187,15 +197,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cast.workload_mode()
         )?;
         for (i, step) in steps.iter().enumerate() {
-            full_transcript::write_radio_step(
-                &mut output,
-                i + 1,
-                step,
-                &["Seattle".into(), "Oakland".into()],
-                &names,
-            )?;
+            full_transcript::write_radio_step(&mut output, i + 1, step, &team_labels, &names)?;
         }
-        let teams = ["Seattle Mariners".into(), "Oakland Athletics".into()];
         full_transcript::write_line_score(&mut output, &steps, &teams)?;
         full_transcript::write_box_score(&mut output, &steps, &teams, &names)?;
         return Ok(());
@@ -214,7 +217,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Seed: {seed} | Model: {label} | RNG: {}",
         preview::RNG_VERSION
     )?;
-    writeln!(output,"Seattle Mariners at Oakland Athletics; recorded 2019-03-20 starting personnel, not the historical result.")?;
+    writeln!(
+        output,
+        "{} at {}; recorded {} starting personnel, not the historical result.",
+        teams[0],
+        teams[1],
+        lineup.date()
+    )?;
+    if lineup.is_generic() {
+        writeln!(output,"Controlled historical lineup/closed cast, not season fidelity; no pinch hitting or daily eligibility. Explicit zero-count roles use the neutral prior.")?;
+    }
     if calibrated.is_some() {
         writeln!(output,"Individual batter/current-pitcher probabilities from an explicit opponent-adjusted outcome-tree development artifact. Full2019 hindsight refit, outcome-specific strengths; one parent draw. Reused retrospective test benchmark, not fresh independent validation, official PA/BF, true ability or forecasting; no handedness adjustment or propagated ability uncertainty.")?;
     } else {
@@ -224,7 +236,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(output,"PA MODEL records the actual consumed vector, raw RNG word and selected parent (K, BB, HBP, 1B, 2B, 3B, HR, ROE, contact, interference). Tactical IBB overrides and runner-only events have no PA draw. Credited walkoff hit value may be shorter than the selected parent.")?;
     writeln!(output,"Manager: {} | {}. Recorded nonstarters assumed available at start; not verified eligibility. Individual outing budgets with bounded scoreless/no-hit extensions; no additional early-performance hook, measured pitch counts or fatigue. No automatic seventh-inning hook; exhausted cast keeps last pitcher.", full_manager::POLICY_VERSION, cast.workload_mode())?;
     writeln!(output,"KNOWN MISSING GENERATION: automatic uncaught-K out plus same-delivery runner advance, pinch hitting/running/defensive replacements, ground-rule doubles, inside-park home runs and appeal double-offs. Joint hits/runner tags and eligible recovered-K advances use provisional priors. No complete major-event coverage claim.")?;
-    writeln!(output, "Source witness OAK201903200; accepted 2019 snapshot d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528; supplement 554632467416eef202b7a55cadad2d09e5355ce98c83868b26b5267f98852b82.")?;
+    writeln!(output, "Source witness {}; accepted 2019 snapshot d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528; supplement 554632467416eef202b7a55cadad2d09e5355ce98c83868b26b5267f98852b82.",lineup.game_id())?;
     writeln!(output, "INTEGRITY CHECKS: contiguous canonical log; event-summed runs/PA/BF/outs/cursors and observed PO/A/E/PB reconciliation. Not complete official accounting.")?;
     writeln!(output, "Engine {} | Mechanics {} | 2019 pilot rules; incomplete official accounting; individual participant-proxy means, not validated player abilities.",env!("CARGO_PKG_VERSION"), full_simulation::MODEL_VERSION)?;
     writeln!(output, "{}\n", joint::ATTRIBUTION)?;
@@ -239,13 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let pitcher = &event.participants.pitcher;
             writeln!(output, "PA MODEL {} | Batter: {} ({batter}) | Pitcher: {} ({pitcher}) | Word: {} | Parent: {} | Probabilities: {:?}",i+1,names.get(batter).ok_or("missing rated batter name")?,names.get(pitcher).ok_or("missing rated pitcher name")?,draw.word,draw.parent,draw.probabilities)?;
         }
-        full_transcript::write_step(
-            &mut output,
-            i + 1,
-            step,
-            &["Seattle".into(), "Oakland".into()],
-            &names,
-        )?;
+        full_transcript::write_step(&mut output, i + 1, step, &team_labels, &names)?;
     }
     Ok(())
 }

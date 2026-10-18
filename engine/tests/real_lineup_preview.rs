@@ -55,6 +55,82 @@ fn sample(i: usize) -> Sample {
         }
     }
 }
+fn generic_fixture(dh: bool) -> String {
+    let mut text = fixture()
+        .replace("closed-starting-lineup-v1", "closed-starting-lineup-v2")
+        .replace("OAK201903200", "LAN201904010")
+        .replace("2019-03-20", "2019-04-01")
+        .replace("TOK01", "LOS03")
+        .replace("Seattle Mariners", "San Francisco Giants")
+        .replace("Oakland Athletics", "Los Angeles Dodgers");
+    text.push_str(&format!(
+        "use_dh\t{dh}\naway_team_id\tSFN\nhome_team_id\tLAN\n"
+    ));
+    if !dh {
+        for (side, prefix) in [("Away", "a"), ("Home", "h")] {
+            text = text
+                .replace(&format!("{side}:0:1:{prefix}p\tPitcher {prefix}\n"), "")
+                .replace(
+                    &format!("{side}:4:10:{prefix}4\tPlayer {prefix}4\n"),
+                    &format!("{side}:4:1:{prefix}p\tPitcher {prefix}\n"),
+                );
+        }
+    }
+    text
+}
+#[test]
+fn generic_dh_and_non_dh_have_exact_starting_roles_and_metadata() {
+    for dh in [false, true] {
+        let text = generic_fixture(dh);
+        let lineup = real::Lineup::read_tsv(&text).unwrap();
+        assert_eq!(lineup.game_id(), "LAN201904010");
+        assert_eq!(
+            lineup.team_names(),
+            ["San Francisco Giants", "Los Angeles Dodgers"]
+        );
+        assert_eq!(lineup.team_labels(), ["SFN", "LAN"]);
+        let state = lineup.initial();
+        for (side, prefix) in [(0, "a"), (1, "h")] {
+            assert_eq!(state.teams[side].pitcher, format!("{prefix}p"));
+            assert_eq!(state.teams[side].dh_slot, if dh { Some(3) } else { None });
+            assert_eq!(state.teams[side].dh_must_bat, dh);
+            assert_eq!(
+                state.teams[side].batting_order[3],
+                format!("{prefix}{}", if dh { "4" } else { "p" })
+            );
+        }
+        let mut out = Vec::new();
+        lineup.write_preamble(&mut out).unwrap();
+        let out = String::from_utf8(out).unwrap();
+        assert!(out.contains("Matchup: LAN201904010 | 2019-04-01 | LOS03"));
+        assert!(!out.contains("Seattle") && !out.contains("Oakland"));
+        let log = lineup.game(7, &model()).unwrap();
+        assert!(log.last().unwrap().after().over);
+        assert!(derive_accounting(&log).is_ok());
+    }
+}
+#[test]
+fn generic_lineup_rejects_bad_metadata_or_mixed_roles() {
+    let text = generic_fixture(false);
+    for bad in [
+        text.replace("false", "0"),
+        text.replace("2019-04-01", "2019-02-29"),
+        text.replace("2019-04-01", "2020-04-01"),
+        text.replace("LAN201904010", "SFN201904010"),
+        text.replace("away_team_id\tSFN", "away_team_id\tLAN"),
+        text.replace("Away:4:1:ap", "Away:0:1:ap"),
+        text.replace("Away:4:1:ap", "Away:4:10:ap"),
+        text.replace("Away:4:1:ap\tPitcher a\n", ""),
+        text.clone() + "Away:0:1:ap\tPitcher a\n",
+        text.clone() + "unknown\tvalue\n",
+        generic_fixture(true).replace("use_dh\ttrue", "use_dh\tfalse"),
+    ] {
+        assert!(real::Lineup::read_tsv(&bad).is_err(), "accepted {bad}");
+    }
+    let hyphen = text.replace(":a1\t", ":jay-j001\t");
+    assert!(hyphen.contains(real::REPORT_SHA));
+    real::Lineup::read_tsv(&hyphen).unwrap();
+}
 #[test]
 fn starting_ids_dh_and_positions_are_not_batting_ordinals() {
     let lineup = real::Lineup::read_tsv(&fixture()).unwrap();

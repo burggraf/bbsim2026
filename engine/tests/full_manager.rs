@@ -72,6 +72,63 @@ fn cast() -> Cast {
     Cast::read_tsv(&cast_text()).unwrap()
 }
 
+fn generic_cast() -> String {
+    let text = tsv(
+        &[("ap", "Starter A"), ("jay-j001", "Reliever A")],
+        &[("hp", "Starter H")],
+    );
+    let mut rows = text
+        .lines()
+        .filter(|line| {
+            !line.starts_with("bullpen_report_sha256\t")
+                && !line.starts_with("workload_report_sha256\t")
+        })
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    rows.extend([
+        "game_id\tLAN201904010".into(),
+        "cast_sizes\t2,1".into(),
+        "workload_recipe_sha256\t512f542cee70c5824c6fff92f1278b51aad2be6a5a066db18b306091a3fae48f"
+            .into(),
+        "outcome_events_sha256\tea3fd660ac87deb02c61cddf28977db59f85f9a88f77aaabc0c07ba0f1831d1a"
+            .into(),
+    ]);
+    for id in ["ap", "jay-j001", "hp"] {
+        rows.push(format!("usage:start:{id}\t27"));
+        rows.push(format!("usage:relief:{id}\t6"));
+    }
+    (rows.join("\n") + "\n")
+        .replace("closed-pitching-cast-v1", "closed-pitching-cast-v3")
+        .replace(
+            "policy\tpa-mean-closed-cast-v1",
+            "policy\tempirical-pa-closed-cast-v2",
+        )
+}
+#[test]
+fn generic_complete_cast_uses_declared_sizes_and_stable_ids_not_the_pinned_fixture() {
+    let text = generic_cast();
+    let cast = Cast::read_complete_tsv(&text).unwrap();
+    assert_eq!(cast.game_id(), Some("LAN201904010"));
+    let initial = GameState {
+        teams: [team("a", "ap", false), team("h", "hp", false)],
+        ..state(1, Half::Top, false)
+    };
+    let prepared = cast.prepare(&initial).unwrap();
+    assert_eq!(prepared.teams[0].bench, ["jay-j001"]);
+    assert!(prepared.teams[1].bench.is_empty());
+    assert_eq!(cast.names().len(), 3);
+    for bad in [
+        text.replace("cast_sizes\t2,1", "cast_sizes\t1,1"),
+        text.replace("cast:Away:1:jay-j001\tReliever A\n", ""),
+        text.replace("game_id\tLAN201904010", "game_id\tinvalid"),
+        text.replace("usage:start:ap\t27", "usage:start:ap\t26"),
+        text.clone() + "unknown\tvalue\n",
+    ] {
+        assert!(Cast::read_complete_tsv(&bad).is_err(), "accepted {bad}");
+    }
+    assert_eq!(self::cast().game_id(), None);
+}
+
 fn team(prefix: &str, pitcher: &str, dh: bool) -> TeamState {
     let mut batting_order = std::array::from_fn(|slot| format!("{prefix}{slot}"));
     if !dh {

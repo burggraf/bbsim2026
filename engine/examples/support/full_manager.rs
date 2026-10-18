@@ -62,17 +62,19 @@ pub struct Cast {
     ability_counts: BTreeMap<String, [u64; 9]>,
     workloads: BTreeMap<(String, bool), Workload>,
     empirical: bool,
+    game_id: Option<String>,
 }
 
 impl Cast {
     #[allow(dead_code)] // Pooled mechanism callers deliberately permit source-cast prefixes.
     pub fn read_complete_tsv(text: &str) -> Result<Self, String> {
         let cast = Self::read_tsv(text)?;
-        if cast
-            .teams
-            .iter()
-            .zip(SOURCE_CAST)
-            .any(|(team, source)| team.len() != source.len())
+        if cast.game_id.is_none()
+            && cast
+                .teams
+                .iter()
+                .zip(SOURCE_CAST)
+                .any(|(team, source)| team.len() != source.len())
         {
             return Err("complete text game requires all 12 pinned cast pitchers".into());
         }
@@ -104,13 +106,56 @@ impl Cast {
             }
         }
 
-        let empirical = match (
+        let (empirical, generic) = match (
             fields.remove("format").as_deref(),
             fields.remove("policy").as_deref(),
         ) {
-            (Some("closed-pitching-cast-v1"), Some("pa-mean-closed-cast-v1")) => false,
-            (Some("closed-pitching-cast-v2"), Some("empirical-pa-closed-cast-v2")) => true,
+            (Some("closed-pitching-cast-v1"), Some("pa-mean-closed-cast-v1")) => (false, false),
+            (Some("closed-pitching-cast-v2"), Some("empirical-pa-closed-cast-v2")) => (true, false),
+            (Some("closed-pitching-cast-v3"), Some("empirical-pa-closed-cast-v2")) => (true, true),
             _ => return Err("unsupported pitching cast format/policy".into()),
+        };
+        let mut game_id = None;
+        let mut sizes = None;
+        if generic {
+            let id = fields.remove("game_id").ok_or("missing cast game_id")?;
+            if id.len() != 12
+                || &id.as_bytes()[3..7] != b"2019"
+                || !id.bytes().take(3).all(|b| b.is_ascii_uppercase())
+                || !id.bytes().skip(7).all(|b| b.is_ascii_digit())
+                || !matches!(id.as_bytes()[11], b'0'..=b'2')
+            {
+                return Err("invalid cast game_id".into());
+            }
+            game_id = Some(id);
+            let counts =
+                numeric_fields(&fields.remove("cast_sizes").ok_or("missing cast sizes")?, 2)?;
+            if counts.iter().any(|n| !(1..=50).contains(n)) {
+                return Err("invalid cast sizes".into());
+            }
+            sizes = Some(counts);
+            for (key, expected) in [
+                (
+                    "workload_recipe_sha256",
+                    "512f542cee70c5824c6fff92f1278b51aad2be6a5a066db18b306091a3fae48f",
+                ),
+                (
+                    "outcome_events_sha256",
+                    "ea3fd660ac87deb02c61cddf28977db59f85f9a88f77aaabc0c07ba0f1831d1a",
+                ),
+            ] {
+                if fields.remove(key).as_deref() != Some(expected) {
+                    return Err(format!("unsupported pitching cast {key}"));
+                }
+            }
+        }
+        let valid_actor = |id: &str| {
+            valid_id(id)
+                || (generic
+                    && !id.is_empty()
+                    && id
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'))
         };
         for (key, expected) in [
             ("attribution", ATTRIBUTION),
@@ -153,6 +198,9 @@ impl Cast {
             ("batter_kappa", "200"),
             ("pitcher_kappa", "200"),
         ] {
+            if generic && ["bullpen_report_sha256", "workload_report_sha256"].contains(&key) {
+                continue;
+            }
             if fields.remove(key).as_deref() != Some(expected) {
                 return Err(format!("unsupported pitching cast {key}"));
             }
@@ -171,14 +219,16 @@ impl Cast {
                     let rank = rank_text
                         .parse::<usize>()
                         .map_err(|_| "invalid pitching cast rank")?;
-                    if rank.to_string() != *rank_text || !valid_id(id) || value.trim().is_empty() {
+                    if rank.to_string() != *rank_text || !valid_actor(id) || value.trim().is_empty()
+                    {
                         return Err("invalid pitching cast identity/name".into());
                     }
-                    if !SOURCE_CAST[side]
-                        .get(rank)
-                        .is_some_and(|(expected_id, expected_name)| {
-                            *expected_id == *id && *expected_name == value
-                        })
+                    if !generic
+                        && !SOURCE_CAST[side].get(rank).is_some_and(
+                            |(expected_id, expected_name)| {
+                                *expected_id == *id && *expected_name == value
+                            },
+                        )
                     {
                         return Err("unsupported pitching cast identity/name".into());
                     }
@@ -190,7 +240,7 @@ impl Cast {
                         },
                     ));
                 }
-                [role @ ("pitcher" | "batter"), id] if valid_id(id) => {
+                [role @ ("pitcher" | "batter"), id] if valid_actor(id) => {
                     let counts = numeric_fields(&value, 9)?
                         .try_into()
                         .map_err(|_| "expected nine ability counts")?;
@@ -199,7 +249,7 @@ impl Cast {
                         return Err("duplicate pitcher profile".into());
                     }
                 }
-                ["workload", role, id] if ["start", "relief"].contains(role) && valid_id(id) => {
+                ["workload", role, id] if ["start", "relief"].contains(role) && valid_actor(id) => {
                     let numbers = numeric_fields(&value, 2)?;
                     let (pa_sum, outings) = (numbers[0], numbers[1]);
                     if pa_sum > 1 << 52 || outings > 2429 || (outings == 0 && pa_sum != 0) {
@@ -220,7 +270,7 @@ impl Cast {
                     }
                 }
                 ["usage", role, id]
-                    if empirical && ["start", "relief"].contains(role) && valid_id(id) =>
+                    if empirical && ["start", "relief"].contains(role) && valid_actor(id) =>
                 {
                     let samples = if value == "-" {
                         Vec::new()
@@ -257,6 +307,14 @@ impl Cast {
         let teams = [teams[0].clone()?, teams[1].clone()?];
         if teams.iter().any(Vec::is_empty) {
             return Err("missing pitching cast starter".into());
+        }
+        if sizes.is_some_and(|sizes| {
+            teams
+                .iter()
+                .zip(sizes)
+                .any(|(team, n)| team.len() as u64 != n)
+        }) {
+            return Err("incomplete declared pitching cast".into());
         }
         let cast_ids = teams
             .iter()
@@ -301,7 +359,13 @@ impl Cast {
             ability_counts,
             workloads,
             empirical,
+            game_id,
         })
+    }
+
+    #[allow(dead_code)] // Only game-input callers need the source game ID.
+    pub fn game_id(&self) -> Option<&str> {
+        self.game_id.as_deref()
     }
 
     /// Literal supplied counts; the rating loader still checks the complete required role set and bounds.

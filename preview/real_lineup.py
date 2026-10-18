@@ -1,5 +1,6 @@
 """Pinned offline witness export for the closed-starting-roster experiment."""
 import argparse
+from datetime import date
 import hashlib
 import json
 import os
@@ -24,8 +25,14 @@ def literal(value):
     return value
 
 
-def encode_witness(witness):
-    if witness['use_dh'] is not True or (witness['game_id'],witness['date'],witness['park_id']) != ('OAK201903200','2019-03-20','TOK01'):
+def encode_witness(witness, *, generic=False):
+    dh=witness['use_dh']
+    if generic:
+        day=literal(witness['date'])
+        if (type(dh) is not bool or not re.fullmatch(r'2019-\d{2}-\d{2}',day)
+                or date.fromisoformat(day).isoformat()!=day):
+            raise ValueError('Invalid generic game date/DH choice')
+    elif dh is not True or (witness['game_id'],witness['date'],witness['park_id']) != ('OAK201903200','2019-03-20','TOK01'):
         raise ValueError('Unsupported starting witness')
     teams=witness['teams']
     if len(teams)!=2 or {t['side'] for t in teams}!={'Away','Home'}:
@@ -34,27 +41,34 @@ def encode_witness(witness):
     metadata=dict(format='closed-starting-lineup-v1',game_id=witness['game_id'],date=witness['date'],park_id=witness['park_id'],
         away_team=teams[0]['team_name'],home_team=teams[1]['team_name'],audit_sha256=REPORT_SHA,
         snapshot_sha256=SNAPSHOT_SHA,supplement_sha256=SUPPLEMENT_SHA,attribution=ATTRIBUTION)
-    rows=[];all_ids=set()
+    if generic:
+        ids=[literal(t['team_id']) for t in teams]
+        if (any(not re.fullmatch('[A-Z]{3}',tid) for tid in ids) or ids[0]==ids[1]
+                or not re.fullmatch(ids[1]+witness['date'].replace('-','')+'[012]',literal(witness['game_id']))):
+            raise ValueError('Invalid generic game/team identity')
+        metadata.update(format='closed-starting-lineup-v2',use_dh=str(dh).lower(),away_team_id=ids[0],home_team_id=ids[1])
+    rows=[];all_ids=set();n=10 if dh else 9
     for t,team_id in zip(teams,['SEA','OAK']):
-        if t['team_id']!=team_id:raise ValueError('Unsupported starting team')
+        if not generic and t['team_id']!=team_id:raise ValueError('Unsupported starting team')
         order=t['batting_order'];field=t['fielding']
         if (len(order)!=9 or any(type(p['slot']) is not int for p in order)
                 or {p['slot'] for p in order}!=set(range(1,10))
-                or len(field)!=10 or any(type(p['position']) is not int for p in field)
-                or {p['position'] for p in field}!=set(range(1,11))
-                or type(t['dh_slot']) is not int or type(t['engine_dh_slot']) is not int):
+                or len(field)!=n or any(type(p['position']) is not int for p in field)
+                or {p['position'] for p in field}!=set(range(1,n+1))
+                or (dh and (type(t['dh_slot']) is not int or type(t['engine_dh_slot']) is not int))
+                or (not dh and (t['dh_slot'] is not None or t['engine_dh_slot'] is not None))):
             raise ValueError('Invalid starting slot/position grain')
         by_id={p['player_id']:p for p in field}
-        if (len(by_id)!=10 or len({p['player_id'] for p in order})!=9
-                or {p['player_id'] for p in order}!={p['player_id'] for p in field if p['position']!=1}
+        if (len(by_id)!=n or len({p['player_id'] for p in order})!=9
+                or {p['player_id'] for p in order}!={p['player_id'] for p in field if not dh or p['position']!=1}
                 or next(p['player_id'] for p in field if p['position']==1)!=t['pitcher_id']
-                or t['engine_dh_slot']!=t['dh_slot']-1
-                or next(p['slot'] for p in order if by_id[p['player_id']]['position']==10)!=t['dh_slot']):
+                or (dh and (t['engine_dh_slot']!=t['dh_slot']-1
+                    or next(p['slot'] for p in order if by_id[p['player_id']]['position']==10)!=t['dh_slot']))):
             raise ValueError('Invalid pitcher/DH/defense relationship')
         pitcher=by_id[t['pitcher_id']]
-        for slot,p in [(0,pitcher)]+[(p['slot'],p) for p in sorted(order,key=lambda p:p['slot'])]:
+        for slot,p in ([(0,pitcher)] if dh else [])+[(p['slot'],p) for p in sorted(order,key=lambda p:p['slot'])]:
             player=literal(p['player_id']);name=literal(p['name'])
-            if not re.fullmatch('[a-z0-9]+',player) or player in all_ids or name!=by_id[player]['name']:
+            if not re.fullmatch('[a-z0-9-]+' if generic else '[a-z0-9]+',player) or player in all_ids or name!=by_id[player]['name']:
                 raise ValueError('Invalid starting identity/name relationship')
             all_ids.add(player)
             rows.append((f"{t['side']}:{slot}:{by_id[player]['position']}:{player}",name))
