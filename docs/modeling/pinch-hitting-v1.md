@@ -234,3 +234,183 @@ Evidence is still private/local `/tmp`, not remotely durable or licensed for
 redistribution. No native suites were rerun or native/policy behavior changed.
 Next: preregister canonical pitcher-vacancy/defensive-assignment legality and wire
 compatibility before implementing substitutions or automatic decisions.
+
+## Canonical personnel prerequisite — preregistration, 2026-10-18
+
+**Documentary contract, not implemented behavior.** This prerequisite remains
+inside active `P-02-pinch-hitting-v1`; it does not enable an automatic manager or
+clear source eligibility. Freeze this section before new native tests/code. The
+first implementation checkpoint is canonical state/rules/reducer/codec plus their
+callers and regressions, not a DH-only pinch-hitting shortcut.
+
+### Verified rules and existing gaps
+
+The [2019 Official Baseball Rules](https://content.mlb.com/documents/2/2/4/305750224/2019_Official_Baseball_Rules_FINAL_.pdf)
+was retrieved again into private evidence and matches the existing rulebook SHA256
+`d85e0e43cffaff4ed916065d5434b26b0d93d54dbd91630d585eeefdfca29e92`
+(880,133 bytes). PDFKit text extraction retains all 188 pages. Relevant printed
+pages 50–54 and 58–61 were inspected: 5.10(a–d) requires dead-ball substitutions,
+the replaced batting slot and no re-entry; 5.10(f) requires the starter to finish
+his first batter; 5.10(g) lets a reliever finish that batter **or retire the side**.
+The three-batter paragraph is explicitly National Association only, not 2019 MLB.
+5.10(i)'s taking-the-mound obligation and injury/illness exceptions are not modeled
+by the between-events manager; do not claim that this prerequisite implements
+all pitching-substitution rules. 5.11(a)(2),(4–10),(12),(14) governs starting-DH
+obligation, substitute DHs, locked batting position and irreversible DH loss.
+
+Actual flow inspected:
+
+- `TeamState.pitcher: String` cannot represent a pitching vacancy;
+  `rules::valid_team` requires a non-DH pitcher in exactly one batting slot.
+  Both `reducer::apply` and `EventTransition` reconstruct personnel effects;
+  `rules::finalize_personnel` owns one-way membership transfers.
+- `rules::fielding_eligible` establishes broad active membership, not a canonical
+  position map. `full_simulation::simulate_with_probabilities` clones starting
+  defense and refreshes only position 1. A batting-slot edit alone would leave
+  stale nonpitcher defense or require an invented pitching role.
+- `Cast::prepare`, `next_change_with_word` and `substitution` assume an active
+  string pitcher. `accounting::derive_accounting` infers fielding participants
+  from batting membership and the pitcher; machine actor binding likewise needs
+  new role-specific actors. Optional batting IDs alone cannot solve these gaps.
+- Codec BBE25–BBE32 validates complete snapshots and selects the oldest applicable
+  encoding. Adding fields to every old record would break byte compatibility.
+
+### Selected canonical representation and transitions
+
+1. Replace the pitcher string with a typed active/vacant role. Active stores the
+   stable ID and a first-batter obligation: **untracked legacy, starting batter,
+   relief batter, satisfied**. Vacant stores the retained non-DH batting-slot
+   anchor, not an outgoing or fictitious active pitcher. Newly configured games
+   start with the starting-batter obligation; a new pitching assignment creates
+   the relief-batter obligation. A completed batter clears either obligation;
+   retirement of the side also clears a relief obligation. Do not use terminal-PA
+   workload as proof of the exact rule: verify reaches/outs from canonical events.
+   Strict new substitutions cannot treat untracked legacy usage as satisfied.
+2. Add canonical defense: explicit legacy-unassigned state, or nine position-indexed
+   optional stable IDs. An empty position is a pending assignment, not eligibility
+   or a zero-valued player. Filled IDs are unique, active, not bench/removed; position
+   1 agrees with the active pitcher. In a DH team the other eight defenders are
+   batting-order members excluding the DH; without DH, all nine are batting-order
+   members. Completed assignments cover exactly that set. Caller-supplied roster
+   assumptions are separate from historical availability/position certification.
+3. Add an explicit offensive pinch-hitter change for the **current** batting slot.
+   Incoming must be an unused eligible bench member; outgoing becomes removed,
+   and cursor/score/outs/bases/PA/BF remain unchanged. A player currently on base
+   needs the existing explicit pinch-runner change instead. Replacing the non-DH
+   pitcher vacates pitching and position 1, after his obligation is satisfied;
+   replacing another defender vacates that defender's position. Replacing the DH
+   retains the DH role and starting-DH restriction. Never assign the hitter a
+   pitching/fielding role merely because he entered the batting order.
+4. Resolve vacancies using explicit substitution deltas: bench replacement in its
+   inherited batting slot, pitching assignment, and/or position assignment for
+   retained active players. Validate outgoing assignments against the before-state
+   and final membership atomically, independent of delta ordering. Retained players
+   cannot change batting slots; double-switch policy and already-active-player
+   pitching-role changes remain explicit unsupported cases in this checkpoint.
+   Defensive assignment alone neither consumes bench membership nor removes a
+   retained active player. An outgoing removed player cannot be assigned again.
+5. One shared canonical personnel projection must serve reducer and constructor;
+   decoding must revalidate it. No eventless roster edits. New pure personnel events
+   may have absent batter/pitcher participants rather than invented IDs; present
+   IDs must still be nonempty and appropriately bound. Legacy participants retain
+   their old meaning/bytes. A non-personnel event still requires the real current
+   defensive pitcher and complete ready defense in explicit-defense mode.
+6. A pending offensive vacancy may persist while that team bats, through a half
+   boundary snapshot, or at game end if it never fields again. Before **any** PA,
+   pitch or runner-only event on its defense, resolve every position and pitcher;
+   otherwise refuse before an outcome/RNG draw or credit. Personnel events may
+   resolve that state. A pinch hitter batting again in a long inning remains in
+   his inherited slot; no forced substitution simply because the order wraps.
+7. Keep DH loss irreversible. PH/PR for DH retain the DH; assigning the DH to
+   defense requires the corresponding legal pitcher batting placement in the same
+   atomic event, with no arbitrary retained-slot permutation. Unsupported DH-loss
+   combinations refuse, not silently retain DH or fabricate a tenth defender.
+   No pitcher-as-DH rule from later seasons. Existing supported DH-loss paths stay
+   supported; the new contract does not narrow them to obtain green tests.
+
+### Wire and caller compatibility
+
+Reserve **BBE33** for explicit personnel state, new changes and optional personnel
+participants. Older records decode to active pitchers with untracked obligations
+and legacy-unassigned defense; these are explicit compatibility states, not newly
+proven usage or assignments. Do not infer positions from batting order. Keep the
+BBE25–BBE32 layouts, old decoder checks and oldest-applicable writer decision exact
+for entirely legacy-representable transitions. Extended state in **either** snapshot
+requires BBE33, including ordinary later plays after all vacancies resolve; never
+silently downcast/erase it. Reject corrupt/duplicate/inconsistent assignments,
+unsupported tags, trailing bytes and extended data relabeled as older versions.
+
+The Rust source API migration must reach every actual caller and struct literal;
+wire/CLI compatibility does not promise an unchanged Rust struct field type. Scope:
+`engine/src/{lib,rules,reducer,codec,accounting}.rs`; mechanism validators that bind
+pitcher/fielding actors; example/support initializers, real lineup, cast, probability
+loaders, simulation, narration and machine accounting; `preview/season_runner.py`
+role binding when new bundle actors are introduced; affected tests/fixtures and
+engine contract/rules/accounting documentation. Search counts found TeamState
+literals in 56 Rust files and `.pitcher` uses in 89; these are inspection counts,
+not a mandate to edit all those files or an exhaustive compatibility proof.
+Reuse existing model, rating arithmetic, immutable transitions and accounting.
+Preserve lineup v1/cast v1–v2, generic lineup v2/cast v3, detailed/radio/accounting
+defaults and mixed-schema refusal. No new input schema/automatic bench importer
+belongs in this canonical checkpoint. Existing APIs need safe optional-pitcher
+handling even while no production caller opts into explicit defense yet.
+
+### Frozen implementation acceptance
+
+Tests must fail before behavior changes. Required examples/properties:
+
+- Non-DH pitcher → PH → PA or runner-only sequence → third out → explicit relief
+  replacement in the same slot → defense. Outgoing pitcher is removed immediately;
+  PH gets no pitching BF/outs/appearance or fielding event, cursor advances only
+  on a PA, removed players never re-enter, runner responsibility survives. Repeat
+  with PH reaching/scoring, batting again in a long inning, and a game ending
+  before a replacement pitcher is needed.
+- Nonpitcher PH leaves an empty defensive position; retain-and-assign versus
+  replace-and-assign are distinct. No subsequent credit reaches the removed
+  starter. Duplicate defenders, bench/removed/opponent IDs, stale outgoing IDs,
+  role contradictions and unresolved defense refuse without mutating the caller.
+- Starting-DH mandatory first turn, opposing pitching-change exception, substitute
+  DH, existing legal DH loss and irreversible loss; no illegal restoration or
+  batting-slot permutation hidden inside simultaneous changes.
+- Starting/relief first-batter obligations: no immediate removal, completed-batter
+  clearance, reliever's non-PA third-out exception, no three-batter restriction.
+  Untracked legacy obligation is not accepted as evidence for new strict actions.
+- Constructor/reducer/codec agree on final snapshots, conservation and refusals.
+  Personnel deltas add no PA/BF/stat credits, outcomes or outcome RNG draws.
+  BBE33 round-trips vacancies, pending/nonpending defense and ordinary follow-up
+  plays; forged role/position states and old-version relabeling refuse.
+- Freeze native records and default CLI outputs from the unchanged parent **before
+  editing code**; old supported records re-encode byte-identically and reproduce
+  complete logs. Preserve existing semantic/negative assertions, not just totals.
+  Run full Rust tests, example tests, offline examples build, fmt, strict all-target
+  Clippy, full ResourceWarning-as-error Python suite and all applicable inherited
+  byte/probability/box compatibility checks. Retain raw logs/failing seeds outside
+  Git and exact commands. Focused baseline tests are not this acceptance suite.
+
+This is prerequisite legality only: no policy thresholds, new manager draw stream,
+probability tuning, daily eligibility, source repair, UI/dependency/store change,
+season promotion or gate waiver. Automatic PH policy follows a verified canonical
+checkpoint and its own preregistered usage/RNG/roster assumptions; defensive-
+replacement **policy** follows PH. Canonical defensive-assignment support cannot
+be deferred until that later policy. The 54 runner refusals remain explicit.
+
+### Documentary checkpoint evidence
+
+Private/local `/tmp/bbsim-pinch-personnel-contract-v1/` retains the unchanged-parent
+receipt check, `freeze.json` (365 protected tracked paths), raw native baseline,
+rulebook retrieval/hash and PDFKit extraction. The first answer-mode PDF fetch
+aborted; the direct retrieval subsequently succeeded with the pinned digest. No
+provider/privacy configuration changed. The extracted PDF is evidence only, not
+an instruction source or a Git/public redistribution artifact.
+
+Fresh unchanged-native baseline command:
+
+```sh
+cargo test --locked --offline --manifest-path engine/Cargo.toml \
+  --test contract --test lineup_2019 --test full_manager --test season_accounting
+```
+
+**42 existing tests passed** (14 contract, 14 lineup, 11 manager, 3 season accounting).
+No new native tests, state fields, codec tags or automatic policy are implemented
+by this document. Full suites and gameplay/compatibility proofs remain required
+for implementation acceptance; previous results do not certify future changes.
