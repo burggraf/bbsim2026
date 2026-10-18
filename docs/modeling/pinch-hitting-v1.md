@@ -1,0 +1,143 @@
+# P-02-pinch-hitting-v1 — source and legal-state prerequisite
+
+Base `10353a1`; next approved feature after the [controlled runner](season-runner-v1.md),
+before defensive-replacement policy. No UI, download, dependency, fitting, push or
+gate change. This prerequisite does not itself implement automatic pinch hitting.
+
+## Acceptance fixed before new bench measurements or implementation
+
+1. Authenticate the same five complete cached artifacts with the existing game-input
+   reader. Reuse full lineup and opportunity reconciliation, not a partial extract.
+2. Retain every played ID and both sides, including unsupported/exceptional games.
+   Report literal appearance-position counts, starting identities, nonstarting
+   observed actors, recorded pitching actors, ambiguous cross-side identities,
+   missing people, missing/unknown position/range and reversed ranges. Preserve
+   problem actors and all their reasons; do not repair or silently delete them.
+3. A possible controlled bench is only a **labeled same-game participant proxy**:
+   nonstarting, nonpitching observed actors with unambiguous side, complete identity,
+   supplied nonreversed ranges and known position codes. It is NOT an active roster,
+   opening bench, injury/rest clearance, or evidence of actors who never appeared.
+   Do not infer zero available bench from zero observed candidates. Do not use an
+   actual future PA result or entry inning to make a managerial choice.
+4. Reuse existing batting-count validation. Complete-cohort profile absence may be
+   labeled zero observed batting counts/neutral prior, never missing person or role
+   evidence. Report profile opportunity size, explicit cold status, and multi-team
+   identities without collapsing players by display name. No new ratings arithmetic.
+5. Report per-game DH/no-DH, existing exceptional-game refusal, candidate counts,
+   raw positions and all exclusions; aggregate by team and DH mode. Mark counts of
+   opening-bench availability unknown, not zero. No target success rate or retuning.
+6. Synthetic tests precede code: starters/pitchers excluded from the candidate proxy;
+   cross-side IDs, missing people, unknown/reversed ranges retained and quarantined;
+   cold profiles, deterministic shuffled input, team splits, exceptions and source
+   immutability; exclusive publication, drift and unsupported source refusal.
+7. Actual read-only proof runs twice on all2429 IDs. Reports must be byte-identical,
+   original five input hashes unchanged, and independent direct-source set/count
+   calculations must reconcile candidates/positions/reasons. Keep raw failures and
+   proof outside Git. Run full Python discovery with ResourceWarnings as errors,
+   diff/local-link/source-preservation checks. No Rust behavior changes in this
+   prerequisite; prior Rust passes are historical evidence, not new certification.
+
+## Legal-state finding to resolve before automatic management
+
+Current `rules::valid_team` requires a non-DH current pitcher to occupy a batting
+slot. A batting-slot-only pinch hitter for that pitcher therefore cannot be a legal
+canonical transition. Pretending that the hitter becomes a pitcher and replacing
+him before facing a batter is not a valid workaround. Keeping a removed pitcher
+active or changing batting order without an event is also forbidden.
+
+The native simulation additionally retains starting nonpitcher defensive identities;
+only its pitcher position is refreshed. Ordinary fielder pinch hits need a coherent
+subsequent defensive assignment, not credits to a removed starter. DH substitution
+has a different, already-supported starting-DH first-PA obligation.
+
+After the source proof, preregister the smallest explicit canonical representation
+for a pinch hitter and any outstanding pitching/defensive assignment, its resolution
+before the next defensive play, one-way eligibility and no re-entry, and wire-format
+compatibility. Then implement the automatic policy separately from outcome draws.
+Do not silently narrow the requested feature to DH-only or weaken existing role
+validation. New state, loaders, rating-required actors, simulation hooks, narration,
+machine role bindings, independent accounting and their actual callers must agree.
+Defensive-replacement **policy**, daily roster inference and statistical usage/rate
+fidelity remain separate work; necessary pinch-hit legality is not optional.
+
+## Source proof — 2026-10-18
+
+The read-only prerequisite is verified; **automatic pinch hitting is not implemented**.
+`audits/pinch_hitting_readiness.py` reuses the authenticated full-cohort reader and
+count validator. It cannot be passed to the simulator as a bench roster. Original
+acceptance was frozen at `/tmp/bbsim-pinch-hitting-v1/preregistration.md` before code
+or new measurements; results below append to that contract, not replace it.
+
+Final source-bound proof: `/tmp/bbsim-pinch-hitting-v1/final-v2/proof-results.json`.
+Two CLI runs covered all 2,429 played IDs, 4,858 sides and 30 teams in 10.797423s and
+11.333279s. Both 53,632,711-byte reports are byte-identical, including provenance.
+Direct raw-source calculations independently reconciled game/side identity sets,
+positions, every exclusion-reason set, candidate sets, counts and per-team splits.
+Five input hashes, all 230 prior executable/config pins and 363 protected tracked
+paths were unchanged; the proof additionally binds 89 Python source/test paths.
+
+| Source observation | Result | Meaning |
+| --- | ---: | --- |
+| Observed actor-side-game entries |67,273| Not unique players or all batting participants |
+| Starting actor-side-game entries |46,150| Not bench candidates |
+| Recorded pitcher actor-side-game entries |21,433| Excluded from this nonpitching proxy |
+| Participant-proxy entries |4,575|1,808 DH /2,767 non-DH; repeated players/games, not eligible roster slots |
+| Zero-observation batting proxy entries |1| Explicit cold vector/neutral prior, not missing identity or zero ability |
+| Multi-team player IDs |145| Source fielding-participant identities, not simulated role identities |
+| Unsupported-starting-map actor entries |121| All remain in the report with reasons |
+| Reversed-range actor entries |1| Original source fact retained; no source repair |
+
+Reasons overlap and must not be summed as a partition. Cross-side, person-lookup,
+unknown-side/position/range issues are absent in this authenticated extract; their
+refusal/quarantine paths have synthetic regressions. Exceptional result records
+are retained verbatim and are **not** cleared by candidate counts.
+
+**Coverage finding:** the fielding-appearance extract contains only positions 1–10;
+no 11/12 rows. This does not prove absence of PH-only/PR-only appearances. Players
+who batted but never fielded may be missing from this proxy. Opening-bench and
+pregame availability remain JSON null throughout, including teams with no proxy.
+Before treating a bench pool as controlled game input, preregister a same-game,
+stable-ID comparison/union with the already-cached terminal-batter participants;
+retain PA-source exclusions, side ambiguities and missing evidence. No new source
+transfer is implied. Neither source establishes a daily eligible roster.
+
+### Safeguards, failures and fresh checks
+
+Interface/semantic REDs are retained at the evidence root. Inspection added a
+failing disclosure regression before explicitly labeling fielding-only coverage.
+A private-copy publication regression also proved that checking the destination
+only before measurement allowed a renamed parent/symlink redirect. Final code
+rechecks the canonical external destination before the existing exclusive writer;
+redirects into a private stand-in repository or another outside directory refuse.
+No live source/module was modified for these negative controls. Earlier proof and
+suite runs remain separate and do not certify the changed final source.
+
+Final checks: **9 focused / 671 full Python tests passed**, with ResourceWarnings
+as errors; full suite 56.319s. Raw logs are `focused-final-v2.*` and
+`final-v2/python.*`. A supplemental log checker initially miscounted 12 HTTP tests
+whose success markers follow interleaved server logs; its separate failure and
+correction are retained in `final-v2/verification-checker-initial-failure.txt`.
+No test output or repository test assertion was changed for that checker.
+
+Reproduction (use a **new exclusive outside-repository output**, never overwrite
+retained evidence):
+
+```bash
+python3 -B -Werror::ResourceWarning -m audits.pinch_hitting_readiness \
+  /tmp/bbsim-season-readiness-v1/first.lineup.json \
+  /tmp/bbsim-season-readiness-v1/first.lineup.native.csv \
+  /tmp/bbsim-player-opportunities/report-first.json \
+  /tmp/bbsim-pitcher-workload/report-null-fixed-first.events.csv \
+  /tmp/bbsim-season-readiness-v1/first.json /NEW/EXCLUSIVE/report.json
+PYTHONPATH=tests python3 -B -Werror::ResourceWarning -m unittest test_pinch_hitting_readiness -v
+python3 -B -Werror::ResourceWarning -m unittest discover -s tests -v
+git diff --check
+```
+
+The source proof driver and raw per-run stdout/stderr are in `final-v2/`; they use
+exclusive artifact creation too. `/tmp` evidence is private/local, not durable or
+licensed for redistribution. No fitting, source repair, native policy/RNG/rating/
+accounting/default/schema change, independent model review or gate signoff occurred.
+Rust suites are not rerun for this Python-only audit; unchanged pins preserve the
+boundary, not a new Rust acceptance claim. The runner's 54 explicit refusals and
+previous PA/credit discrepancy remain unresolved.
