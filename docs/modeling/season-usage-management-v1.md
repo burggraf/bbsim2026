@@ -5,6 +5,34 @@ extension of season management: historical PA/IP pace should softly influence us
 with leeway; normal starter rotation and bullpen situation suitability remain primary.
 Live task status belongs only in [PROGRESS.md](../PROGRESS.md).
 
+## Maintainer clarification — 2026-10-18 (supersedes dated-roster requirements below)
+
+Use the existing selected-season player/team data, not verified daily active rosters.
+Do not acquire more roster data or infer injury/minor-league availability windows.
+A player observed for a club belongs to its modeled season pool; a multi-team player
+has separate club targets, spread over each club's actual played-game denominator.
+Recent simulated pitching workload follows the player across clubs. Positions are
+observed season positions assumed usable, not certified defensive eligibility.
+Unknown positions/targets remain explicit. Do not select one actor on both sides of
+a game. No new identities, invented appearances, hard quotas or outcome adjustment.
+Season-end totals/roles/positions are intentional hindsight reconstruction inputs.
+The earlier dated-roster interview and phase-3/stint prerequisites below are retained
+as history, not current blockers. Existing numerical bands remain frozen.
+
+**Next bounded checkpoint (`P-02-season-pool-policy-v1`):** build deterministic club
+pools from authenticated existing appearances and reconciled targets; implement pure
+PA pace, compatible hitter preference, rotation/rest and relief-order helpers.
+Observable acceptance: full source/target schedule binding; per-club/role totals
+reconcile (integer outs); no source mutation; unknown-vs-zero distinction; no daily
+windows; position compatibility and occupied-ID exclusion; inside-band neutrality;
+correct under/overuse direction; rest before pace, four full starter rest days,
+same-day exclusion, >6 relief outs next-day exclusion and fourth consecutive day
+exclusion; stable ties and bounded starter shortening. Audit real-data coverage and
+run regression suites before acceptance. This checkpoint does not enable these
+helpers in the native season runner: integrated managed inputs, in-game bullpen/PH
+hooks and seed1/2/3 usage comparisons follow, with fresh evidence. Historical mode
+and its artifacts remain unchanged.
+
 ## Contract
 
 - Count actual simulated batter PA and pitcher outs from canonical game accounting.
@@ -54,12 +82,11 @@ PA definition, not just the nine-category ratings sample. Preserve and explain t
 known PA/credit discrepancies; missing values remain unknown, not zero. Reconcile
 player-team totals with player and club totals and retain source hashes/recipes.
 
-Define stint clocks for trades/call-ups/returns: divide the team's player-specific
-stint target over that stint's eligible team games, rather than spreading late-season
-usage across opening day. Do not infer injury/transaction dates from a gap alone.
-Where stint boundaries are unsupported, publish a labeled bounded assumption or
-exclude the case from automatic selection; never spend one team's target on another.
-Carry recent workload across trades without duplicating cumulative totals.
+Use a whole-season club clock: divide each player-team target across that club's
+actual played games, including players who historically arrived late or left early.
+This is the maintainer-approved simplification, not inferred stint eligibility.
+Never spend one club's target on another. Carry recent simulated workload globally
+by player, without duplicating cumulative totals.
 
 Before policy comparisons, freeze numerical tolerance bands, preference weights,
 recent-rest rules, substantial-overuse thresholds and evaluation tolerances.
@@ -91,12 +118,13 @@ refused games do not advance the clock; resumed and uninterrupted runs agree exa
 old no-usage/no-bench controls retain exact bytes. Deliver a readable pace report
 before the policy changes any personnel choices.
 
-### 3. Supply date-appropriate selectable personnel
+### 3. Supply selectable season-pool personnel
 
-Build an authenticated pregame personnel input from supported team membership,
-availability assumptions, positions, pitcher roles and individual rating coverage.
-Keep historical-lineup replay as its existing mode; add explicit opt-in managed
-selection rather than silently changing what historical replay means.
+Build an authenticated personnel input from existing season club participation,
+observed positions, pitcher roles and individual rating coverage. All club pool
+members are modeled as available throughout its schedule, subject to simulated
+workload/rest and legal positions; no daily roster reconstruction. Keep historical-
+lineup replay as its existing mode; add explicit opt-in managed selection.
 
 Resolve actual schedule order, including doubleheaders and suspended-game treatment,
 before enabling recent-rest decisions. Use calendar dates for rest and team-game
@@ -104,10 +132,10 @@ counts for pace. Game two sees game-one workload; an off day creates rest, not P
 Use a normal five-man rotation as the initial policy with explicitly supported
 roster changes/spot starts, not a promise that every 2019 club used exactly five.
 
-**Accept:** no cross-team/ineligible/removed selections, no invented identities;
-legal complete positional lineup and sufficient pitching coverage; all selected
-actors have ratings. Unknown eligibility, ambiguous order or exhausted legal pools
-produce an explicit refusal/diagnostic, not an undeclared roster expansion.
+**Accept:** no unsupported club identities or same actor on both sides; legal
+complete positional lineup and sufficient pitching coverage; all selected actors
+have ratings. Unknown positions, ambiguous modeled order or exhausted legal pools
+produce an explicit refusal/diagnostic, not invented positions or identities.
 This phase is a real prerequisite for changing starters or resting starting hitters.
 
 ### 4. Integrate batting usage preferences
@@ -165,17 +193,17 @@ This plan connects P-02 game policies with future S-01 personnel/schedule inputs
 S-02 season management; it does not waive A-04/S-01/S-02 dependencies or sign off G1–G5.
 Strategic defensive replacements remain a separate unfinished P-02 slice. Target
 reconciliation and the observational ledger can be prepared before that slice;
-autonomous roster-based selection waits for its own availability and legality checks.
+autonomous season-pool selection waits for integrated positional/rest legality checks.
 
 **First concrete checkpoint:** phase 1 target/clock audit and frozen contract, followed
 by phase 2 ledger + explicit PH accounting support. Do not start rotation selection
 against the existing same-game-only pitching casts.
 
 No new dependency, UI, injury generator, exact-usage quota, outcome-model refit or
-source-data repair is needed for this scope. Roster/stint coverage remains an
-evidence requirement, not a reason to invent eligibility or claim fidelity.
+source-data repair is needed for this scope. Club participation and positional
+coverage remain visible; daily roster/stint coverage is no longer required.
 
-## Approved first delivery and availability decision
+## Historical first delivery and availability decision — superseded
 
 Interview `b10ff106-df5f-409b-89c0-ec8bd811a033`: the user requires verified dated
 roster inputs before autonomous selection, and approves the ledger plus historical-
