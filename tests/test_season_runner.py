@@ -90,6 +90,13 @@ class AccountingTests(unittest.TestCase):
             with self.subTest(role=role),self.assertRaises(ValueError):
                 season.parse_accounting(accounting(),e)
 
+    def test_malformed_and_cross_side_actor_declarations_refuse(self):
+        for actors in [None,{},[],{'Away':{},'Home':{}},
+                {'Away':{r:[{}] for r in season.METRICS},'Home':{r:['h'] for r in season.METRICS}},
+                {s:{r:['both'] for r in season.METRICS} for s in ['Away','Home']}]:
+            e=entry();e['role_actors']=actors
+            with self.subTest(actors=actors),self.assertRaises(ValueError):season.parse_accounting(accounting(),e)
+
     def test_team_splits_and_unknown_propagation_are_not_partial_totals(self):
         first=season.parse_accounting(accounting(),entry());second=copy.deepcopy(first)
         for p in second['players']:
@@ -106,7 +113,76 @@ class AccountingTests(unittest.TestCase):
         self.assertEqual(totals['teams']['LAN']['losses'],2)
 
 
+class PhAccountingTests(unittest.TestCase):
+    def ph_text(self):
+        from preview import bench_inputs as bench
+        return accounting().replace('controlled-accounting-v1','controlled-accounting-ph-v1').replace(
+            'seed\t7\n',f'seed\t7\npinch_hitting\t{bench.POLICY}\navailability_basis\t{bench.AVAILABILITY}\ndefense_basis\t{bench.DEFENSE_BASIS}\n')
+
+    def test_explicit_ph_metadata_and_declared_roles_are_required(self):
+        e=entry();e['accounting_format']='controlled-accounting-ph-v1'
+        result=season.parse_accounting(self.ph_text(),e)
+        self.assertEqual(result['accounting']['format'],'controlled-accounting-ph-v1')
+        self.assertEqual(result['accounting']['seed'],'7')
+        for text in [self.ph_text().replace('pinch_hitting\t','wrong_policy\t'),
+                self.ph_text().replace('not verified eligibility','verified eligibility'),
+                self.ph_text().replace('not verified defensive eligibility','verified defense'),
+                accounting().replace('controlled-accounting-v1','controlled-accounting-ph-v1'),
+                self.ph_text().replace('batter\tAway\ta','batter\tAway\tbench')]:
+            with self.subTest(text=text),self.assertRaises(ValueError):season.parse_accounting(text,e)
+        with self.assertRaises(ValueError):season.parse_accounting(self.ph_text(),entry())
+        with self.assertRaises(ValueError):season.parse_accounting(accounting(),e)
+        e['role_actors']['Away']['batter'].append('bench')
+        result=season.parse_accounting(self.ph_text().replace('batter\tAway\ta','batter\tAway\tbench'),e)
+        self.assertIn('bench',[p['player_id'] for p in result['players']])
+        with self.assertRaises(ValueError):
+            season.parse_accounting(self.ph_text().replace('pitcher\tAway\ta','pitcher\tAway\tbench'),e)
+
+    def bundle(self):
+        from preview import bench_inputs as bench
+        p=fixtures.GenericCastTests().parts(False)
+        return dict(lineup=season.game.real.encode_witness(p[1],generic=True),
+            cast=season.game.cast.encode(*p,empirical=True,generic=True),
+            bench='key\tvalue\nformat\tassumed-game-bench-v1\ngame_id\tLAN201904010\n'+
+                f'policy\t{bench.POLICY}\navailability_basis\t{bench.AVAILABILITY}\ndefense_basis\t{bench.DEFENSE_BASIS}\n'+
+                'Away:bench:name\tBench Actor\nAway:bench:positions\t7\nAway:bench:counts\t0,0,0,0,0,0,0,0,0\n')
+
+    def test_bench_bindings_expand_only_batting_and_fielding(self):
+        bundle=self.bundle();bindings=season.actor_bindings(bundle)
+        self.assertIn('bench',bindings['Away']['batter'])
+        self.assertIn('bench',bindings['Away']['fielder'])
+        self.assertNotIn('bench',bindings['Away']['pitcher'])
+        self.assertNotIn('bench',bindings['Home']['batter'])
+        for text in [bundle['bench'].replace(':positions',':pitcher'),
+                bundle['bench']+'Home:bench:name\tBench Actor\nHome:bench:positions\t7\nHome:bench:counts\t0,0,0,0,0,0,0,0,0\n',
+                bundle['bench'].replace('Away:bench:','Away:h1:'),
+                bundle['bench'].replace('Away:bench:positions\t7\n',''),
+                bundle['bench'].replace('Away:bench:name','Unknown:bench:name'),
+                bundle['bench'].replace('LAN201904010','LAN201904020')]:
+            with self.subTest(text=text),self.assertRaises(ValueError):
+                season.actor_bindings(dict(bundle,bench=text))
+
+
 class NativeTests(unittest.TestCase):
+    def test_existing_native_ph_output_reconciles_with_expanded_bindings(self):
+        from preview import bench_inputs as bench
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);_,command=fixtures.GenericCliTests().run_game(root,False)
+            bundle=PhAccountingTests().bundle()
+            text=bundle['bench']
+            text+=f'snapshot_sha256\t{season.game.real.SNAPSHOT_SHA}\nsupplement_sha256\t{season.game.real.SUPPLEMENT_SHA}\n'
+            text+=f'opportunity_report_sha256\t{season.game.ratings.REPORT_SHA}\nattribution\t{season.game.real.ATTRIBUTION}\n'
+            text=text.replace('0,0,0,0,0,0,0,0,0','0,0,0,0,0,0,100,0,0')
+            path=root/'bench.tsv';path.write_text(text);bundle['bench']=text
+            e=entry();e.update(seed=1,accounting_format='controlled-accounting-ph-v1',role_actors=season.actor_bindings(bundle))
+            native=subprocess.run(command+['--bench',str(path),'--format','accounting'],capture_output=True,text=True,timeout=30)
+            self.assertEqual(native.returncode,0,native.stderr)
+            parsed=season.parse_accounting(native.stdout,e)
+            self.assertEqual(parsed['accounting']['pinch_hitting'],bench.POLICY)
+            self.assertEqual(sum(t['pa'] for t in parsed['teams'].values()),sum(p['stats']['pa'] for p in parsed['players'] if p['role']=='batter'))
+            self.assertEqual(subprocess.check_output(command+['--bench',str(path),'--format','accounting'],text=True),native.stdout)
+            with self.assertRaises(ValueError):season.parse_accounting(native.stdout,dict(e,accounting_format='controlled-accounting-v1'))
+
     def test_actual_native_dh_and_non_dh_accounting_repeats_and_matches_radio_scores(self):
         for dh in [False,True]:
             with self.subTest(dh=dh),tempfile.TemporaryDirectory() as directory:
@@ -123,6 +199,17 @@ class NativeTests(unittest.TestCase):
                     lineup=Path(command[command.index('--lineup')+1]).read_text(),
                     cast=Path(command[command.index('--cast')+1]).read_text()))
                 parsed=season.parse_accounting(native.stdout,e)
+                from preview.usage_ledger import Ledger
+                lineup_keys=[line.split('\t')[0].split(':') for line in Path(command[command.index('--lineup')+1]).read_text().splitlines() if line.startswith(('Away:','Home:'))]
+                ids={'Away':'SFN','Home':'LAN'}
+                e['starting_batter_ids']={tid:[k[3] for k in lineup_keys if k[0]==side and k[1]!='0'] for side,tid in ids.items()}
+                e['starting_pitcher_ids']={tid:next(k[3] for k in lineup_keys if k[0]==side and k[2]=='1') for side,tid in ids.items()}
+                ledger=Ledger([e]);self.assertTrue(ledger.accept(e,parsed,'a'*64))
+                snapshot=ledger.snapshot()
+                self.assertEqual(sum(p['usage'] for p in snapshot['players'].values() if p['role']=='batter'),sum(t['pa'] for t in parsed['teams'].values()))
+                self.assertEqual(sum(p['usage'] for p in snapshot['players'].values() if p['role']=='pitcher'),sum(t['outs'] for t in parsed['teams'].values()))
+                self.assertEqual(sum(p['starts'] for p in snapshot['players'].values() if p['role']=='batter'),18)
+                self.assertEqual(sum(p['starts'] for p in snapshot['players'].values() if p['role']=='pitcher'),2)
                 self.assertEqual(len(parsed['teams']),2)
                 for team,name in [('SFN','San Francisco Giants'),('LAN','Los Angeles Dodgers')]:
                     self.assertIn(name,radio.stdout)

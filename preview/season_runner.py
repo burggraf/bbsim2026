@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 from preview import game_inputs as game
+from preview import bench_inputs as bench
 
 METRICS={
     'batter':('pa','ab','r','h','rbi','bb','so','single','double','triple','hr','ibb','hbp','sh','sf','gdp','sb','cs','ci'),
@@ -53,6 +54,36 @@ def actor_bindings(bundle):
         fielders={k[3] for k in lineup if k[0]==side and k[2]!='10'}
         result[side]=dict(batter=sorted(batting&(starting|pitchers)),
             pitcher=sorted(pitchers),fielder=sorted(fielders|pitchers))
+    if 'bench' in bundle:
+        fields={};records={}
+        lines=bundle['bench'].splitlines()
+        if not lines or lines[0]!='key\tvalue':raise ValueError('Invalid bench header')
+        metadata={'format','game_id','policy','availability_basis','defense_basis',
+            'snapshot_sha256','supplement_sha256','opportunity_report_sha256','attribution'}
+        for line in lines[1:]:
+            cells=line.split('\t')
+            if len(cells)!=2 or not all(cells) or cells[0] in fields:raise ValueError('Invalid/duplicate bench field')
+            key,value=cells;fields[key]=value
+            if key in metadata:continue
+            parts=key.split(':')
+            if (len(parts)!=3 or parts[0] not in result or not re.fullmatch(r'[a-z0-9-]{1,64}',parts[1])
+                    or parts[2] not in {'name','positions','counts'}):raise ValueError('Unknown bench actor role')
+            records.setdefault((parts[0],parts[1]),{})[parts[2]]=value
+        lineup_game=next((line.split('\t',1)[1] for line in bundle['lineup'].splitlines() if line.startswith('game_id\t')),None)
+        if fields.get('game_id')!=lineup_game or lineup_game is None:raise ValueError('Mismatched bench game')
+        for key,value in [('format','assumed-game-bench-v1'),('policy',bench.POLICY),
+                ('availability_basis',bench.AVAILABILITY),('defense_basis',bench.DEFENSE_BASIS)]:
+            if fields.get(key)!=value:raise ValueError('Mismatched bench metadata')
+        occupied={pid for roles in result.values() for ids in roles.values() for pid in ids}
+        for (side,pid),record in records.items():
+            if set(record)!={'name','positions','counts'} or pid in occupied:raise ValueError('Conflicting/incomplete bench actor')
+            occupied.add(pid)
+            result[side]['batter'].append(pid);result[side]['fielder'].append(pid)
+        for roles in result.values():
+            for ids in roles.values():ids.sort()
+    away={pid for ids in result['Away'].values() for pid in ids}
+    home={pid for ids in result['Home'].values() for pid in ids}
+    if away&home:raise ValueError('Cross-side actor binding')
     return result
 
 
@@ -69,10 +100,24 @@ def _sum(values):
 
 def parse_accounting(text,entry):
     metadata={};teams={};players=[];seen=set()
+    expected_format=entry.get('accounting_format','controlled-accounting-v1')
+    ph_metadata=dict(pinch_hitting=bench.POLICY,availability_basis=bench.AVAILABILITY,defense_basis=bench.DEFENSE_BASIS)
+    expected_keys={'format','game','seed'}|VERSIONS
+    if expected_format=='controlled-accounting-ph-v1':expected_keys|=ph_metadata.keys()
+    elif expected_format!='controlled-accounting-v1':raise ValueError('Unknown accounting schema')
     ids=dict(Away=entry['away_team_id'],Home=entry['home_team_id'])
+    bindings=entry['role_actors']
+    if (not isinstance(bindings,dict) or set(bindings)!=set(ids)
+            or any(not isinstance(roles,dict) or set(roles)!=set(METRICS) for roles in bindings.values())
+            or any(not isinstance(actors,list) or any(not isinstance(pid,str) or not pid for pid in actors)
+                or len(actors)!=len(set(actors))
+                for roles in bindings.values() for actors in roles.values())
+            or {pid for actors in bindings['Away'].values() for pid in actors}&
+               {pid for actors in bindings['Home'].values() for pid in actors}):
+        raise ValueError('Invalid accounting actor declarations')
     for line in text.splitlines():
         parts=line.split('\t');kind=parts[0]
-        if kind in {'format','game','seed'}|VERSIONS:
+        if kind in expected_keys:
             if len(parts)!=2 or not parts[1] or kind in metadata:raise ValueError('Invalid accounting metadata')
             metadata[kind]=parts[1]
         elif kind=='team':
@@ -88,7 +133,8 @@ def parse_accounting(text,entry):
             stats={k:None if v=='?' and k in OPTIONAL[kind] else _number(v) for k,v in zip(METRICS[kind],cells)}
             players.append(dict(role=kind,team_id=ids[side],player_id=pid,stats=stats))
         else:raise ValueError('Unknown accounting row')
-    if (set(metadata)!={'format','game','seed'}|VERSIONS or metadata['format']!='controlled-accounting-v1'
+    if (set(metadata)!=expected_keys or metadata['format']!=expected_format
+            or any(metadata.get(k)!=v for k,v in ph_metadata.items() if k in expected_keys)
             or metadata['game']!=entry['game_id'] or metadata['seed']!=str(entry['seed'])
             or metadata['rules']!='2019' or set(teams)!=set(ids.values())):
         raise ValueError('Incomplete/mismatched accounting identity')
@@ -119,7 +165,7 @@ def parse_accounting(text,entry):
         teams[tid].update(games=1,wins=int(teams[tid]['runs']>teams[opponent]['runs']),
             losses=int(teams[tid]['runs']<teams[opponent]['runs']),runs_allowed=teams[opponent]['runs'],
             pa=total('batter','pa'),bf=total('pitcher','bf'),outs=total('pitcher','outs'),h=total('batter','h'))
-    return dict(teams=teams,players=players,versions={k:metadata[k] for k in sorted(VERSIONS)})
+    return dict(teams=teams,players=players,versions={k:metadata[k] for k in sorted(VERSIONS)},accounting=metadata)
 
 
 def accumulate(results):
