@@ -45,8 +45,8 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
         return Ok(None);
     }
     let mut fields = BTreeMap::new();
-    let mut pairs = args.chunks_exact(2);
-    for pair in &mut pairs {
+    let (pairs, remainder) = args.as_chunks::<2>();
+    for pair in pairs {
         if ![
             "--baseline",
             "--contact-counts",
@@ -66,7 +66,7 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
             ));
         }
     }
-    if !pairs.remainder().is_empty()
+    if !remainder.is_empty()
         || ["--baseline", "--contact-counts", "--lineup", "--cast"]
             .iter()
             .any(|key| !fields.contains_key(*key))
@@ -442,6 +442,36 @@ mod tests {
             assert!(parse(&[good.clone(), args(&["--format", format])].concat()).is_err());
         }
         assert!(parse(&[good, args(&["--format"])].concat()).is_err());
+    }
+    #[test]
+    fn malformed_pairs_keep_error_precedence_over_a_trailing_missing_value() {
+        let good = args(&[
+            "--baseline",
+            "base.csv",
+            "--contact-counts",
+            "contact.csv",
+            "--lineup",
+            "lineup.tsv",
+            "--cast",
+            "cast.tsv",
+        ]);
+        for tail in [
+            args(&["--other", "x", "--seed"]),
+            args(&["--seed", "", "--format"]),
+            args(&["--cast", "duplicate.tsv", "--seed"]),
+        ] {
+            assert_eq!(
+                parse(&[good.clone(), tail].concat()).unwrap_err(),
+                format!(
+                    "unknown, empty or duplicate option; usage: {}",
+                    super::USAGE
+                )
+            );
+        }
+        assert_eq!(
+            parse(&[good, args(&["--seed"])].concat()).unwrap_err(),
+            format!("missing input/value; usage: {}", super::USAGE)
+        );
     }
     #[test]
     fn options_require_all_offline_inputs_and_a_valid_seed_without_duplicate_or_unknown_flags() {

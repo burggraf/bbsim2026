@@ -507,15 +507,12 @@ fn recovery_facts(
                     {
                         return Err(TransitionError::IllegalCredit)
                     }
-                    RecoveryReview::AfterAdvance { advancer_id, .. } => {
-                        if facts
-                            .advances
-                            .iter()
-                            .any(|a| &a.runner_id == advancer_id && a.reached == Destination::Home)
-                            && !third.home_before_out.contains(advancer_id)
-                        {
-                            return Err(TransitionError::IllegalCredit);
-                        }
+                    RecoveryReview::AfterAdvance { advancer_id, .. }
+                        if facts.advances.iter().any(|a| {
+                            &a.runner_id == advancer_id && a.reached == Destination::Home
+                        }) && !third.home_before_out.contains(advancer_id) =>
+                    {
+                        return Err(TransitionError::IllegalCredit);
                     }
                     _ => {}
                 }
