@@ -39,8 +39,8 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | P-02-season-runner-v1 | done — bounded verified controlled-batch checkpoint | [Contract/results/reproduction](modeling/season-runner-v1.md):2429IDs twice;2375complete/54refused/zero native failures;30teams/2430exact schedule rows; independent cumulative role/team accounting and9503byte-identical artifacts per run.404legacy text/8preview pairs unchanged.902Rust/4examples/662Python/full checks,230stable source pins.14exceptional and40already-active-actor role-change refusals remain explicit; no full-season/fidelity/official-stat/gate claim. |
 | P-02-regular-game-policy-v1 | done — bounded verified correction | [Policy/acceptance/results](modeling/season-game-inputs-v1.md#approved-regular-full-game-policy--2026-10-18). All2,429 played IDs:2,384complete/45personnel-data refusals/zero native failures; nine newly complete repeat exactly,9,500old input/output artifact pairs unchanged.27focused/678Python and independent team/player accumulation pass. No historical-result gating, native/RNG/probability change or gate promotion. |
 | P-02-pinch-hitting-v1 | done — bounded opt-in full-game PH v1 | [Results/reproduction](modeling/pinch-hitting-v1.md#end-to-end-ph-game-results--2026-10-18). Fresh946Rust/4examples/680Python/130focused/full checks;50wire/36no-bench CLI controls exact;2,048 synthetic PH games and64 source-input games/33PH/16restorations with independent boxes pass.125native pins/244protected/seven inputs stable. Eligibility/positions remain assumptions; no full-season/fidelity/gate claim. |
-| P-02-season-usage-management-v1 | active — observational slice verified; dated-roster prerequisite in progress | [Plan](modeling/season-usage-management-v1.md), [first-slice results](modeling/season-usage-ledger-v1-results.md). Authenticated PA/outs targets, exactly-once ledger, explicit gaps, receipt-backed replay/comparison and PH parser support implemented. Three fixed seeds each2384complete/45refused; descriptive bands pass, individual errors retained. User requires verified dated rosters before autonomous selection; no inferred-window workaround. Fresh722Python/946Rust/4examples, build/fmt/strictClippy, source guards and compatibility pass. Next source audit in first Resume. No S-01/S-02/G1–G5 waiver. |
-| P-02-dated-roster-readiness-v1 | active — bounded source probe | User permits MLB public API2019 roster/transaction retrieval and necessary identity lookups if baseball.computer lacks verified dated availability. Audit source semantics/IDs/timing with a preregistered small probe first; no bulk retrieval unless justified, no inferred eligibility or automatic-policy enablement before evidence. Child `5fbbd0d2`, private raw evidence `/tmp/bbsim-dated-roster-probe-v1/`. |
+| P-02-season-usage-management-v1 | blocked for autonomous policy — observational slice verified | [Plan](modeling/season-usage-management-v1.md), [first-slice results](modeling/season-usage-ledger-v1-results.md). Authenticated PA/outs targets, exactly-once ledger, explicit gaps, receipt-backed replay/comparison and PH parser support implemented. Three fixed seeds each2384complete/45refused; descriptive bands pass, individual errors retained. User requires verified dated rosters before autonomous selection; no inferred-window workaround. Fresh722Python/946Rust/4examples, build/fmt/strictClippy, source guards and compatibility pass. Dated-roster probe NO-GO; follow-up approval needed in first Resume. No S-01/S-02/G1–G5 waiver. |
+| P-02-dated-roster-readiness-v1 | blocked — completed bounded probe NO-GO | [Source audit](data-audits/2019-dated-roster-probe-v1.md):15requests/147784bytes,58hashes independently checked; historical active-roster completeness/timing, date semantics and identity bridge unsupported. No full2019 retrieval or inferred eligibility. User decision requested for a second at-most20-request game-specific-roster/identity investigation; interview `ebe8c22e` pending. Raw evidence privately checkpointed; details in first Resume. |
 | P-02-defensive-replacements-v1 | ready — separate pending slice | Approved next slice after verified PH. Define observable legal-position/roster accounting checks and a bounded manager policy before implementation; keep missing range/arm and eligibility explicit rather than inventing defensive skill. No implementation or gate approval yet. |
 | P-02-text-game-manager-v2 | done | [Contract/results and explicit usage warnings](modeling/text-game-manager-v2.md). Removed fixed seventh/27–6PA hooks; individual means or explicit empirical training-outing budgets, separate entry RNG, bounded context. Seed67: Fiers8IP/25BF/1H/0BB/7K, Oakland2–0; eight perfect innings, Healy single then hook. Full896Rust/4examples/57focused/624Python, build/fmt/strictClippy/diff;197stable source pins,191unchanged.1000games per input format reconcile;9997removed-reliever entry budgets independently reconstructed. Shorter starts/final-entry tail warnings retained; no2019usage/fatigue/era/predictive/gate signoff. Verified local checkpoint only, no push. |
 | E-03-reviewed-errorless-er | done — bounded verified local checkpoint; not pushed | [Shared accounting contract](engine/accounting.md): fully observed/completed, whole-chance NoMisplay halves certify charged runs as earned independently of the older mechanism whitelist. `proc_ffdf` passes891Rust/4examples/221focused/623Python/build/fmt/strictClippy/diff on197stable source pins;1000native games preserve all non-ER outputs andresolve3732ER cells. Exact raw receipts andremaining uncertainty in newest Resume. Responsible pitcher andstrict PB/error reconstruction retained; substitutions deferred; no G1 signoff. |
@@ -157,15 +157,16 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 
 ## Resume here
 
-### Dated roster readiness — source probe active; observational slice verified
+### Dated roster readiness — bounded NO-GO; follow-up decision needed
 
-**Current task:** `P-02-dated-roster-readiness-v1` active, the next prerequisite
-within `P-02-season-usage-management-v1`. The observational first slice is verified;
-autonomous selection still requires verified dated roster inputs, as chosen in
+**Current task:** `P-02-dated-roster-readiness-v1` blocked after its completed small
+source probe returned NO-GO. The observational first slice of
+`P-02-season-usage-management-v1` is verified; autonomous selection still requires
+verified dated roster inputs, as chosen in
 interview `b10ff106-df5f-409b-89c0-ec8bd811a033`.
 [First-slice results, failures and reproduction](modeling/season-usage-ledger-v1-results.md).
 Target/ledger components are cherry-picked locally as `d3262fc`, `b781f1c`, `2405777`;
-parent integration/documentation are being checkpointed locally after final checks.
+parent integration/documentation are committed locally as `d6e4836` after final checks.
 No push; no claim that the complete automatic manager is implemented.
 
 **Implemented:** authenticated target export; chronological exactly-once PA/outs/BF
@@ -202,21 +203,34 @@ changed during the checks. Exact commands/raw logs: `verification-v2/results.jso
 and sibling stdout/stderr files. Initial `verification-v1` was deliberately stopped
 for review corrections (its full Python passed); it is not final acceptance.
 
-**Next action:** receive read-only source-probe child `5fbbd0d2-bbec-483d-81fb-a9aadfdfcb3b`
-without polling, verify its raw evidence and decide whether broader2019 retrieval
-is justified. Parent retains implementation/acceptance. User approved this continuation
-and conditional MLB API retrieval in interview `a1b82cd0-baac-4f79-a16f-8d00944f7047`,
-asking to prefer baseball.computer if available. Current upstream
-`stg_rosters.sql` is season/team/player grain without dates; its synthetic-lineup
-transaction helper consumes Retrosheet team changes with inclusive trade-day windows
-and proportional fallback, not full active/IL availability. No such inference is
-approved here. Existing local `people` schema has no MLBAM ID. Child must preregister
-a small bounded roster/transaction/identity probe before player-data retrieval,
-preserve exact bytes/hashes, verify date-filter semantics and disclose timing gaps.
-It may write only new `/tmp/bbsim-dated-roster-probe-v1/`, not this checkout.
-Private observational evidence checkpoint is being prepared at
-`~/Library/Application Support/bbsim2026/work-checkpoints/season-usage-ledger-v1-verified-20261018-v1/`;
-only its completed receipt establishes archival success. Existing preview servers stay running; no push/data redistribution or
+**Source probe complete:** child `5fbbd0d2-bbec-483d-81fb-a9aadfdfcb3b` returned
+NO-GO for bulk2019 retrieval/eligible selection. [Audit and precise blockers](data-audits/2019-dated-roster-probe-v1.md).
+Baseball.computer's checked sources lack verified dated active/IL availability.
+MLB probe:15 requests/147784 response-body bytes; date filters change sampled
+membership, but TOR pre-trade omission,22 transaction date/effectiveDate conflicts,
+missing pregame timing and missing exact identity bridge remain. Parent independently
+verified58 evidence hashes and raw blocking witnesses; no requests rerun, no source
+repair, no bulk data or policy change. No pending supervisor requests.
+Probe/raw report privately copied and byte-verified (59original files plus report)
+at `~/Library/Application Support/bbsim2026/work-checkpoints/dated-roster-probe-v1-nogo-20261018-v1/`;
+`checkpoint-receipt.json` records hashes/limits; original absolute paths remain.
+
+**Next action:** consume interview `ebe8c22e-f1c3-49b1-816d-5c9e8335e491` decision:
+request permission for a second bounded investigation of game-specific MLB rosters
+and an exact Retrosheet↔MLB ID crosswalk, at most20 read-only requests, no full-season
+retrieval yet. Initial interview `a1b82cd0` allowed bulk retrieval only after a
+passing small probe; that condition is unmet. Reuse saved responses first; do not
+infer availability or silently select a date field. Automatic management remains
+blocked unless supported availability is established or the user explicitly changes
+requirements. Parent retains acceptance; completed probe is not roster certification.
+Private observational evidence checkpoint completed (`proc_3873`, exit0) at
+`~/Library/Application Support/bbsim2026/work-checkpoints/season-usage-ledger-v1-verified-20261018-v1/`:
+29,273 raw evidence files,55,199,976-byte archive SHA256
+`a5d4c16fe98a289d5e86e73c2e7a147bd7a41ca6dcd2f4de84d176e4a9ce117b`.
+Every archive member and original file hash was checked; the `d6e4836` source bundle
+verifies. Completed `receipt.json` records all hashes/limits. This is a private
+local evidence checkpoint, not a relocatable execution bundle or remote backup;
+protected databases/prerequisite inputs remain separately retained. Existing preview servers stay running; no push/data redistribution or
 G1–G5 signoff. All new evidence is under `/tmp/bbsim-season-usage-v1/`, target
 repeats under `/tmp/bbsim-season-usage-targets-v1/`; `/tmp` is not durable.
 
