@@ -39,7 +39,8 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | P-02-season-runner-v1 | done — bounded verified controlled-batch checkpoint | [Contract/results/reproduction](modeling/season-runner-v1.md):2429IDs twice;2375complete/54refused/zero native failures;30teams/2430exact schedule rows; independent cumulative role/team accounting and9503byte-identical artifacts per run.404legacy text/8preview pairs unchanged.902Rust/4examples/662Python/full checks,230stable source pins.14exceptional and40already-active-actor role-change refusals remain explicit; no full-season/fidelity/official-stat/gate claim. |
 | P-02-regular-game-policy-v1 | done — bounded verified correction | [Policy/acceptance/results](modeling/season-game-inputs-v1.md#approved-regular-full-game-policy--2026-10-18). All2,429 played IDs:2,384complete/45personnel-data refusals/zero native failures; nine newly complete repeat exactly,9,500old input/output artifact pairs unchanged.27focused/678Python and independent team/player accumulation pass. No historical-result gating, native/RNG/probability change or gate promotion. |
 | P-02-pinch-hitting-v1 | done — bounded opt-in full-game PH v1 | [Results/reproduction](modeling/pinch-hitting-v1.md#end-to-end-ph-game-results--2026-10-18). Fresh946Rust/4examples/680Python/130focused/full checks;50wire/36no-bench CLI controls exact;2,048 synthetic PH games and64 source-input games/33PH/16restorations with independent boxes pass.125native pins/244protected/seven inputs stable. Eligibility/positions remain assumptions; no full-season/fidelity/gate claim. |
-| P-02-defensive-replacements-v1 | ready — preregistration next | Approved next slice after verified PH. Define observable legal-position/roster accounting checks and a bounded manager policy before implementation; keep missing range/arm and eligibility explicit rather than inventing defensive skill. No implementation or gate approval yet. |
+| P-02-season-usage-management-v1 | active — audit/contract before implementation | User-requested plan for soft historical PA/IP pace, batter rest/PH, normal rotation with substantial-overuse rest and situation-first bullpen selection: [implementation plan](modeling/season-usage-management-v1.md). No implementation or numerical policy approval yet. Start with target reconciliation and an observational ledger; autonomous selection requires supported date-appropriate pools, not same-game proxies. Does not waive S-01/S-02 gates. |
+| P-02-defensive-replacements-v1 | ready — separate pending slice | Approved next slice after verified PH. Define observable legal-position/roster accounting checks and a bounded manager policy before implementation; keep missing range/arm and eligibility explicit rather than inventing defensive skill. No implementation or gate approval yet. |
 | P-02-text-game-manager-v2 | done | [Contract/results and explicit usage warnings](modeling/text-game-manager-v2.md). Removed fixed seventh/27–6PA hooks; individual means or explicit empirical training-outing budgets, separate entry RNG, bounded context. Seed67: Fiers8IP/25BF/1H/0BB/7K, Oakland2–0; eight perfect innings, Healy single then hook. Full896Rust/4examples/57focused/624Python, build/fmt/strictClippy/diff;197stable source pins,191unchanged.1000games per input format reconcile;9997removed-reliever entry budgets independently reconstructed. Shorter starts/final-entry tail warnings retained; no2019usage/fatigue/era/predictive/gate signoff. Verified local checkpoint only, no push. |
 | E-03-reviewed-errorless-er | done — bounded verified local checkpoint; not pushed | [Shared accounting contract](engine/accounting.md): fully observed/completed, whole-chance NoMisplay halves certify charged runs as earned independently of the older mechanism whitelist. `proc_ffdf` passes891Rust/4examples/221focused/623Python/build/fmt/strictClippy/diff on197stable source pins;1000native games preserve all non-ER outputs andresolve3732ER cells. Exact raw receipts andremaining uncertainty in newest Resume. Responsible pitcher andstrict PB/error reconstruction retained; substitutions deferred; no G1 signoff. |
 | F-01 | done | [Query](../audits/2019.sql) v1, [validator](../audits/verify_2019.py), [69-metric report](data-audits/2019.md) and [tests](../tests/test_f01_audit.py). Two independent read-only aggregate runs yielded byte-identical CSV SHA-256 `775e9629132013f1e448e1f5d62636a7da14bccb007315cb66568a3a8ee210f3` (outside Git); 7/7 unit tests and `git diff --check` passed. Metadata hash stable. Original G0 not signed off at that checkpoint; limitations in report. Follow-up [outcome inventory](data-audits/2019-outcomes.md) done on fresh `proc_c419`:548 Rust/83 Python/full checks, 192,025 real events, 19 scalar/17 result controls, byte-identical repeated outputs and unchanged snapshot. The [raw outcome supplement](data-audits/2019-outcome-details.md) now covers222,047 identities and known supplied-credit actors (fresh548 Rust/103 Python checks); complete legal retirement cause/order/clock/all throws and defensive opportunities remain partial/unproved. |
@@ -155,6 +156,72 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 
 ## Resume here
 
+### Season usage implementation — authorized subagent work
+
+**Current task:** `P-02-season-usage-management-v1` active. User now authorizes
+implementation using subagents and comparison of simulated PA/IP with actual usage.
+Parent owns integration, numerical preregistration and final acceptance. Initial
+read-only subagents audit target/roster data and canonical legality/native seams;
+no concurrent source writers in this checkout. Preserve historical-mode/default
+bytes, raw failures, authenticated source data and existing preview servers.
+
+**Acceptance before completion:** deterministic exactly-once PA/outs ledger;
+explicit date/pool assumptions and chronological refusal behavior; soft within-band
+neutral usage preferences; legal position/rotation/rest/bullpen/PH integration;
+independently reconciled historical-vs-simulated player usage with frozen evaluation
+criteria and coverage/failures; fresh applicable full checks and independent review.
+Full MLB/historical-roster certification is not assumed: complete assigned defense
+is required at play readiness, but offensive PH vacancies can legally persist until
+defense. Existing unsupported MLB rules and historical eligibility remain disclosed.
+
+**Audits consumed:** source/legality workflow `bc32aea7-e0cc-460e-ba01-7830d7fb85e6`
+completed. Source evidence `/tmp/bbsim-season-usage-source-v1/` reconciles186,517
+credited PA and130,270 current-pitcher outs;936outs are on non-PA events. Sixteen
+mid-PA responsibility switches make rating-participant PA the wrong target.
+Suspended games contaminate inferred membership dates (Diekman appears KCA/OAK on
+2019-05-19); no verified roster/transaction table exists. Interview `b10ff106-df5f-409b-89c0-ec8bd811a033` resolved availability: the user
+requires verified dated roster inputs before autonomous selection and approves the
+ledger/historical-lineup comparison first. Autonomous selection is blocked on those
+inputs; no modeled-window workaround is approved.
+Development numeric bands/comparison criteria are frozen in the plan before policy
+comparison. Source pins are frozen at `/tmp/bbsim-season-usage-v1/source-before.json`.
+
+**Implementation topology:** multi-seam. Isolated target-export writer owns new
+`audits/season_usage_targets.py`, `audits/2019-season-usage-targets.sql` and tests;
+isolated ledger writer owns new `preview/usage_ledger.py`, tests and explicit PH
+parsing/expanded actor binding in `preview/season_runner.py`. Both hand off committed
+components with focused TDD evidence. Parent integrates runner/publication/comparison
+only after handoffs; a fresh reviewer then checks integrated behavior. No concurrent
+writers in the same worktree. Native usage-policy changes are deferred by the user's verified-roster decision.
+**Next action:** launch the two bounded component writers. Existing source/native
+behavior remains unchanged; no new simulation/test success claim yet.
+
+### Earlier season usage planning — after verified PH checkpoint
+
+**Current task:** `P-02-season-usage-management-v1`, implementation planning only.
+The user requested soft prorated historical batter PA and pitcher IP management,
+normal rotation with substantial-overuse rest, and situation-first relief selection.
+[Plan](modeling/season-usage-management-v1.md) defines six delivery phases and
+observable acceptance checks. Changed files: that new plan and this ledger only.
+No production code, input data, policy thresholds or completed PH evidence changed.
+
+**Inspection:** `git status --short --branch` was clean (`main...origin/main`);
+`git log -3 --oneline` identified `971be58`, `9325791`, `e50949d`.
+Inspected runner accumulation/publication, historical input construction, first-unused
+pitcher selection/restoration and canonical PH selection. These confirm the key
+prerequisite: existing same-game pools cannot support alternate rotation/lineup
+choices as if they were complete date-appropriate club rosters.
+
+**Open decisions:** numerical PA/outs bands and preference limits, recent-rest
+thresholds, supported stint/availability clocks and schedule-order ambiguities.
+**Next concrete action:** reconcile canonical historical PA/pitcher-out targets by
+player/team/stint and freeze the phase 1 contract before implementing the phase 2
+observational ledger and explicit PH accounting support. Defensive replacements
+remain a separate ready slice; this plan does not complete P-02 or waive season gates.
+Verification for this documentation-only change: `git diff --check` and local plan-link/
+required-section assertions (see current turn result); no native/Python suite rerun.
+Preserve both existing preview servers and all completed private PH evidence.
+
 ### 2026-10-18 — end-to-end PH verified; local checkpoint
 
 **Completed task:** `P-02-pinch-hitting-v1`, bounded opt-in game delivery. Opt-in `text_game --bench`
@@ -195,8 +262,8 @@ artifacts; verification SHA256
 The v1 evidence index included its own open stdout; its corrected v2 index is
 independently checked, with the publication failure retained and no test weakening.
 
-**Next concrete action:** preregister `P-02-defensive-replacements-v1`, the next
-approved slice. Checkpoint subject: `Integrate canonical personnel and playable pinch-hit games`;
+**Next action at this earlier checkpoint:** preregister `P-02-defensive-replacements-v1`.
+The newer season-usage planning handoff above records the subsequent user request. Checkpoint subject: `Integrate canonical personnel and playable pinch-hit games`;
 parent `9325791`. Private handoff target:
 `~/Library/Application Support/bbsim2026/work-checkpoints/pinch-hitting-v1-verified-20261018-v1/`. No push, release, G1–G5, full-season or official-stat claim. Bench
 availability/positions remain explicit assumptions; empty pools mean unknown historical
