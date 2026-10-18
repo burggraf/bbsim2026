@@ -2,6 +2,8 @@
 
 **Last updated:** 2026-10-18 UTC
 
+**Latest completed preregistration:** `P-02-pitcher-usage-policy-v2-contract` — [separate v2 contract](modeling/pitcher-usage-policy-v2.md). All-supported-starter start debt; bounded continuous relief debt plus0.25 class preference; unchanged rest/legal/outcome rules; explicit entry traces; original usage bands plus coverage/role/start checks. No v2 policy implementation or games yet; v1 remains NO-GO.
+
 **Latest completed analysis:** `P-02-pitcher-usage-diagnosis-v1` — [read-only attribution](modeling/pitcher-usage-diagnosis-v1.md). All14,574 starter decisions reconstructed; fixed top-five rotations take4,749–4,753 starts versus3,680 historically. Missing qualifying entries never enter a cast in24/22/20 cases; another0/2/4 are offered relief but never pitch. Negative-pace relief appearances and class priority are verified, but exact entry-state attribution is unavailable. V1 remains NO-GO; no simulator/policy/source changes.
 
 **Latest completed implementation checkpoint:** `P-02-managed-season-v1` implementation/evaluation
@@ -53,9 +55,11 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | P-02-pinch-hitting-v1 | done — bounded opt-in full-game PH v1 | [Results/reproduction](modeling/pinch-hitting-v1.md#end-to-end-ph-game-results--2026-10-18). Fresh946Rust/4examples/680Python/130focused/full checks;50wire/36no-bench CLI controls exact;2,048 synthetic PH games and64 source-input games/33PH/16restorations with independent boxes pass.125native pins/244protected/seven inputs stable. Eligibility/positions remain assumptions; no full-season/fidelity/gate claim. |
 | P-02-managed-season-v1 | done — verified implementation/evaluation; pitcher-usage NO-GO | [Results](modeling/managed-season-v1-results.md), [contract](modeling/managed-season-v1.md). Three seeds each2,429complete/zero refusals/native failures; batter100%/aggregate limits pass, pitcher60.26–62.48% fails80%,24qualifying uncomparable per seed. Code `fb2cde0`;769Python/956Rust/4examples/full checks,12legacy byte controls,review/source guards pass. No validated usage/fidelity/default/gate claim. |
 | P-02-pitcher-usage-diagnosis-v1 | done — bounded read-only attribution | [Report/reproduction/limits](modeling/pitcher-usage-diagnosis-v1.md). Three frozen seasons/14,574 starter decisions/7,287 native outputs reconciled;43,765 pinned paths unchanged. Separate literal TSV checker passes. Top-five restriction and extra ordering explain opportunity exclusion; relief class/pace exposure verified without claiming unrecorded entry-state causes. V1 NO-GO preserved; no simulation/policy/outcome/source change. |
-| P-02-pitcher-usage-policy-v2-contract | ready — separate preregistration only | Use the diagnosis to specify supported-starter opportunity allocation, relief competition/role budgeting, coverage checks and retained entry context. Freeze metrics/populations before implementation/evaluation. No v2 code or seasons yet; no rest/legality/probability relaxation or v1 result revision. |
+| P-02-pitcher-usage-policy-v2-contract | done — bounded preregistration, not implementation | [Contract](modeling/pitcher-usage-policy-v2.md): exact starter/relief rankings, unchanged empirical budgets/rest/legal/outcome boundaries, opt-in v2 schemas/entry evidence and fixed seeds1/2/3. Original bands retained; additional coverage/role/start gates. Source-only preflight binds455batter/565pitcher/240starter-role/331relief-role/250start-count entries and395unchanged protected paths. No v2 simulation/fit/code or gate signoff. |
+| P-02-pitcher-usage-policy-v2 | ready — pure policy component only | Implement the preregistered rational starter/relief helpers and regression/property tests, preserving v1 behavior; authenticate/freeze prerequisites before code. No default or native season switch in this slice. |
+| P-02-managed-season-v2 | planned — after pure policy component | Versioned producer/native/trace integration, mechanism/compatibility/full-suite gates, then fixed three-season evaluation under the v2 contract. No completed implementation or new seasons yet. |
 | P-02-season-pool-policy-v1 | done — bounded pure component | [Contract/results](modeling/season-pool-policy-v1.md):19 focused/741Python/946Rust/4examples, build/fmt/strictClippy/source guards pass;30club pools independently reconcile historical PA/outs; mixed-role P1 fixed and reviewer-confirmed. Pure selection helpers only, not managed-season integration. |
-| P-02-season-usage-management-v1 | active — v1 NO-GO diagnosed; successor preregistration next | [Plan](modeling/season-usage-management-v1.md), [first-slice results](modeling/season-usage-ledger-v1-results.md). Authenticated PA/outs targets, exactly-once ledger, explicit gaps, receipt-backed replay/comparison and PH parser support implemented. Three fixed seeds each2384complete/45refused; descriptive bands pass, individual errors retained. Maintainer explicitly supersedes verified dated rosters: use existing season club pools and soft PA/IP targets; no injury/minor-league dates. Fresh722Python/946Rust/4examples, build/fmt/strictClippy, source guards and compatibility pass. Both bounded probes are stopped; further acquisition is unnecessary for the revised pool scope, as detailed in first Resume. No S-01/S-02/G1–G5 waiver. |
+| P-02-season-usage-management-v1 | active — v1 NO-GO retained; v2 pure component next | [Plan](modeling/season-usage-management-v1.md), [first-slice results](modeling/season-usage-ledger-v1-results.md). Authenticated PA/outs targets, exactly-once ledger, explicit gaps, receipt-backed replay/comparison and PH parser support implemented. Three fixed seeds each2384complete/45refused; descriptive bands pass, individual errors retained. Maintainer explicitly supersedes verified dated rosters: use existing season club pools and soft PA/IP targets; no injury/minor-league dates. Fresh722Python/946Rust/4examples, build/fmt/strictClippy, source guards and compatibility pass. Both bounded probes are stopped; further acquisition is unnecessary for the revised pool scope, as detailed in first Resume. No S-01/S-02/G1–G5 waiver. |
 | P-02-dated-roster-readiness-v1 | stopped — requirement superseded | [v1](data-audits/2019-dated-roster-probe-v1.md), [v2](data-audits/2019-game-roster-identity-probe-v2.md). V2 exhausts20requests/2103150bytes: historical game rosters include unused personnel; exact candidate mappings exist, but completeness/retroactive timing and independent ID validation remain unverified. MLB non-bulk terms do not clear full2019 acquisition. Parent verified93sealed files; private evidence checkpointed. Maintainer explicitly changed the requirement on 2026-10-18: use existing season club pools instead. No further acquisition; retain both probes as historical evidence. |
 | P-02-defensive-replacements-v1 | ready — separate pending slice | Approved next slice after verified PH. Define observable legal-position/roster accounting checks and a bounded manager policy before implementation; keep missing range/arm and eligibility explicit rather than inventing defensive skill. No implementation or gate approval yet. |
 | P-02-text-game-manager-v2 | done | [Contract/results and explicit usage warnings](modeling/text-game-manager-v2.md). Removed fixed seventh/27–6PA hooks; individual means or explicit empirical training-outing budgets, separate entry RNG, bounded context. Seed67: Fiers8IP/25BF/1H/0BB/7K, Oakland2–0; eight perfect innings, Healy single then hook. Full896Rust/4examples/57focused/624Python, build/fmt/strictClippy/diff;197stable source pins,191unchanged.1000games per input format reconcile;9997removed-reliever entry budgets independently reconstructed. Shorter starts/final-entry tail warnings retained; no2019usage/fatigue/era/predictive/gate signoff. Verified local checkpoint only, no push. |
@@ -173,6 +177,56 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 
 ## Resume here
 
+### Pitcher usage policy v2 contract — completed preregistration only
+
+**Current checkpoint:** `P-02-pitcher-usage-policy-v2-contract`, from clean `4e9c005`.
+[Contract and implementation gates](modeling/pitcher-usage-policy-v2.md) freeze exact
+all-starter fractional start-debt ranking, continuous relief debt plus0.25 workload-
+class preference, role-supported mixed-role relief, unchanged empirical budgets/
+80–100% starter scaling/rest/legal/outcome boundaries, opt-in formats and entry
+traces. Only that contract and this ledger changed. No policy code, new games,
+acquisition, fit, default change or gate signoff; v1 remains a frozen NO-GO.
+
+**Acceptance/populations:** original80% batter/pitcher bands and5% aggregate limits
+retained. V2 adds100% qualifying total/role appearance coverage,80% role-outs/start-
+count bands and separate5% role aggregate limits. Same2,429IDs/seeds1/2/3, known
+reused development evidence, not predictive validation. Exact criteria/formulas,
+clock, unknown/zero semantics and no-retuning rule are fixed in the contract.
+
+**Fresh source-only checks:**
+`PYTHONPATH=. python3 -B -W error /tmp/bbsim-pitcher-usage-policy-v2-contract-v1/preflight.py`,
+`proc_f53b` exit0/12s: authenticated five existing sources and target SHAf45cd379…;
+455batter/565pitcher/240starter-role/331relief-role/250>=5-start entries, sorted
+eligible identities/target hashes retained;75,473starter/54,797relief outs. All565
+qualifying pitchers have observed position/primary-pitcher support.395protected
+tracked paths (including all production/tests/frozen v1 reports) unchanged.
+`python3 -B -W error /tmp/bbsim-pitcher-usage-policy-v2-contract-v1/verify.py` passes
+source/population/protected-path bindings, exact rational hand examples, local links,
+policy/version/threshold clauses and two-document scope; `git diff --check` passes.
+Raw recipes/JSON/stdout/stderr remain under that external root. No project suite,
+native simulation, counterfactual or UI run for this documentary checkpoint; no
+independent model review claimed. Verification covers345local links and six exact
+rational formula examples, not policy performance.
+
+**Private preregistration seal:**
+`python3 -B -W error /tmp/bbsim-pitcher-usage-policy-v2-contract-seal-v1.py`, exit0;
+15regular members verified against originals,412,394archive bytes, SHA256
+`3e097139c1980767959a4e69137bc5ad52a42d665dd196d6060d3d3734c8b966`.
+Destination
+`~/Library/Application Support/bbsim2026/work-checkpoints/pitcher-usage-policy-v2-preregistered-20261018-v1/`
+contains `evidence.tar.gz`/`receipt.json`: source/eligible-population/protected-path
+bindings, recipes/raw logs, contract SHA256
+`a5e3c85ec91d53cb67639e1ebb98eb8e6f029ce20daa46def8a1256e91266956`
+and pre-seal ledger snapshot. This later ledger callback/final checks/commit are not
+inside the seal. Existing raw source/season evidence remains separately sealed;
+no redundant dataset copy, automatic restore, public distribution or push.
+
+**Next concrete action:** `P-02-pitcher-usage-policy-v2` — authenticate/freeze the
+preregistration and v1 controls, then add only the pure rational policy helpers and
+RED/GREEN regression/property tests. Native/runner integration is separately planned
+behind that component. No additional maintainer input is needed; do not tune these
+settings against source-player or simulated usage results.
+
 ### Pitcher usage diagnosis v1 — completed read-only attribution
 
 **Current checkpoint:** `P-02-pitcher-usage-diagnosis-v1` done for bounded diagnosis,
@@ -222,9 +276,10 @@ managed-v1 seal (archive SHA6e670be9…); no redundant source dataset copy. This
 ledger-only seal callback is not inside the archive. No automatic restore, push or
 public redistribution.
 
-**Next concrete action:** separately preregister `P-02-pitcher-usage-policy-v2-contract`.
-It is ready, not started; no v2 implementation/evaluation or gate signoff follows
-from the diagnostic result. No maintainer input is needed for this checkpoint.
+**Historical next action at diagnosis completion:** separately preregister
+`P-02-pitcher-usage-policy-v2-contract` (then ready/not started; now completed above).
+The diagnostic result itself did not authorize v2 implementation/evaluation or gate
+signoff. No maintainer input was needed for that checkpoint.
 
 ### Prior season-pool implementation/evaluation evidence
 
