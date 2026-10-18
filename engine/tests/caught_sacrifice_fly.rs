@@ -14,9 +14,10 @@ fn state(mask: u8, outs: u8, half: Half, cursor: u8, dh: bool) -> GameState {
             order[7] = pitcher.clone();
         }
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: order,
             next_batter: cursor,
-            pitcher,
+            pitcher: (pitcher).into(),
             dh_slot: dh.then_some(8),
             dh_must_bat: false,
             bench: vec![format!("{prefix}bench")],
@@ -55,7 +56,11 @@ fn action(before: &GameState, contact: AirContact, scoring: bool) -> Event {
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: Destination::Out,
@@ -95,7 +100,13 @@ fn action(before: &GameState, contact: AirContact, scoring: bool) -> Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -184,7 +195,7 @@ fn checked(before: &GameState, event: &Event, facts: &CaughtSacrificeFlyFacts) -
     let offense = before.half.offense();
     let defense = 1 - offense;
     let batter = event.participants.batter.as_ref().unwrap();
-    let actual = &before.teams[defense].pitcher;
+    let actual = before.teams[defense].pitcher.active_id().unwrap();
     let responsible = &before.bases[2].as_ref().unwrap().responsible_pitcher;
     let fielder = &event.ordinary_air_catch.as_ref().unwrap().fielder_id;
     let stats = derive_accounting(std::slice::from_ref(&transition)).unwrap();
@@ -357,7 +368,7 @@ fn unknown_or_wrong_facts_refuse_and_late_qualifying_sacrifices_end_the_game() {
             5 => bad.delta.moves[1].to = Destination::Third,
             6 => bad.delta.moves[1].runner.responsible_pitcher = "other".into(),
             7 => bad.participants.batter = Some("a1".into()),
-            8 => bad.participants.pitcher = "foreign".into(),
+            8 => bad.participants.pitcher = Some("foreign".into()),
             9 => bad.kind = EventKind::OutOfParkHomeRun,
             10 => bad.ordinary_air_catch.as_mut().unwrap().fielder_id = "h8".into(),
             _ => bad.ordinary_air_catch.as_mut().unwrap().batter_id = "a1".into(),
@@ -472,17 +483,22 @@ fn named_handling_actor_requires_real_before_defense_eligibility() {
         for dh in [false, true] {
             let before = state(6, 1, half, 2, dh);
             let defense = &before.teams[1 - half.offense()];
-            for actor in defense.batting_order.iter().chain([&defense.pitcher]) {
+            for actor in defense
+                .batting_order
+                .iter()
+                .map(String::as_str)
+                .chain(defense.pitcher.active_id())
+            {
                 let mut event = action(&before, AirContact::Fly, true);
-                event.ordinary_air_catch.as_mut().unwrap().fielder_id = actor.clone();
+                event.ordinary_air_catch.as_mut().unwrap().fielder_id = actor.to_owned();
                 event
                     .delta
                     .credits
                     .iter_mut()
                     .find(|c| c.kind == CreditKind::Putout)
                     .unwrap()
-                    .player_id = actor.clone();
-                if dh && actor == &defense.batting_order[8] {
+                    .player_id = actor.to_owned();
+                if dh && actor == defense.batting_order[8] {
                     rejected(&before, &event, &facts(&before));
                 } else {
                     checked(&before, &event, &facts(&before));
@@ -493,7 +509,7 @@ fn named_handling_actor_requires_real_before_defense_eligibility() {
                 "foreign",
                 &defense.bench[0],
                 &defense.removed[0],
-                &before.teams[half.offense()].pitcher,
+                before.teams[half.offense()].pitcher.active_id().unwrap(),
             ] {
                 let mut event = action(&before, AirContact::Fly, true);
                 event.ordinary_air_catch.as_mut().unwrap().fielder_id = actor.into();
@@ -523,7 +539,7 @@ fn known_canonical_contradictions_precede_unknown_handling_evidence() {
         Err(TransitionError::InvalidState)
     );
     let mut invalid = event.clone();
-    invalid.participants.pitcher = "foreign".into();
+    invalid.participants.pitcher = Some("foreign".into());
     assert_eq!(
         apply_with_caught_sacrifice_fly_facts(&before, invalid, unknown.clone()),
         Err(TransitionError::InvalidParticipants)
@@ -580,7 +596,7 @@ fn completed_reviewed_sf_half_earns_run_without_restoring_unknown_fielding() {
     assert_eq!(log[3].after().half, Half::Bottom);
     assert_eq!(log[3].after().outs, 0);
     let stats = derive_accounting(&log).unwrap();
-    let pitcher = &start.teams[1].pitcher;
+    let pitcher = start.teams[1].pitcher.active_id().unwrap();
     assert_eq!(stats.runs, [1, 0]);
     assert_eq!(stats.pitchers[1][pitcher].earned_runs, Some(1));
     assert_eq!(stats.pitchers[1][pitcher].runs_allowed, 1);

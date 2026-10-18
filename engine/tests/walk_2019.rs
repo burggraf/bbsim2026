@@ -6,9 +6,10 @@ use bbsim_engine::{
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|slot| format!("{prefix}{slot}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_relief")],
@@ -42,7 +43,11 @@ fn walk(before: &GameState, classification: Option<CreditKind>, reverse: bool) -
     let offense = before.half.offense();
     let batter =
         before.teams[offense].batting_order[before.teams[offense].next_batter as usize].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
@@ -91,7 +96,7 @@ fn walk(before: &GameState, classification: Option<CreditKind>, reverse: bool) -
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: if reverse {
             FieldingReview::NoMisplay
@@ -125,7 +130,7 @@ fn assert_walk_line(transition: &EventTransition, classification: Option<CreditK
     let offense = before.half.offense();
     let defense = 1 - offense;
     let batter = transition.event().participants.batter.as_ref().unwrap();
-    let pitcher = &transition.event().participants.pitcher;
+    let pitcher = transition.event().participants.pitcher.as_deref().unwrap();
     let batting = &lines.batters[offense][batter];
     let pitching = &lines.pitchers[defense][pitcher];
     assert_eq!(batting.plate_appearances, 1);
@@ -277,7 +282,7 @@ fn review_never_infers_walk_classification_and_known_zero_is_qualified() {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some("away0".into()),
-            pitcher: "home_pitcher".into(),
+            pitcher: Some("home_pitcher".into()),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
@@ -355,7 +360,11 @@ fn out_pa(before: &GameState) -> Event {
     let offense = before.half.offense();
     let batter =
         before.teams[offense].batting_order[before.teams[offense].next_batter as usize].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let third_out = (before.outs == 2).then(|| bbsim_engine::ThirdOut {
         runner_id: batter.clone(),
         kind: bbsim_engine::ThirdOutKind::BatterBeforeFirst,
@@ -365,7 +374,7 @@ fn out_pa(before: &GameState) -> Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
@@ -382,7 +391,11 @@ fn out_pa(before: &GameState) -> Event {
             moves: vec![RunnerMove {
                 runner: Runner {
                     player_id: batter.clone(),
-                    responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+                    responsible_pitcher: before.teams[1 - offense]
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned(),
                 },
                 from: Base::Plate,
                 to: Destination::Out,
@@ -414,7 +427,7 @@ fn unknown_intentionality_is_irreversible_per_batter_and_pitcher_segment() {
         kind: EventKind::Substitution,
         participants: Participants {
             batter: Some("away1".into()),
-            pitcher: "home_pitcher".into(),
+            pitcher: Some("home_pitcher".into()),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
@@ -633,12 +646,16 @@ fn missing_walk_modifier_precedes_inherited_runner_charge_ambiguity() {
     let mut before = state(1, 0, Half::Top);
     before.bases[0].as_mut().unwrap().responsible_pitcher = "inherited_pitcher".into();
     let batter = before.teams[0].batting_order[0].clone();
-    let pitcher = before.teams[1].pitcher.clone();
+    let pitcher = before.teams[1]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let event = Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: pitcher.clone(),
+            pitcher: Some(pitcher.clone()),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,

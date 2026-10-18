@@ -53,7 +53,7 @@ pub(crate) fn validate(
     }
     // Canonical contradictions precede unrelated missing scorer judgment.
     rules::validate_event_shape(event)?;
-    rules::validate_move_origins(&before.bases, event, Some(&defense.pitcher))?;
+    rules::validate_move_origins(&before.bases, event, defense.pitcher.active_id())?;
     let total_outs = rules::validate_outs(before, event)?;
     rules::validate_fielding_review(event)?;
     rules::validate_pa_credits(event)?;

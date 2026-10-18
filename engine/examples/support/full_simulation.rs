@@ -12,6 +12,13 @@ use bbsim_engine::{
     SacrificeBuntJudgment, SacrificeBuntThrowFacts,
 };
 
+#[allow(dead_code)] // Only opt-in personnel callers consume the bench schema and PH policy.
+#[path = "full_bench.rs"]
+pub mod bench;
+#[allow(dead_code)]
+#[path = "full_pinch.rs"]
+pub mod pinch;
+
 pub const MODEL_VERSION: &str = "text-game-recovery-v1-joint-hit-k-incomplete";
 // Both variants retain an inline immutable transition; boxing saves little but adds per-event allocations.
 #[allow(clippy::large_enum_variant)]
@@ -19,12 +26,13 @@ pub const MODEL_VERSION: &str = "text-game-recovery-v1-joint-hit-k-incomplete";
 pub enum Step {
     Play(ResolvedPlay),
     PitchingChange(EventTransition),
+    PinchHit(EventTransition),
 }
 impl Step {
     pub fn transition(&self) -> &EventTransition {
         match self {
             Self::Play(p) => p.transition(),
-            Self::PitchingChange(t) => t,
+            Self::PitchingChange(t) | Self::PinchHit(t) => t,
         }
     }
 }
@@ -247,6 +255,7 @@ impl Model {
         probabilities: &mut impl FnMut(&GameState) -> Result<Option<[f64; 10]>, String>,
         audit: &mut Option<PaDraw>,
     ) -> Result<ResolvedPlay, String> {
+        full_game::validate_defense(before, fielders)?;
         let offense = before.half.offense();
         let batter = before.teams[offense]
             .batting_order
@@ -598,12 +607,31 @@ pub fn simulate_with_probabilities(
     model: &Model,
     cast: Option<&Cast>,
     seed: u64,
+    probabilities: impl FnMut(&GameState) -> Result<Option<[f64; 10]>, String>,
+) -> Result<Simulation, String> {
+    simulate_with_personnel(initial, fielders, model, cast, None, seed, probabilities)
+}
+
+pub fn simulate_with_personnel(
+    initial: &GameState,
+    fielders: &[[String; 9]; 2],
+    model: &Model,
+    cast: Option<&Cast>,
+    bench: Option<&bench::Bench>,
+    seed: u64,
     mut probabilities: impl FnMut(&GameState) -> Result<Option<[f64; 10]>, String>,
 ) -> Result<Simulation, String> {
     let mut state = match cast {
         Some(cast) => cast.prepare(initial)?,
         None => initial.clone(),
     };
+    if let Some(bench) = bench {
+        state = bench.prepare(
+            &state,
+            fielders,
+            cast.ok_or("PH requires an explicit pitching cast")?,
+        )?;
+    }
     let mut rng = Rng::new(seed);
     // Manager draws must not consume or shift the outcome RNG stream.
     let mut manager_rng = Rng::new(seed ^ 0x6d61_6e61_6765_7232);
@@ -617,9 +645,34 @@ pub fn simulate_with_probabilities(
                 "seed {seed}: explicit 10000-event resource limit; no winner fabricated"
             ));
         }
+        if state.teams[state.half.offense()].next_batter > 8 {
+            return Err("invalid batting cursor".into());
+        }
+        if bench.is_some() {
+            if let Some(change) = cast
+                .ok_or("PH requires an explicit pitching cast")?
+                .restore_pitcher(&state)?
+            {
+                state = change.after().clone();
+                log.push(change.clone());
+                steps.push(Step::PitchingChange(change));
+                continue;
+            }
+        }
+        state
+            .validate_play_ready()
+            .map_err(|e| format!("unready personnel before generation: {e:?}"))?;
         let side = 1 - state.half.offense();
-        if cast.is_some() && entries[side].0 != state.teams[side].pitcher {
-            entries[side] = (state.teams[side].pitcher.clone(), manager_rng.next_u64());
+        if cast.is_some() && Some(entries[side].0.as_str()) != state.teams[side].pitcher.active_id()
+        {
+            entries[side] = (
+                state.teams[side]
+                    .pitcher
+                    .active_id()
+                    .expect("validated active pitcher")
+                    .to_owned(),
+                manager_rng.next_u64(),
+            );
         }
         let step = if let Some(change) = cast
             .map(|cast| cast.next_change_with_word(&state, &log, entries[side].1))
@@ -627,10 +680,36 @@ pub fn simulate_with_probabilities(
             .flatten()
         {
             Step::PitchingChange(change)
+        } else if let Some(change) = bench
+            .map(|bench| {
+                let offense = state.half.offense();
+                let reserve = cast
+                    .ok_or("PH requires an explicit pitching cast")?
+                    .next_available(&state, offense);
+                pinch::decide_states(&state, &bench.pools[offense], reserve, |candidate| {
+                    let p = probabilities(candidate)?
+                        .ok_or("PH requires individual current-matchup ratings")?;
+                    validate_pa(&p)?;
+                    Ok(std::array::from_fn(|i| p[i] / (1.0 - p[9])))
+                })
+            })
+            .transpose()?
+            .flatten()
+        {
+            Step::PinchHit(change)
         } else {
             let side = 1 - state.half.offense();
-            let mut defense = fielders[side].clone();
-            defense[0] = state.teams[side].pitcher.clone();
+            let mut defense = match &state.teams[side].defense {
+                bbsim_engine::DefenseState::LegacyUnassigned => fielders[side].clone(),
+                bbsim_engine::DefenseState::Assigned(positions) => {
+                    (*positions.clone()).map(|id| id.expect("validated complete defense"))
+                }
+            };
+            defense[0] = state.teams[side]
+                .pitcher
+                .active_id()
+                .expect("validated active pitcher")
+                .to_owned();
             let mut draw = None;
             let play = model
                 .next_with_probabilities(&state, &defense, &mut rng, &mut probabilities, &mut draw)

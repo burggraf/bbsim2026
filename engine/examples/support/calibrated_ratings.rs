@@ -175,7 +175,10 @@ impl Ratings {
             .batters
             .get(batter)
             .ok_or("missing current calibrated batter rating")?;
-        let pitcher = &state.teams[1 - offense].pitcher;
+        let pitcher = state.teams[1 - offense]
+            .pitcher
+            .active_id()
+            .ok_or("no current calibrated pitcher")?;
         let p = self
             .pitchers
             .get(pitcher)

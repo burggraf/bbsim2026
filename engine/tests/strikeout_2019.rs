@@ -6,9 +6,10 @@ use bbsim_engine::{
 
 fn state(half: Half, mask: u8, outs: u8) -> GameState {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -35,7 +36,11 @@ fn state(half: Half, mask: u8, outs: u8) -> GameState {
 fn safe_reach(before: &GameState, destination: Destination) -> (Event, GameState) {
     let offense = before.half.offense();
     let batter = before.teams[offense].batting_order[0].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let batter_runner = Runner {
         player_id: batter.clone(),
         responsible_pitcher: pitcher.clone(),
@@ -85,7 +90,7 @@ fn safe_reach(before: &GameState, destination: Destination) -> (Event, GameState
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
@@ -155,7 +160,7 @@ fn check_safe_reach(constructor: bool) {
                             derive_accounting(std::slice::from_ref(&transition)).unwrap();
                         let offense = half.offense();
                         let batter = &before.teams[offense].batting_order[0];
-                        let pitcher = &before.teams[1 - offense].pitcher;
+                        let pitcher = before.teams[1 - offense].pitcher.active_id().unwrap();
                         assert_eq!(accounting.batters[offense][batter].plate_appearances, 1);
                         assert_eq!(accounting.batters[offense][batter].credited_strikeouts, 1);
                         assert_eq!(accounting.batters[offense][batter].at_bats, Some(1));
@@ -232,13 +237,15 @@ fn retired_strikeouts_remain_legal_and_keep_pre_boundary_fielding_attribution() 
                 let accounting = derive_accounting(std::slice::from_ref(&transition)).unwrap();
                 let offense = half.offense();
                 assert_eq!(
-                    accounting.pitchers[1 - offense][&before.teams[1 - offense].pitcher]
-                        .outs_recorded,
+                    accounting.pitchers[1 - offense]
+                        [before.teams[1 - offense].pitcher.active_id().unwrap()]
+                    .outs_recorded,
                     1
                 );
                 assert_eq!(
-                    accounting.pitchers[1 - offense][&before.teams[1 - offense].pitcher]
-                        .batters_faced,
+                    accounting.pitchers[1 - offense]
+                        [before.teams[1 - offense].pitcher.active_id().unwrap()]
+                    .batters_faced,
                     1
                 );
                 assert_eq!(

@@ -36,6 +36,9 @@ pub fn project(before: &GameState, decision: &StealDecision) -> Result<EventTran
     if before.over || before.inning == 0 || before.outs > 2 {
         return Err("invalid or ended runner-only state".into());
     }
+    before
+        .validate_play_ready()
+        .map_err(|e| format!("unready personnel: {e:?}"))?;
     if decision.cause != StealCause::OrdinaryReviewed {
         return Err("missing explicit ordinary reviewed steal cause".into());
     }
@@ -118,7 +121,13 @@ pub fn project(before: &GameState, decision: &StealDecision) -> Result<EventTran
         kind: EventKind::RunnerOnly(RunnerEvent::StealAttempt),
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: before.teams[1 - offense].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("validated active pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,

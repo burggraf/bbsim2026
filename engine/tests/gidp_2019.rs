@@ -15,9 +15,10 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 
 fn fixture(half: Half, outs: u8, reverse_force: bool, crossing: bool) -> (GameState, Event) {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_relief")],
@@ -25,7 +26,11 @@ fn fixture(half: Half, outs: u8, reverse_force: bool, crossing: bool) -> (GameSt
     });
     let offense = half.offense();
     let batter = teams[offense].batting_order[0].clone();
-    let pitcher = teams[1 - offense].pitcher.clone();
+    let pitcher = teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let runner = Runner {
         player_id: teams[offense].batting_order[5].clone(),
         responsible_pitcher: pitcher.clone(),
@@ -112,7 +117,7 @@ fn fixture(half: Half, outs: u8, reverse_force: bool, crossing: bool) -> (GameSt
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::Unknown,
         single_delivery: None,
@@ -198,7 +203,7 @@ fn force_and_reverse_force_count_one_gidp_without_inferring_vector_order() {
                     let lines = derive_accounting(std::slice::from_ref(&transition)).unwrap();
                     let side = half.offense();
                     let batter = transition.event().participants.batter.as_ref().unwrap();
-                    let pitcher = &transition.event().participants.pitcher;
+                    let pitcher = transition.event().participants.pitcher.as_deref().unwrap();
                     assert_eq!(
                         lines.batters[side][batter].credited_grounded_into_double_plays,
                         1
@@ -405,7 +410,12 @@ fn safe_fixture(half: Half, outs: u8, two_forces: bool, crossing: bool) -> (Game
     let side = half.offense();
     let second = Runner {
         player_id: before.teams[side].batting_order[6].clone(),
-        responsible_pitcher: event.participants.pitcher.clone(),
+        responsible_pitcher: event
+            .participants
+            .pitcher
+            .as_deref()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
     };
     before.bases[1] = Some(second.clone());
     event.delta.moves[0].to = Destination::First;
@@ -497,7 +507,7 @@ fn batter_safe_force_and_reverse_force_preserve_literal_participation_and_runs()
                     assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
                     let lines = derive_accounting(std::slice::from_ref(&t)).unwrap();
                     let side = half.offense();
-                    let p = &t.event().participants.pitcher;
+                    let p = t.event().participants.pitcher.as_deref().unwrap();
                     assert_eq!(
                         lines.batters[side][&batter].credited_grounded_into_double_plays,
                         1

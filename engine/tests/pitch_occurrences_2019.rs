@@ -15,16 +15,21 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 
 fn fixture(half: Half, outs: u8) -> (GameState, Event) {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_relief")],
         removed: vec![],
     });
     let offense = half.offense();
-    let pitcher = teams[1 - offense].pitcher.clone();
+    let pitcher = teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let batter = teams[offense].batting_order[0].clone();
     let catcher = teams[1 - offense].batting_order[1].clone();
     let runner = Runner {
@@ -44,7 +49,7 @@ fn fixture(half: Half, outs: u8) -> (GameState, Event) {
         kind: EventKind::RunnerOnly(RunnerEvent::WildPitch),
         participants: Participants {
             batter: Some(batter),
-            pitcher: pitcher.clone(),
+            pitcher: Some(pitcher.clone()),
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
@@ -102,7 +107,12 @@ fn one_delivery_credits_one_pitcher_wp_without_a_batting_line_or_pa() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..=2 {
             let (before, event) = fixture(half, outs);
-            let pitcher = event.participants.pitcher.clone();
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let transition = accepted(&before, event);
             assert_eq!(transition.after().teams, before.teams);
             assert_eq!(transition.after().outs, outs);
@@ -127,7 +137,12 @@ fn several_handling_advances_are_one_wp_not_one_per_runner_or_carried_charge() {
         for outs in 0..=2 {
             let (mut before, mut event) = fixture(half, outs);
             let offense = half.offense();
-            let current = event.participants.pitcher.clone();
+            let current = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let old = "prior_pitcher";
             let lead = Runner {
                 player_id: before.teams[offense].batting_order[7].clone(),
@@ -252,6 +267,46 @@ fn an_explicit_qualified_delivery_cannot_omit_its_unit() {
 }
 
 #[test]
+fn assigned_delivery_requires_the_actual_catcher_not_another_active_defender() {
+    for half in [Half::Top, Half::Bottom] {
+        for passed in [false, true] {
+            let (mut before, mut event) = fixture(half, 0);
+            let side = 1 - half.offense();
+            let team = &mut before.teams[side];
+            let pitcher = team.pitcher.active_id().unwrap().to_owned();
+            let mut positions: [Option<String>; 9] = std::array::from_fn(|i| {
+                Some(if i == 0 {
+                    pitcher.clone()
+                } else {
+                    team.batting_order[i - 1].clone()
+                })
+            });
+            positions.swap(1, 2);
+            team.defense = bbsim_engine::DefenseState::Assigned(Box::new(positions));
+            team.pitcher = bbsim_engine::PitcherRole::Active {
+                player_id: pitcher,
+                obligation: bbsim_engine::PitcherObligation::Satisfied,
+            };
+            let wrong = team.batting_order[2].clone();
+            if passed {
+                event.kind = EventKind::RunnerOnly(RunnerEvent::PassedBall);
+                event.fielding_review = FieldingReview::Unknown;
+                let facts = event.single_delivery.as_mut().unwrap();
+                facts.handling = HandlingAssessment::CatcherPassed;
+                event.delta.credits = vec![credit(&facts.catcher_id, CreditKind::PassedBall)];
+            }
+            let t = apply(&before, event.clone()).unwrap();
+            assert!(t.to_bytes().starts_with(b"BBE33"));
+            assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
+            event.single_delivery.as_mut().unwrap().catcher_id = wrong.clone();
+            if passed {
+                event.delta.credits = vec![credit(&wrong, CreditKind::PassedBall)];
+            }
+            rejected(&before, event, t.after(), TransitionError::IllegalCredit);
+        }
+    }
+}
+#[test]
 fn catcher_assertion_must_be_defensively_eligible_before_review_uncertainty() {
     for half in [Half::Top, Half::Bottom] {
         for invalid in 0..4 {
@@ -261,7 +316,11 @@ fn catcher_assertion_must_be_defensively_eligible_before_review_uncertainty() {
             let facts = event.single_delivery.as_mut().unwrap();
             facts.catcher_id = match invalid {
                 0 => String::new(),
-                1 => defense.pitcher.clone(),
+                1 => defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
                 2 => defense.batting_order[8].clone(),
                 _ => defense.bench[0].clone(),
             };
@@ -365,7 +424,12 @@ fn wrong_wp_actor_cannot_hide_behind_inherited_batter_charge_ambiguity() {
         let (mut before, mut event) = fixture(half, 0);
         before.bases[0].as_mut().unwrap().responsible_pitcher = "prior_pitcher".into();
         let batter = event.participants.batter.clone().unwrap();
-        let current = event.participants.pitcher.clone();
+        let current = event
+            .participants
+            .pitcher
+            .as_deref()
+            .expect("legacy fixture pitcher")
+            .to_owned();
         event.kind = EventKind::PlateAppearance;
         event.fielding_review = FieldingReview::Unknown;
         event.single_delivery = None;
@@ -421,7 +485,12 @@ fn unique_offset(bytes: &[u8], needle: &[u8]) -> usize {
 #[test]
 fn well_formed_codec_omission_reaches_semantic_qualification_not_byte_corruption() {
     let (before, event) = fixture(Half::Top, 0);
-    let current = event.participants.pitcher.clone();
+    let current = event
+        .participants
+        .pitcher
+        .as_deref()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let control = accepted(&before, event);
     let mut bytes = control.to_bytes();
     let mut one_credit = 1u64.to_le_bytes().to_vec();
@@ -439,7 +508,12 @@ fn well_formed_codec_omission_reaches_semantic_qualification_not_byte_corruption
 fn pa_delivery(half: Half, outs: u8, mask: u8, walk: bool) -> (GameState, Event) {
     let (mut before, mut event) = fixture(half, outs);
     let offense = half.offense();
-    let pitcher = event.participants.pitcher.clone();
+    let pitcher = event
+        .participants
+        .pitcher
+        .as_deref()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let batter = event.participants.batter.clone().unwrap();
     before.bases = std::array::from_fn(|i| {
         (mask & (1 << i) != 0).then(|| Runner {
@@ -526,7 +600,12 @@ fn safe_uncaught_k_first_reach_qualifies_one_wp_with_exact_participation() {
                 let (before, event) = pa_delivery(half, outs, mask, false);
                 let after = legacy_after(&before, &event);
                 let batter = event.participants.batter.clone().unwrap();
-                let pitcher = event.participants.pitcher.clone();
+                let pitcher = event
+                    .participants
+                    .pitcher
+                    .as_deref()
+                    .expect("legacy fixture pitcher")
+                    .to_owned();
                 let transition = accepted(&before, event);
                 assert_eq!(transition.after(), &after);
                 let accounting = derive_accounting(&[transition]).unwrap();
@@ -557,7 +636,12 @@ fn fourth_ball_forced_awards_alone_suppress_wp_without_an_at_bat() {
         for outs in 0..=2 {
             for mask in 0..8 {
                 let (before, mut event) = pa_delivery(half, outs, mask, true);
-                let pitcher = event.participants.pitcher.clone();
+                let pitcher = event
+                    .participants
+                    .pitcher
+                    .as_deref()
+                    .expect("legacy fixture pitcher")
+                    .to_owned();
                 let batter = event.participants.batter.clone().unwrap();
                 let control = accepted(&before, event.clone());
                 let accounting = derive_accounting(std::slice::from_ref(&control)).unwrap();
@@ -610,7 +694,12 @@ fn fourth_ball_handling_excess_or_unforced_advance_qualifies_one_wp() {
                         .push(credit(&lead.player_id, CreditKind::Run));
                 }
             }
-            let pitcher = event.participants.pitcher.clone();
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             event
                 .delta
                 .credits
@@ -647,7 +736,12 @@ fn pre_delivery_steal_only_suppresses_but_extra_or_other_advance_allows_wp() {
         for scenario in 0..3 {
             let (mut before, mut event) = fixture(half, 0);
             let runner = event.delta.moves[0].runner.player_id.clone();
-            let pitcher = event.participants.pitcher.clone();
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             event.kind = EventKind::RunnerOnly(RunnerEvent::StealAttempt);
             event
                 .delta
@@ -725,7 +819,12 @@ fn recovery_play(half: Half, outs: u8, after_advance: bool, passed: bool) -> (Ga
     let (mut before, mut event) = fixture(half, outs);
     let lead = Runner {
         player_id: before.teams[half.offense()].batting_order[7].clone(),
-        responsible_pitcher: event.participants.pitcher.clone(),
+        responsible_pitcher: event
+            .participants
+            .pitcher
+            .as_deref()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
     };
     before.bases[2] = Some(lead.clone());
     let retired = event.delta.moves[0].runner.player_id.clone();
@@ -763,7 +862,7 @@ fn recovery_play(half: Half, outs: u8, after_advance: bool, passed: bool) -> (Ga
             if passed {
                 &facts.catcher_id
             } else {
-                &event.participants.pitcher
+                event.participants.pitcher.as_deref().unwrap()
             },
             if passed {
                 CreditKind::PassedBall
@@ -798,7 +897,12 @@ fn recovery_before_any_advance_suppresses_while_later_recovery_preserves_one_uni
                 for after in [false, true] {
                     let (before, mut event) = recovery_play(half, outs, after, passed);
                     let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
-                    let pitcher = event.participants.pitcher.clone();
+                    let pitcher = event
+                        .participants
+                        .pitcher
+                        .as_deref()
+                        .expect("legacy fixture pitcher")
+                        .to_owned();
                     let control_after = legacy_after(&before, &event);
                     event.delta.moves.reverse(); // Facts, not vector order, control timing.
                     let control = accepted(&before, event.clone());
@@ -846,7 +950,12 @@ fn recovered_third_strike_before_first_has_separate_fc_suppression() {
         for outs in 0..=2 {
             let (before, mut event) = pa_delivery(half, outs, 4, false);
             let batter = event.participants.batter.clone().unwrap();
-            let pitcher = event.participants.pitcher.clone();
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let lead = before.bases[2].clone().unwrap();
             event.delta.moves[0].to = Destination::Out;
             event.delta.moves.push(RunnerMove {
@@ -926,7 +1035,12 @@ fn intermediate_causal_reach_is_unsupported_even_after_an_independent_qualifier(
             let (mut before, mut event) = fixture(half, 0);
             let extra = Runner {
                 player_id: before.teams[half.offense()].batting_order[6].clone(),
-                responsible_pitcher: event.participants.pitcher.clone(),
+                responsible_pitcher: event
+                    .participants
+                    .pitcher
+                    .as_deref()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
             };
             before.bases[1] = Some(extra.clone());
             event.delta.moves.push(RunnerMove {
@@ -961,7 +1075,12 @@ fn intermediate_causal_reach_is_unsupported_even_after_an_independent_qualifier(
 fn separate_validated_deliveries_accumulate_without_cross_event_deduplication() {
     for half in [Half::Top, Half::Bottom] {
         let (before, event) = fixture(half, 0);
-        let pitcher = event.participants.pitcher.clone();
+        let pitcher = event
+            .participants
+            .pitcher
+            .as_deref()
+            .expect("legacy fixture pitcher")
+            .to_owned();
         let first = accepted(&before, event.clone());
         let mut later = event;
         later.delta.moves[0].from = Base::Second;
@@ -985,7 +1104,12 @@ fn separate_validated_deliveries_accumulate_without_cross_event_deduplication() 
 fn a_qualified_pb_uses_the_asserted_catcher_without_a_pitcher_wp() {
     for half in [Half::Top, Half::Bottom] {
         let (before, mut event) = fixture(half, 0);
-        let pitcher = event.participants.pitcher.clone();
+        let pitcher = event
+            .participants
+            .pitcher
+            .as_deref()
+            .expect("legacy fixture pitcher")
+            .to_owned();
         let facts = event.single_delivery.as_mut().unwrap();
         facts.handling = HandlingAssessment::CatcherPassed;
         let catcher = facts.catcher_id.clone();
@@ -1100,10 +1224,10 @@ fn qualified_family_unit_omissions_cannot_become_known_zeroes() {
                     event.delta.moves[0].to = Destination::Second;
                     event.single_delivery.as_mut().unwrap().advances[0].reached =
                         Destination::Second;
-                    event
-                        .delta
-                        .credits
-                        .push(credit(&event.participants.pitcher, CreditKind::WildPitch));
+                    event.delta.credits.push(credit(
+                        event.participants.pitcher.as_deref().unwrap(),
+                        CreditKind::WildPitch,
+                    ));
                     (before, event)
                 }
                 2 => {
@@ -1158,7 +1282,12 @@ fn wire_string(bytes: &mut Vec<u8>, id: &str) {
 fn well_formed_codec_delivery_fact_forgeries_use_the_same_semantic_guards() {
     let (before, event) = fixture(Half::Top, 0);
     let facts = event.single_delivery.as_ref().unwrap().clone();
-    let pitcher = event.participants.pitcher.clone();
+    let pitcher = event
+        .participants
+        .pitcher
+        .as_deref()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let mut record = vec![1, 0, 0]; // Some, RunnerOnly, PitcherWild.
     wire_string(&mut record, &facts.catcher_id);
     record.extend_from_slice(&1u64.to_le_bytes());
@@ -1205,7 +1334,12 @@ fn handling_class_changes_charge_actor_not_physical_effects_or_participation() {
                         continue;
                     }
                     let (before, event) = pa_delivery(half, outs, mask, walk);
-                    let pitcher = event.participants.pitcher.clone();
+                    let pitcher = event
+                        .participants
+                        .pitcher
+                        .as_deref()
+                        .expect("legacy fixture pitcher")
+                        .to_owned();
                     let wild_units = event
                         .delta
                         .credits
@@ -1711,10 +1845,10 @@ fn reject_prestart_to_protected_award(codec: bool) {
                     runner_id: runner.clone(),
                     target: Destination::Second,
                 }]);
-                event
-                    .delta
-                    .credits
-                    .push(credit(&event.participants.pitcher, CreditKind::WildPitch));
+                event.delta.credits.push(credit(
+                    event.participants.pitcher.as_deref().unwrap(),
+                    CreditKind::WildPitch,
+                ));
                 if passed {
                     passed_handling(&mut event);
                 }
@@ -1868,7 +2002,10 @@ fn fourth_ball_nonforced_prestart_still_supports_sb_with_other_handling_advance(
             }]);
             event.delta.credits.extend([
                 credit(&runner.player_id, CreditKind::StolenBase),
-                credit(&event.participants.pitcher, CreditKind::WildPitch),
+                credit(
+                    event.participants.pitcher.as_deref().unwrap(),
+                    CreditKind::WildPitch,
+                ),
             ]);
             if passed {
                 passed_handling(&mut event);
@@ -1958,14 +2095,14 @@ fn known_credit_and_review_contradictions_do_not_hide_behind_k_uncertainty() {
                         .unwrap()
                         .player_id = "other_batter".into()
                 }
-                2 => event
-                    .delta
-                    .credits
-                    .push(credit(&event.participants.pitcher, CreditKind::Putout)),
-                _ => event
-                    .delta
-                    .credits
-                    .push(credit(&event.participants.pitcher, CreditKind::Error)),
+                2 => event.delta.credits.push(credit(
+                    event.participants.pitcher.as_deref().unwrap(),
+                    CreditKind::Putout,
+                )),
+                _ => event.delta.credits.push(credit(
+                    event.participants.pitcher.as_deref().unwrap(),
+                    CreditKind::Error,
+                )),
             }
             event.single_delivery.as_mut().unwrap().pre_delivery_steals = None;
             event.single_delivery.as_mut().unwrap().recovery = RecoveryReview::Unknown;

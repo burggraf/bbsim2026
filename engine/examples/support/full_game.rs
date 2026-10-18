@@ -99,7 +99,21 @@ impl ResolvedPlay {
         &self.mechanism
     }
 }
-fn validate_defense(before: &GameState, fielders: &[String; 9]) -> Result<(), String> {
+pub(crate) fn validate_defense(before: &GameState, fielders: &[String; 9]) -> Result<(), String> {
+    before
+        .validate_play_ready()
+        .map_err(|e| format!("unready personnel: {e:?}"))?;
+    if let bbsim_engine::DefenseState::Assigned(positions) =
+        &before.teams[1 - before.half.offense()].defense
+    {
+        if positions
+            .iter()
+            .zip(fielders)
+            .any(|(id, supplied)| id.as_ref() != Some(supplied))
+        {
+            return Err("positional defense differs from canonical assignments".into());
+        }
+    }
     use std::collections::BTreeSet;
     let defense = &before.teams[1 - before.half.offense()];
     let expected: BTreeSet<_> = defense
@@ -107,11 +121,14 @@ fn validate_defense(before: &GameState, fielders: &[String; 9]) -> Result<(), St
         .iter()
         .enumerate()
         .filter(|(i, _)| defense.dh_slot != Some(*i as u8))
-        .map(|(_, id)| id)
-        .chain(std::iter::once(&defense.pitcher))
+        .map(|(_, id)| id.as_str())
+        .chain(defense.pitcher.active_id())
         .collect();
-    let supplied: BTreeSet<_> = fielders.iter().collect();
-    if fielders[0] != defense.pitcher || supplied.len() != 9 || expected != supplied {
+    let supplied: BTreeSet<_> = fielders.iter().map(String::as_str).collect();
+    if Some(fielders[0].as_str()) != defense.pitcher.active_id()
+        || supplied.len() != 9
+        || expected != supplied
+    {
         return Err(
             "positional defense must name exactly the active nine with current pitcher at P".into(),
         );

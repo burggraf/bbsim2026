@@ -32,7 +32,7 @@ fn credit(player_id: &str, kind: CreditKind) -> Credit {
 
 fn validate_fielders(before: &GameState, fielders: &[String; 9]) -> Result<(), String> {
     let defense = &before.teams[1 - before.half.offense()];
-    if fielders[PITCHER] != defense.pitcher {
+    if Some(fielders[PITCHER].as_str()) != defense.pitcher.active_id() {
         return Err("fielding pitcher must match the current defensive pitcher".into());
     }
     let unique = fielders.iter().collect::<BTreeSet<_>>();
@@ -247,7 +247,7 @@ pub fn project(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter),
-            pitcher: fielders[PITCHER].clone(),
+            pitcher: Some(fielders[PITCHER].clone()),
         },
         fielding_review,
         delta: Delta {

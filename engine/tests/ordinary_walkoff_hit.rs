@@ -8,6 +8,7 @@ use bbsim_engine::{
 
 fn fixture(mask: u8, outs: u8) -> GameState {
     let teams = std::array::from_fn(|side| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| {
             // Before runners h1/h2/h3 must not be the queued next batter h8.
             let slot = match i {
@@ -18,7 +19,7 @@ fn fixture(mask: u8, outs: u8) -> GameState {
             format!("{}{}", ["a", "h"][side], slot)
         }),
         next_batter: 0,
-        pitcher: format!("p{side}"),
+        pitcher: (format!("p{side}")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -92,7 +93,7 @@ fn event(before: &GameState, value: u8, targets: &[u8]) -> Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some("h0".into()),
-            pitcher: "p0".into(),
+            pitcher: Some("p0".into()),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -227,11 +228,11 @@ fn natural_course_second_after_winning_run_is_not_instant_clipped() {
     assert_eq!(result.sole_safe_hit_rbi().unwrap().runs_batted_in["h0"], 1);
     let accounting = derive_accounting(std::slice::from_ref(&result)).unwrap();
     assert_eq!(accounting.runs, [0, 1]);
-    // Legacy reducer first sees the stale batter; canonical construction also
-    // independently refuses any transition whose before state is already over.
+    // Readiness now rejects the ended game before checking its stale batter;
+    // canonical construction independently rejects an already-over before-state.
     assert_eq!(
         apply(result.after(), event.clone()),
-        Err(TransitionError::InvalidParticipants)
+        Err(TransitionError::IllegalStateChange)
     );
     assert_eq!(
         EventTransition::try_new(

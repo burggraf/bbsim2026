@@ -453,3 +453,296 @@ automatic PH remain unimplemented. No roster/data repair or probability/RNG/poli
 change belongs in this slice. The earlier 54-refusal statement is historical;
 the [regular-full-game correction](season-game-inputs-v1.md#approved-regular-full-game-policy--2026-10-18)
 now records 45 personnel/data refusals, not exceptional-result gating.
+
+### Canonical personnel implementation — verified local prerequisite
+
+The preparatory paragraph above is historical. The uncommitted successor now
+implements active/vacant pitcher roles, pending/assigned positional defense,
+first-batter obligations, PH/assignment transactions and optional substitution
+actors across the canonical engine, codec, accounting and real Rust callers.
+See [current type/wire contract](../engine/contract.md#canonical-personnel-extension-bbe33),
+[rules](../engine/2019-rules.md) and [accounting](../engine/accounting.md).
+`PROGRESS` remains the single live status/next-action ledger.
+
+BBE33 retains explicit state in both snapshots, including ordinary follow-ups;
+legacy conversion remains untracked/unassigned. Compatibility is event-wide:
+optional/new/mixed strict events cannot use one legacy team to bypass an unknown
+pitcher's first-batter obligation. Assignment projection binds to original
+personnel, not sequential intermediate entrants. Ordinary producers reject
+unready defense before callbacks or RNG; supplied positional inputs bind to the
+canonical map. Explicit catcher facts and PB credits require assigned C, not any
+active fielder. Offensive vacancies can survive long innings or a walk-off.
+
+Raw local evidence is `/tmp/bbsim-canonical-personnel-v1/`. Semantic regressions
+cover consumed RNG on refusal, already-active pitching, overflowing out counts,
+untracked-usage bypass, standalone vacancy panics, stale supplied positions and
+wrong assigned catcher identities. The first catcher test draft omitted a
+required third-out clock in its positive control; that fixture failure is not
+semantic RED. Corrected `assigned-catcher-red-v2.*` supplies behavioral RED;
+`assigned-catcher-green.*` verifies reducer/constructor/decoder and delivery paths.
+
+Earlier full attempts are preserved, not counted as acceptance: v2 stopped on an
+illegal-frame fixture built through a newly guarded producer; v3 records932 Rust
+passes/two validation-order failures. Fixtures now independently assert producer
+and native refusals using legally built events, preserving callback/RNG checks.
+Ended-game readiness intentionally precedes stale-participant diagnostics; the
+walk-off test retains exact reducer and constructor errors. Only those two test
+files changed after v3; production source did not.
+
+Fresh **v4 passes934 Rust tests, four example tests,77 focused tests,15 additional
+regression methods and678 Python tests** (`-B -Werror`,83.627s), plus example build,
+fmt and strict all-target Clippy. Full Rust is unfiltered (`--no-fail-fast`),
+including the10,000-game continuity/independent-accounting simulation; no failures
+or ignored tests. Authenticated50wire/36CLI parent controls remain byte-exact.
+Source-before/after pins match current files;244 protected paths and HEAD stay
+unchanged. Raw logs/commands are `full-v4/{checks.json,*.stdout,*.stderr}`;
+`verification-v4.json` SHA256 is
+`c6cc191518d8b63b4de88c598e56122fd6b3e1459c46508eb1b90c667985d01c`.
+Reproduce native checks with `python3 -B /tmp/bbsim-canonical-personnel-v1/run-full-v4.py`
+using a NEW exclusive evidence directory (the existing driver refuses to overwrite
+its completed evidence), or the exact Cargo argv in `full-v4/checks.json`.
+Python uses `python3 -B -Werror -m unittest discover -s tests -v`; compatibility
+uses the private `run-compat-v4.py` with a fresh output root. These are private
+local artifacts, not durable publication. The bounded canonical prerequisite is
+verified locally; source remains uncommitted and no gate promotion is claimed.
+
+Automatic PH, bench eligibility/import, defensive-replacement policy, double
+switches and already-active pitching-role changes remain deferred. No production
+input schema, probability/default/RNG policy, source data or dependency changed.
+
+## Automatic-PH policy — preregistration, 2026-10-18
+
+The canonical prerequisite is verified above. The next bounded implementation is
+**a standalone deterministic decision helper**, not CLI integration or completion
+of automatic management. Policy/version: `late-close-expected-bases-ph-v1`.
+Freeze this contract before policy tests/code or new source measurements. These
+are provisional, unfitted tactical choices, not inferred historical PH rates.
+
+### Bench and decision inputs
+
+- The caller explicitly supplies an **assumed-available closed hitter pool**, with
+  stable IDs and supplied assumed defensive positions2–9. Empty position evidence
+  is unknown, not fielding eligibility. Every live candidate must be on the current
+  offensive team's unused canonical bench. Reject duplicate IDs/positions,
+  malformed IDs, position1/out-of-range positions, cross-side membership and
+  entirely absent actors. A pool member already active/removed is unavailable,
+  not a new entrant; do not re-enter him. Validate metadata before rating callbacks.
+- Recorded pitching-cast actors are excluded from this hitter pool. A separate
+  optional caller-declared reserve pitcher must be a distinct unused own bench
+  member, not a hitter-pool member or opponent. This declaration is an explicit
+  availability/role assumption, not proof of historical pitching eligibility.
+- No current input schema is extended in this first helper slice. Future controlled
+  export may use the audited same-game participant union only with its assumptions,
+  exclusions and provenance retained. An empty observed pool does not establish
+  zero historical eligible bench. No daily roster/injury/rest inference, source
+  entry-inning/outcome selection or new data transfer.
+- Require valid canonical explicit personnel, not upgraded legacy uncertainty.
+  Ready current defense is mandatory. If the offense has pending assignments,
+  decline another PH until resolved; no fictitious pitcher or stale defender.
+  Ended games decline without a rating callback. Earlier/lopsided valid frames
+  decline without rating callbacks or RNG.
+
+### Frozen decision rule and canonical action
+
+Consider all current batting slots, including non-DH pitcher, DH and fielders,
+from inning7 onward when the absolute score difference is at most3, at any out/base
+state. These are versioned policy thresholds, not fitted usage targets.
+
+For each currently unused candidate, first build the legal substitution through
+canonical `apply`, before querying probabilities. For a fielder, require supplied
+coverage of his current position and include the corresponding explicit defensive
+assignment in the same event. A DH needs no invented defensive position. A
+non-DH pitcher requires the declared unused reserve pitcher; PH vacates pitching
+and position1, to be resolved by the future integration before that team's next
+ordinary defensive event. The reserve is not assigned now or credited an appearance.
+Canonical first-batter/starting-DH restrictions remain authoritative; an
+`IllegalStateChange` candidate is ineligible, while other canonical errors surface.
+
+Only if at least one legal candidate exists, query the outgoing batter and those
+candidates against the **current opposing pitcher** using the selected existing
+rating model, not sampled outcomes. Require finite strictly positive normalized
+nine-category vectors (sum tolerance1e-12). Rank by the explicit coarse score
+`BB + HBP + 1B + 2*2B + 3*3B + 4*HR + ROE`, with K/BIP-out weights0. This is an
+expected-bases proxy, not run expectancy or a new PA distribution. Choose the best
+candidate only when his score exceeds the outgoing batter's by **strictly more
+than0.10**. Stable-ID ascending breaks equal-score ties; input order must not matter.
+No policy RNG is needed; do not consume outcome or pitching-entry words. Return
+only the winning validated canonical transition, or no change. Never mutate the
+supplied frame. Substitution adds no PA/BF/outs/runs/fielding/pitching appearance.
+
+### Scope, integration order and acceptance
+
+First slice: new `engine/examples/support/full_pinch.rs`, its focused native test
+and this contract/`PROGRESS`. No current caller/default/output change. Subsequent
+integration must separately cover bench preparation without `Cast::prepare`
+conflicts, typed starting obligations/positions, offensive PH before the next draw,
+mandatory defense restoration **before** the loop's readiness guard, workload
+entry tracking, current-position fielders, replacement ratings (including calibrated
+v2), names/narration, machine role bindings and receipt-last controlled exports.
+No silent fallback to pooled ratings, legacy role uncertainty or unqualified defense.
+Do not mislabel a passing standalone helper as completed automatic PH.
+
+Before implementation, tests must expose absent behavior (interface absence is
+not semantic RED). Then cover both halves/DH modes, pitcher/DH/fielder PH,
+first-batter/DH obligations, pending and game-over refusal, inning/score/gain
+boundaries, unused reserve requirements, unknown positions, duplicate/foreign/
+used IDs, malformed probability vectors, stable ties/shuffles and immutable input.
+Verify selected IDs/current pitcher callback binding, BBE33 roundtrip, preserved
+batting slot/DH/runner charges and independent zero-stat substitution accounting.
+Run all applicable native/Python/build/fmt/strict-Clippy and parent byte controls;
+authenticate the122-source canonical prerequisite before edits and distinguish
+new policy paths from untouched core/default callers. No fitting, source repair,
+full-season acceptance, public redistribution or gate promotion.
+
+### Standalone helper verification — 2026-10-18
+
+Implemented only `engine/examples/support/full_pinch.rs` and its native test;
+no existing native source or CLI caller changed in this policy slice. Private
+`/tmp/bbsim-pinch-policy-v1/preregistration.md/json` preserve the pre-code contract.
+Interface absence is retained separately from five behavioral no-op failures.
+An additional semantic RED caught a malformed reserve ID accepted before rating
+callbacks; shared ID validation corrects that boundary. Nine focused methods pass,
+including96 base/out/side/DH cases, canonical BBE33 and zero-stat substitution checks.
+
+Fresh managed `proc_e539` exits0: `python3 -B
+/tmp/bbsim-pinch-policy-v1/run-full.py` runs943 Rust tests/66 result blocks, zero
+failed/ignored, including the10,000-game continuity/accounting test. All10 native
+stages pass, including examples build,86 focused methods, four example tests,
+fmt and strict all-target Clippy. Managed `proc_c0ef` exits0: `python3 -B -Werror
+-m unittest discover -s tests -v` passes678 tests (61.843s); `python3 -B
+/tmp/bbsim-pinch-policy-v1/run-compat.py` preserves50 wire records/36 CLI cases
+byte-exact, with unchanged native binary/rlib hashes. Driver output directories
+are exclusive; use a fresh evidence root rather than overwrite completed logs.
+
+`verification.json` authenticates124 native pins (original122 unchanged),244
+protected paths, seven input/database pins, raw logs and unchanged HEAD; SHA256
+`5e5b041e614dceeb30fefc6cd2dae11796ae6b982526ba064f8b3f14a4dfcd20`.
+This supersedes `checkpoint-pending.json`, not the retained RED evidence.
+The helper trusts explicitly supplied availability/role assumptions; it cannot
+certify their historical provenance or completeness. Future import/integration
+must cross-check pitching-cast exclusions and preserve unknown roster evidence.
+**Automatic PH remains unintegrated**: no default/input/RNG change, independent
+review, fresh historical full-season run, commit/push or gate promotion. Evidence
+and source remain private/local, not remotely durable.
+
+## End-to-end PH integration acceptance — 2026-10-18
+
+Continue P-02 through actual `text_game` games, not another standalone checkpoint.
+Add optional `--bench` with strict `assumed-game-bench-v1` key/value TSV: matching
+`game_id`, frozen PH `policy`, explicit `availability_basis` (same-game participant
+proxies assumed available at start; not verified eligibility), `defense_basis`
+(supplied observed positions assumed usable; not verified defensive eligibility),
+snapshot/supplement/opportunity hashes and attribution. Per-side stable actor rows
+supply name, positions2–9 (or `?`) and nine batting counts. Empty pools remain
+unknown historical availability, not known empty rosters. Reject extra/duplicate/
+malformed fields, cross-side/starting/cast identities and name/count conflicts.
+No pitching-cast member enters the hitter pool. No future results or entry innings
+are runtime manager inputs. No source data repair, new dependencies or fitting.
+
+Prepare the cast once, then add hitters and explicitly initialize complete starting
+positions, starting-batter obligations and mandatory starting-DH turn at a full-game
+origin. Keep the old path unchanged without `--bench`. On each iteration restore a
+defensive pitching vacancy from the next unused cast pitcher BEFORE readiness/RNG;
+replace the PH in that original batting slot with that pitcher atomically. Do not
+assign a pitcher or invent an appearance while the PH's team is still batting.
+Preserve first-batter obligations for ordinary pitching hooks too. After any opposing
+pitching decision, run the frozen PH policy before play draws; evaluate legal
+candidate **canonical after-states** using the same selected rating model. PH events
+have no draw receipt. Fielders come from current assigned positions. Current and
+incoming hitters must have complete count profiles; calibrated artifacts must also
+cover the full expanded role/count set, never silently use standard ratings instead.
+
+Acceptance: complete deterministic DH and non-DH games that actually contain PH;
+PH reaches/bats/scores, replacement ratings appear in the next consumed PA vector,
+removed players do not re-enter or make defensive plays, vacancy survives offense
+and resolves before the next defensive event, inherited charges/cursors and independent
+accounting reconcile. Explicitly render PH, associated position assignment and forced
+pitcher entry in detailed/radio/box and machine accounting without false pitching
+appearances. Malformed input refuses before output. Retain exact no-bench parent
+50wire/36CLI controls; run full native/Python/examples/build/fmt/strict Clippy.
+P-02 stays active until this evidence exists; no full-season/fidelity/gate promotion.
+
+Supplemental stress acceptance (frozen before that run): reuse the exact full-game
+regression with seeds1–256, both DH modes and both rating models, each repeated:
+1,024 distinct configurations/2,048 complete games. Change only its seed bound in
+an outside-repository driver; retain every assertion and raw output. This supplements,
+not replaces, the unfiltered native suite and its 10,000-game check. These are synthetic
+mechanism controls, not historical usage or predictive-accuracy evidence.
+
+## End-to-end PH game results — 2026-10-18
+
+**Bounded opt-in PH v1 is verified**, not just its helper. `--bench` connects strict
+bench preparation, canonical candidate-state ratings, deterministic policy, explicit
+vacancy/restoration, current fielders and named detailed/radio/box/accounting output.
+No-bench behavior remains unchanged. Accounting uses `controlled-accounting-ph-v1`
+with policy/availability/defense disclosures and the actually selected ratings model;
+it does not masquerade as the no-PH season-runner schema. The old cast-only calibrated
+artifact is correctly refused when expanded actor/count coverage is missing.
+
+Fresh `/tmp/bbsim-pinch-integration-v1/full-v2/` checks pass:
+
+- Unfiltered946 Rust tests,66 zero-failure summaries, including the10,000-game method;
+  four example tests,130 focused tests, build/fmt/strict all-target Clippy.
+- `PYTHONWARNINGS=error python3 -B -m unittest discover -s tests`:680 tests pass.
+- Authenticated50 old wire records and36 no-bench CLI cases remain byte-identical.
+- All125 native before/after source pins,244 protected paths and seven source/DB
+  input pins match; the eight prior native files changed by this integration are
+  explicitly enumerated. No source-data repairs, default-rating changes or policy-threshold retuning.
+
+Selected **fixed200 simulated games using2019 source inputs**, not historical event replays:
+
+| Fixture, seeds1–32 | Completed | PH events | Forced pitching restoration | PH PA / H / R |
+| --- | ---: | ---: | ---: | ---: |
+| `PIT201904220`, non-DH |32|27|16|33 /7 /4|
+| `BAL201905230`, DH |32|6|0|10 /3 /3|
+
+All64 named boxes reconcile against independently checked machine actors/counts,
+with76 malformed-schema/membership/missing-artifact/actor/count/header controls.
+For this verification only, the three PH disclosures are checked exactly and the
+version header is normalized in memory so the existing strict conservation checker
+can be reused unchanged; raw PH artifacts remain intact. This does **not** extend
+the production season runner to PH. First PH games repeat byte-for-byte in all three
+formats. Non-DH PIT seed4 also repeats all three formats and explicitly shows:
+**Ketel Marte bats for Zack Godley; Matt Koch subsequently takes the mound and slot9.**
+PH actors never receive fictitious pitching rows. Their current batting ratings and
+legal defensive continuity are separately exercised in the full-game regression.
+
+The supplementary unchanged-assertion stress driver passes1,024 DH/model/seed
+configurations, each repeated:2,048 complete games. The first executions contain
+1,472 PH selections and68 pitching restorations; both models and both offensive
+halves are exercised. These synthetic controls are not historical usage estimates.
+
+**Negative evidence retained:** initial CIN/OAK probes and LAN/MIL demonstration
+attempts select no PH under the frozen policy. Positive fixtures were deliberately
+selected for substitution coverage, not representativeness. Metadata/origin semantic
+REDs caught incorrect PH model labeling and46 rating callbacks from a non-origin
+frame; fixes now refuse nonzero batting cursors/removed personnel before callbacks.
+The first full native run was stopped before these refinements and is not claimed
+as passing. Evidence-index v1 mistakenly hashed its own open stdout; v2 corrects that
+publication mistake without altering raw tests or weakening assertions.
+
+Final evidence: `/tmp/bbsim-pinch-integration-v1/verification-v2.json`, SHA256
+`e157baeb86752716adffcf881fd2d2168e9a8761d81def264bd7b4c92654425d`;
+`artifact-pins-v2.json` authenticates975 completed artifacts. The coherent local
+checkpoint/private handoff do not authorize a push or public data publication.
+Bench availability and positions remain explicit assumptions, not roster eligibility.
+Full-season PH orchestration, defensive-replacement policy, usage fidelity, licensing
+clearance and G1–G5 remain outside this bounded completion.
+
+### Play the pitcher-PH example
+
+After building examples with `cargo build --locked --offline --manifest-path engine/Cargo.toml --examples`:
+
+```sh
+engine/target/debug/examples/text_game \
+  --baseline /tmp/bbsim-preview-2019-counts.csv \
+  --contact-counts /tmp/bbsim-joint-preview/counts.csv \
+  --lineup /tmp/bbsim-pinch-integration-v1/source-pit/lineup.tsv \
+  --cast /tmp/bbsim-pinch-integration-v1/source-pit/cast.tsv \
+  --bench /tmp/bbsim-pinch-integration-v1/source-pit/bench.tsv \
+  --seed 4 --format radio
+```
+
+Readable saved output:
+`/tmp/bbsim-pinch-integration-v1/actor-check-v1/pitcher-ph-004.radio.first.stdout`.
+Use `--format detailed` or `--format accounting` with the same inputs/seed.

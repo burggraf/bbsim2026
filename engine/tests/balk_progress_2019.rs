@@ -18,16 +18,21 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 // Touches are supplied separately; final destinations do not create them.
 fn fixture(half: Half, outs: u8, mask: u8, reach: u8) -> (GameState, Event) {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_relief")],
         removed: vec![],
     });
     let offense = half.offense();
-    let pitcher = teams[1 - offense].pitcher.clone();
+    let pitcher = teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let batter = teams[offense].batting_order[0].clone();
     let bases: [Option<Runner>; 3] = std::array::from_fn(|i| {
         (mask & (1 << i) != 0).then(|| Runner {
@@ -83,7 +88,7 @@ fn fixture(half: Half, outs: u8, mask: u8, reach: u8) -> (GameState, Event) {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
@@ -170,7 +175,12 @@ fn explicit_minimum_progress_conserves_one_pa_and_no_balk_for_all_safe_frames() 
                                 };
                                 facts.runner_next_touches.reverse();
                             }
-                            let pitcher = event.participants.pitcher.clone();
+                            let pitcher = event
+                                .participants
+                                .pitcher
+                                .as_deref()
+                                .expect("legacy fixture pitcher")
+                                .to_owned();
                             let batter = event.participants.batter.clone().unwrap();
                             let transition = accepted(&before, event);
                             assert_eq!(transition.after().outs, outs);
@@ -357,10 +367,10 @@ fn discarded_balk_credit_and_known_run_actor_error_precede_incomplete_progress()
     let (before, mut event) = fixture(Half::Top, 0, 4, 4);
     progress(&mut event).runner_next_touches.clear();
     let mut positive = event.clone();
-    positive
-        .delta
-        .credits
-        .push(credit(&positive.participants.pitcher, CreditKind::Balk));
+    positive.delta.credits.push(credit(
+        positive.participants.pitcher.as_deref().unwrap(),
+        CreditKind::Balk,
+    ));
     rejected(&before, positive, TransitionError::IllegalCredit);
     let batter = event.participants.batter.clone().unwrap();
     event
@@ -464,7 +474,7 @@ fn existing_participant_pa_review_role_and_state_errors_stay_known_before_progre
     let (before, event) = fixture(Half::Top, 0, 1, 4);
     let after = physical_after(&before, &event);
     let mut participant = event.clone();
-    participant.participants.pitcher = "home_relief".into();
+    participant.participants.pitcher = Some("home_relief".into());
     assert_eq!(
         apply(&before, participant.clone()),
         Err(TransitionError::InvalidParticipants)
@@ -575,7 +585,10 @@ fn complete_touches_and_absent_balk_unit_do_not_bind_pitch_error_or_steal_episod
             .delta
             .credits
             .push(if handling == HandlingAssessment::PitcherWild {
-                credit(&event.participants.pitcher, CreditKind::WildPitch)
+                credit(
+                    event.participants.pitcher.as_deref().unwrap(),
+                    CreditKind::WildPitch,
+                )
             } else {
                 credit("home1", CreditKind::PassedBall)
             });
@@ -683,8 +696,12 @@ fn corrupt_before_origin(event: &mut Event, malformed: u8) {
             event.delta.moves[index].runner.player_id = format!("{prefix}6");
         }
         2 => {
-            event.delta.moves[index].runner.responsible_pitcher =
-                event.participants.pitcher.clone();
+            event.delta.moves[index].runner.responsible_pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
         }
         _ => panic!("unknown synthetic origin corruption"),
     }
@@ -1045,7 +1062,12 @@ fn play_proceeds_run_charge_stays_carried_while_pa_belongs_to_actual_pitcher() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..=2 {
             let (mut before, mut event) = fixture(half, outs, 4, 0);
-            let current = event.participants.pitcher.clone();
+            let current = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             before.bases[2].as_mut().unwrap().responsible_pitcher = "prior_pitcher".into();
             event
                 .delta

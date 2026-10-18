@@ -20,9 +20,10 @@ use full_hit::{project, HitDecision, TagAttempt};
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let teams = ["a", "h"].map(|p| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{p}{i}")),
         next_batter: 0,
-        pitcher: format!("{p}p"),
+        pitcher: (format!("{p}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{p}bench")],
@@ -47,11 +48,31 @@ fn fielders(s: &GameState) -> [String; 9] {
     let team = &s.teams[1 - s.half.offense()];
     std::array::from_fn(|i| {
         if i == 0 {
-            team.pitcher.clone()
+            team.pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned()
         } else {
             team.batting_order[i - 1].clone()
         }
     })
+}
+#[test]
+fn supplied_positions_must_match_canonical_defense_even_on_a_safe_hit() {
+    let mut before = state(0, 0, Half::Top);
+    let stale = fielders(&before);
+    let mut current = stale.clone();
+    current.swap(1, 5);
+    before.teams[1].defense = DefenseState::Assigned(Box::new(current.clone().map(Some)));
+    before.teams[1].pitcher = PitcherRole::Active {
+        player_id: current[0].clone(),
+        obligation: PitcherObligation::Satisfied,
+    };
+    let choice = decision(1, [None; 3]);
+    assert!(project(&before, &stale, &choice).is_err());
+    let t = project(&before, &current, &choice).unwrap();
+    assert!(t.to_bytes().starts_with(b"BBE33"));
+    assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), t);
 }
 fn dest(n: u8) -> Destination {
     [
@@ -132,7 +153,7 @@ fn accounting(s: &GameState, t: &EventTransition, value: u8, runs: u8, outs: u8)
         b.credited_hit_breakdown.as_ref().unwrap().total_bases(),
         u32::from(value)
     );
-    let p = &a.pitchers[1 - o][&s.teams[1 - o].pitcher];
+    let p = &a.pitchers[1 - o][s.teams[1 - o].pitcher.active_id().unwrap()];
     assert_eq!(
         (
             p.batters_faced,
@@ -660,7 +681,11 @@ fn invalid_snapshots_and_nondh_lineups_do_not_bypass_native_validation() {
     let mut s = state(0, 0, Half::Top);
     let d = decision(3, [None; 3]);
     s.teams[1].dh_slot = None;
-    s.teams[1].batting_order[8] = s.teams[1].pitcher.clone();
+    s.teams[1].batting_order[8] = s.teams[1]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     checked(&s, &d);
     for mutate in 0..5 {
         let mut bad = s.clone();

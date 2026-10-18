@@ -14,6 +14,9 @@ mod full_manager;
 #[path = "../examples/support/full_simulation.rs"]
 mod full_simulation;
 #[allow(dead_code)]
+#[path = "../examples/support/full_transcript.rs"]
+mod full_transcript;
+#[allow(dead_code)]
 #[path = "../examples/support/joint_contact.rs"]
 mod joint;
 #[allow(dead_code)]
@@ -25,6 +28,9 @@ mod ratings;
 #[allow(dead_code)]
 #[path = "../examples/support/real_lineup.rs"]
 mod real;
+#[allow(dead_code)]
+#[path = "../examples/support/transcript.rs"]
+mod transcript;
 #[allow(dead_code)]
 #[path = "../examples/support/player_calibration_tree.rs"]
 mod tree;
@@ -133,20 +139,29 @@ fn defense(l: &real::Lineup) -> [[String; 9]; 2] {
         std::array::from_fn(|i| {
             t.batting_order
                 .iter()
-                .chain(std::iter::once(&t.pitcher))
+                .map(String::as_str)
+                .chain(t.pitcher.active_id())
                 .find(|id| {
                     positions.get(*id)
                         == Some(&["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"][i])
                 })
                 .unwrap()
-                .clone()
+                .to_owned()
         })
     })
 }
 fn calibrated_text(c: &full_manager::Cast, b: &preview::Baseline) -> String {
+    calibrated_counts_text(c.ability_counts(), b)
+}
+fn calibrated_counts_text(abilities: &BTreeMap<String, [u64; 9]>, b: &preview::Baseline) -> String {
     let rates = tree::league_nodes(*b.probabilities()).unwrap();
     let mut text=format!("key\tvalue\nformat\tclosed-opponent-tree-ratings-v2\nmodel\t{}\nopportunity_report_sha256\t{}\nsnapshot_sha256\t{}\nsupplement_sha256\t{}\ncast_sha256\t{}\nreused_test_benchmark\ttrue\nstrengths\t{}\nattribution\t{}\naudit_sha256\t{}\nselection_sha256\t{}\nleague_nodes\t{}\n",calibrated::MODEL_VERSION,ratings::REPORT_SHA,real::SNAPSHOT_SHA,real::SUPPLEMENT_SHA,calibrated::CAST_SHA,calibrated::STRENGTHS,joint::ATTRIBUTION,"a".repeat(64),"b".repeat(64),rates.iter().map(f64::to_string).collect::<Vec<_>>().join(","));
-    for (key, counts) in c.ability_counts() {
+    for (key, counts) in abilities {
+        let actor_rates = if ["batter:aph", "batter:hph"].contains(&key.as_str()) {
+            [0.01, 0.01, 0.01, 0.99, 0.99, 0.01, 0.01, 0.01]
+        } else {
+            rates
+        };
         text += &format!(
             "counts:{key}\t{}\n{key}\t{}\n",
             counts
@@ -154,7 +169,7 @@ fn calibrated_text(c: &full_manager::Cast, b: &preview::Baseline) -> String {
                 .map(u64::to_string)
                 .collect::<Vec<_>>()
                 .join(","),
-            rates
+            actor_rates
                 .iter()
                 .map(f64::to_string)
                 .collect::<Vec<_>>()
@@ -272,7 +287,7 @@ fn calibrated_tree_consumes_one_parent_and_a_relief_profile_only_after_native_en
     let entry = a
         .steps
         .iter()
-        .position(|s| s.transition().after().teams[1].pitcher == "dullr001")
+        .position(|s| s.transition().after().teams[1].pitcher.active_id() == Some("dullr001"))
         .unwrap();
     assert_eq!(a.steps[..=entry], z.steps[..=entry]);
     assert_ne!(a.steps, z.steps);
@@ -423,7 +438,7 @@ fn reliever_only_rating_changes_only_after_native_entry_and_actual_draws_respond
     let z = run(&strong);
     let entry = a
         .iter()
-        .position(|s| s.transition().after().teams[1].pitcher == "dullr001")
+        .position(|s| s.transition().after().teams[1].pitcher.active_id() == Some("dullr001"))
         .unwrap();
     assert_eq!(a[..=entry], z[..=entry]);
     assert_ne!(a, z);
@@ -540,4 +555,293 @@ fn hitter_profile_changes_the_consumed_first_parent_and_missing_model_never_fall
     .err()
     .unwrap();
     assert!(error.contains("missing current pitcher rating"));
+}
+
+// Controlled synthetic abilities exercise management, not historical roster eligibility.
+fn bench_text() -> String {
+    let mut text = format!("key\tvalue\nformat\tassumed-game-bench-v1\ngame_id\tOAK201903200\npolicy\tlate-close-expected-bases-ph-v1\navailability_basis\tsame-game participant proxies assumed available at start; not verified eligibility\ndefense_basis\tsupplied observed positions assumed usable; not verified defensive eligibility\nsnapshot_sha256\t{}\nsupplement_sha256\t{}\nopportunity_report_sha256\t{}\nattribution\t{}\n", real::SNAPSHOT_SHA, real::SUPPLEMENT_SHA, ratings::REPORT_SHA, joint::ATTRIBUTION);
+    for (side, id) in [("Away", "aph"), ("Home", "hph")] {
+        text += &format!("{side}:{id}:name\tSynthetic {id}\n{side}:{id}:positions\t2,3,4,5,6,7,8,9\n{side}:{id}:counts\t0,0,0,0,0,0,4000,0,0\n");
+    }
+    text
+}
+
+#[test]
+fn automatic_ph_reaches_actual_games_with_current_ratings_defense_and_named_output() {
+    use bbsim_engine::{DefenseState, PersonnelChange, PitcherRole};
+    let baseline = preview::Baseline::from_counts(COUNTS).unwrap();
+    let cast = full_manager::Cast::read_complete_tsv(&cast_text().replace("0,1", "100,1")).unwrap();
+    let bench = full_simulation::bench::Bench::read_tsv(&bench_text(), "OAK201903200").unwrap();
+    let l = lineup();
+    let model = model();
+    let fielders = defense(&l);
+    for dh in [false, true] {
+        let mut initial = l.initial();
+        if !dh {
+            for t in &mut initial.teams {
+                let slot = t.dh_slot.take().unwrap() as usize;
+                t.dh_must_bat = false;
+                t.batting_order[slot] = t.pitcher.active_id().unwrap().into();
+            }
+        }
+        let mut counts = cast.ability_counts().clone();
+        let mut required: BTreeSet<_> = initial
+            .teams
+            .iter()
+            .flat_map(|t| t.batting_order.iter().map(|id| format!("batter:{id}")))
+            .chain(cast.names().keys().map(|id| format!("pitcher:{id}")))
+            .collect();
+        if !dh {
+            for id in cast.names().keys() {
+                required.insert(format!("batter:{id}"));
+                counts.insert(format!("batter:{id}"), [1000, 0, 0, 0, 0, 0, 0, 0, 0]);
+            }
+        }
+        counts.retain(|id, _| required.contains(id));
+        counts.extend(bench.counts.clone());
+        required.extend(bench.counts.keys().cloned());
+        let calibrated = calibrated::Ratings::read_tsv(
+            &calibrated_counts_text(&counts, &baseline),
+            &counts,
+            &baseline,
+            &required,
+        )
+        .unwrap();
+        let ratings = ratings::Ratings::from_counts(counts, &baseline, &required).unwrap();
+        for experimental in [false, true] {
+            let probabilities = |s: &GameState| {
+                if experimental {
+                    calibrated.probabilities(s)
+                } else {
+                    ratings.probabilities(s, *baseline.probabilities())
+                }
+            };
+            let mut ph_count = 0;
+            let mut restored = 0;
+            let mut ph_sides = [0; 2];
+            let mut reaches = 0;
+            let mut runs = 0;
+            let mut again = 0;
+            let mut names = l.names();
+            names.extend(cast.names());
+            names.extend(bench.names.clone());
+            for seed in 1..=16 {
+                let run = || {
+                    full_simulation::simulate_with_personnel(
+                        &initial,
+                        &fielders,
+                        &model,
+                        Some(&cast),
+                        Some(&bench),
+                        seed,
+                        |s| Ok(Some(model.player_probabilities(probabilities(s)?)?)),
+                    )
+                    .unwrap()
+                };
+                let a = run();
+                let b = run();
+                assert_eq!(a.steps, b.steps);
+                assert_eq!(a.draws, b.draws);
+                assert!(a.steps.last().unwrap().transition().after().over);
+                let log: Vec<_> = a.steps.iter().map(|s| s.transition().clone()).collect();
+                for pair in log.windows(2) {
+                    pair[1].follows(&pair[0]).unwrap();
+                }
+                for (index, step) in a.steps.iter().enumerate() {
+                    let t = step.transition();
+                    for change in &t.event().delta.changes {
+                        if let PersonnelChange::PinchHitter { incoming, .. } = change {
+                            ph_count += 1;
+                            ph_sides[t.before().half.offense()] += 1;
+                            assert!(!a.draws.iter().any(|(n, _)| *n == index + 1));
+                            assert!(log[index + 1..].iter().any(|p| p
+                                .event()
+                                .participants
+                                .batter
+                                .as_ref()
+                                == Some(incoming)));
+                        }
+                        if matches!(change, PersonnelChange::AssignPitcher { .. }) {
+                            restored += 1;
+                            let side = 1 - t.before().half.offense();
+                            assert!(matches!(
+                                t.before().teams[side].pitcher,
+                                PitcherRole::Vacant { .. }
+                            ));
+                            assert!(t.after().validate_play_ready().is_ok());
+                        }
+                    }
+                    if t.event().kind != bbsim_engine::EventKind::Substitution {
+                        t.before().validate_play_ready().unwrap();
+                        assert!(matches!(
+                            t.before().teams[1 - t.before().half.offense()].defense,
+                            DefenseState::Assigned(_)
+                        ));
+                    }
+                    let mut detailed = Vec::new();
+                    let mut radio = Vec::new();
+                    full_transcript::write_step(
+                        &mut detailed,
+                        index + 1,
+                        step,
+                        &["A".into(), "H".into()],
+                        &names,
+                    )
+                    .unwrap();
+                    full_transcript::write_radio_step(
+                        &mut radio,
+                        index + 1,
+                        step,
+                        &["A".into(), "H".into()],
+                        &names,
+                    )
+                    .unwrap();
+                    if t.event()
+                        .delta
+                        .changes
+                        .iter()
+                        .any(|c| matches!(c, PersonnelChange::PinchHitter { .. }))
+                    {
+                        assert!(String::from_utf8(radio).unwrap().contains("Pinch hitter:"));
+                    }
+                }
+                for (n, draw) in &a.draws {
+                    let state = a.steps[n - 1].transition().before();
+                    assert_eq!(
+                        draw.probabilities,
+                        model
+                            .player_probabilities(probabilities(state).unwrap())
+                            .unwrap()
+                    );
+                }
+                let stats = bbsim_engine::accounting::derive_accounting(&log).unwrap();
+                for side in 0..2 {
+                    assert!(!stats.pitchers[side].contains_key("aph"));
+                    assert!(!stats.pitchers[side].contains_key("hph"));
+                    if let Some(b) = stats.batters[side].get(["aph", "hph"][side]) {
+                        reaches +=
+                            b.classified_hits.unwrap() + b.credited_walks + b.credited_hit_by_pitch;
+                        runs += b.credited_runs;
+                        again += u32::from(b.plate_appearances > 1);
+                    }
+                }
+                let mut boxes = Vec::new();
+                full_transcript::write_box_score(
+                    &mut boxes,
+                    &a.steps,
+                    &["Away".into(), "Home".into()],
+                    &names,
+                )
+                .unwrap();
+            }
+            assert!(ph_count > 0, "no PH in complete {dh} games");
+            assert!(ph_sides.iter().all(|n| *n > 0));
+            assert!(reaches > 0 && runs > 0 && again > 0);
+            println!("PH integration dh={dh} experimental={experimental}: selections={ph_count}, sides={ph_sides:?}, restorations={restored}, reaches={reaches}, runs={runs}, repeated_batters={again}");
+            if !dh {
+                assert!(
+                    restored > 0,
+                    "non-DH PH never followed by legal pitching restoration"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn bench_schema_and_membership_refuse_before_the_first_rating_callback() {
+    use full_simulation::bench::Bench;
+    let text = bench_text();
+    for bad in [
+        text.replace("assumed-game-bench-v1", "unknown"),
+        text.replace("OAK201903200", "OAK201903210"),
+        text.replace("2,3,4,5,6,7,8,9", "1,2"),
+        text.replace("2,3,4,5,6,7,8,9", "2,2"),
+        text.replace("0,0,0,0,0,0,4000,0,0", "0,0"),
+        format!("{text}extra\tunknown\n"),
+        format!("{text}Away:aph:name\tDuplicate\n"),
+    ] {
+        assert!(Bench::read_tsv(&bad, "OAK201903200").is_err());
+    }
+    let l = lineup();
+    let m = model();
+    let cast = full_manager::Cast::read_complete_tsv(&cast_text()).unwrap();
+    for id in ["gonzm005", "a1", "h1"] {
+        let b = Bench::read_tsv(
+            &text.replace("Away:aph:", &format!("Away:{id}:")),
+            "OAK201903200",
+        )
+        .unwrap();
+        let mut calls = 0;
+        let result = full_simulation::simulate_with_personnel(
+            &l.initial(),
+            &defense(&l),
+            &m,
+            Some(&cast),
+            Some(&b),
+            1,
+            |_| {
+                calls += 1;
+                Ok(None)
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(calls, 0);
+    }
+    let b = Bench::read_tsv(&text, "OAK201903200").unwrap();
+    for removed in [false, true] {
+        let mut state = l.initial();
+        if removed {
+            state.teams[1].removed.push("retired".into());
+        } else {
+            state.teams[0].next_batter = 1;
+        }
+        let mut calls = 0;
+        assert!(full_simulation::simulate_with_personnel(
+            &state,
+            &defense(&l),
+            &m,
+            Some(&cast),
+            Some(&b),
+            1,
+            |_| {
+                calls += 1;
+                Ok(None)
+            },
+        )
+        .is_err());
+        assert_eq!(calls, 0);
+    }
+    let base = preview::Baseline::from_counts(COUNTS).unwrap();
+    let mut expanded = cast.ability_counts().clone();
+    expanded.extend(b.counts.clone());
+    let roles = expanded.keys().cloned().collect();
+    assert!(calibrated::Ratings::read_tsv(
+        &calibrated_text(&cast, &base),
+        &expanded,
+        &base,
+        &roles
+    )
+    .is_err());
+    let legacy = full_simulation::simulate_with_probabilities(
+        &l.initial(),
+        &defense(&l),
+        &m,
+        Some(&cast),
+        1,
+        |_| Ok(None),
+    )
+    .unwrap();
+    let untouched = full_simulation::simulate_with_personnel(
+        &l.initial(),
+        &defense(&l),
+        &m,
+        Some(&cast),
+        None,
+        1,
+        |_| Ok(None),
+    )
+    .unwrap();
+    assert_eq!(legacy.steps, untouched.steps);
+    assert_eq!(legacy.draws, untouched.draws);
 }

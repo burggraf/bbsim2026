@@ -11,6 +11,7 @@ fn state() -> GameState {
         score: [11, 2],
         teams: [
             TeamState {
+                defense: bbsim_engine::DefenseState::LegacyUnassigned,
                 batting_order: std::array::from_fn(|i| format!("away{i}")),
                 next_batter: 0,
                 pitcher: "away_pitcher".into(),
@@ -20,6 +21,7 @@ fn state() -> GameState {
                 removed: vec![],
             },
             TeamState {
+                defense: bbsim_engine::DefenseState::LegacyUnassigned,
                 batting_order: std::array::from_fn(|i| format!("home{i}")),
                 next_batter: 0,
                 pitcher: "home_pitcher".into(),
@@ -54,7 +56,7 @@ fn derives_f02_runner_only_wild_pitch_without_advancing_batter() {
         kind: EventKind::RunnerOnly(RunnerEvent::WildPitch),
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![
@@ -98,7 +100,11 @@ fn derives_f02_runner_only_wild_pitch_without_advancing_batter() {
 fn batter(before: &GameState) -> Runner {
     Runner {
         player_id: "home0".into(),
-        responsible_pitcher: before.teams[0].pitcher.clone(),
+        responsible_pitcher: before.teams[0]
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
     }
 }
 
@@ -117,7 +123,13 @@ fn pa(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: before.teams[0].pitcher.clone(),
+            pitcher: Some(
+                before.teams[0]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves,
@@ -186,7 +198,7 @@ fn caught_stealing_third_out_clears_stranded_runners() {
         kind: EventKind::RunnerOnly(RunnerEvent::StealAttempt),
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![RunnerMove {
@@ -317,7 +329,7 @@ fn substitution_changes_pitcher_and_inherits_pinch_runner_responsibility() {
         kind: EventKind::Substitution,
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![],
@@ -354,7 +366,7 @@ fn substitution_changes_pitcher_and_inherits_pinch_runner_responsibility() {
         ordinary_ground_throw: None,
     };
     let next = apply(&before, event).unwrap();
-    assert_eq!(next.after().teams[0].pitcher, "reliever");
+    assert_eq!(next.after().teams[0].pitcher, "reliever".into());
     assert_eq!(
         next.after().bases[0].as_ref().unwrap().responsible_pitcher,
         "away_pitcher"
@@ -370,7 +382,7 @@ fn illegal_collision_does_not_mutate_caller_state() {
         kind: EventKind::RunnerOnly(RunnerEvent::WildPitch),
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![RunnerMove {
@@ -506,7 +518,7 @@ fn pickoff_follows_prior_event_without_plate_appearance() {
         kind: EventKind::RunnerOnly(RunnerEvent::Pickoff),
         participants: Participants {
             batter: Some("home1".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![RunnerMove {

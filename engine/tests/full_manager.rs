@@ -135,9 +135,10 @@ fn team(prefix: &str, pitcher: &str, dh: bool) -> TeamState {
         batting_order[8] = pitcher.to_owned();
     }
     TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order,
         next_batter: 0,
-        pitcher: pitcher.to_owned(),
+        pitcher: (pitcher.to_owned()).into(),
         dh_slot: dh.then_some(8),
         dh_must_bat: false,
         bench: Vec::new(),
@@ -173,7 +174,13 @@ fn event(before: &GameState, kind: EventKind, delta: Delta) -> Event {
                 before.teams[offense].batting_order[usize::from(before.teams[offense].next_batter)]
                     .clone(),
             ),
-            pitcher: before.teams[1 - offense].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::Unknown,
         delta,
@@ -194,7 +201,11 @@ fn out_pa(before: &GameState) -> Event {
     let offense = before.half.offense();
     let batter =
         before.teams[offense].batting_order[usize::from(before.teams[offense].next_batter)].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     event(
         before,
         EventKind::PlateAppearance,
@@ -220,7 +231,11 @@ fn walk(before: &GameState) -> Event {
     let offense = before.half.offense();
     let batter =
         before.teams[offense].batting_order[usize::from(before.teams[offense].next_batter)].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
@@ -274,7 +289,10 @@ fn walk(before: &GameState) -> Event {
 fn balk(before: &GameState) -> Event {
     let mut moves = Vec::new();
     let mut credits = vec![credit(
-        &before.teams[1 - before.half.offense()].pitcher,
+        before.teams[1 - before.half.offense()]
+            .pitcher
+            .active_id()
+            .unwrap(),
         CreditKind::Balk,
     )];
     for (base, runner) in before.bases.iter().enumerate() {
@@ -417,7 +435,7 @@ fn individual_budget_is_not_shortened_again_by_performance_and_lead_extension_is
     assert_eq!(empirical.next_change(&before, &log).unwrap(), None);
     while log
         .iter()
-        .filter(|t| t.event().participants.pitcher == "fierm001")
+        .filter(|t| t.event().participants.pitcher.as_deref() == Some("fierm001"))
         .count()
         < 26
     {
@@ -564,8 +582,8 @@ fn prepare_adds_only_recorded_nonstarters_and_rejects_personnel_conflicts() {
     assert_eq!(prepared.teams[1].bench, ["dullr001", "wendj001"]);
     assert_eq!(prepared.teams[0].removed, initial.teams[0].removed);
     assert_eq!(prepared.teams[1].removed, initial.teams[1].removed);
-    assert_eq!(prepared.teams[0].pitcher, "gonzm005");
-    assert_eq!(prepared.teams[1].pitcher, "fierm001");
+    assert_eq!(prepared.teams[0].pitcher, "gonzm005".into());
+    assert_eq!(prepared.teams[1].pitcher, "fierm001".into());
 
     let mut mismatch = initial.clone();
     mismatch.teams[1].pitcher = "not_fierm001".into();
@@ -605,7 +623,7 @@ fn pitch_changes_use_logged_pa_only_keep_runner_charges_and_obey_relief_threshol
     before = non_pa.after().clone();
     log.push(non_pa);
     assert_eq!(cast.next_change(&before, &log).unwrap(), None);
-    assert_eq!(before.teams[1].pitcher, "fierm001");
+    assert_eq!(before.teams[1].pitcher, "fierm001".into());
     assert_eq!(before.teams[0].next_batter, cursor_before_non_pa);
     assert_eq!(before.teams[0].next_batter, 8);
 
@@ -613,10 +631,13 @@ fn pitch_changes_use_logged_pa_only_keep_runner_charges_and_obey_relief_threshol
     let charged = before.bases.clone();
     let change = cast.next_change(&before, &log).unwrap().unwrap();
     assert_eq!(change.event().kind, EventKind::Substitution);
-    assert_eq!(change.event().participants.pitcher, "fierm001");
+    assert_eq!(
+        change.event().participants.pitcher.as_deref(),
+        Some("fierm001")
+    );
     assert_eq!(change.event().delta.credits, []);
     assert_eq!(change.event().delta.changes.len(), 1);
-    assert_eq!(change.after().teams[1].pitcher, "dullr001");
+    assert_eq!(change.after().teams[1].pitcher, "dullr001".into());
     assert_eq!(
         change
             .after()
@@ -669,7 +690,7 @@ fn pitch_changes_use_logged_pa_only_keep_runner_charges_and_obey_relief_threshol
     assert_eq!(cast.next_change(&relief_state, &log).unwrap(), None);
     advance(&mut log, &mut relief_state, walk);
     let second_change = cast.next_change(&relief_state, &log).unwrap().unwrap();
-    assert_eq!(second_change.after().teams[1].pitcher, "wendj001");
+    assert_eq!(second_change.after().teams[1].pitcher, "wendj001".into());
     assert!(second_change.after().teams[1].bench.is_empty());
 }
 
@@ -702,7 +723,7 @@ fn seventh_inning_boundary_alone_does_not_hook_and_exhaustion_keeps_current() {
             .unwrap(),
         None
     );
-    assert_eq!(exhausted.teams[1].pitcher, "fierm001");
+    assert_eq!(exhausted.teams[1].pitcher, "fierm001".into());
 }
 
 #[test]
@@ -718,7 +739,7 @@ fn no_dh_pitcher_change_replaces_the_pitching_batting_slot() {
         advance(&mut log, &mut before, walk);
     }
     let transition = cast.next_change(&before, &log).unwrap().unwrap();
-    assert_eq!(transition.after().teams[1].pitcher, "dullr001");
+    assert_eq!(transition.after().teams[1].pitcher, "dullr001".into());
     assert_eq!(transition.after().teams[1].batting_order[8], "dullr001");
     assert_eq!(transition.event().delta.changes.len(), 2);
     assert!(transition

@@ -65,17 +65,29 @@ pub fn project(
     if !(1..=3).contains(&decision.value) || !(7..=9).contains(&decision.position) {
         return Err("hit value must be 1..=3 and actual outfielder 7..=9".into());
     }
+    before
+        .validate_play_ready()
+        .map_err(|e| format!("unready personnel: {e:?}"))?;
     let offense = &before.teams[before.half.offense()];
     let defense = &before.teams[1 - before.half.offense()];
     let batter = offense
         .batting_order
         .get(usize::from(offense.next_batter))
         .ok_or("invalid batting cursor")?;
-    if fielders[0] != defense.pitcher
+    if let DefenseState::Assigned(positions) = &defense.defense {
+        if positions
+            .iter()
+            .zip(fielders)
+            .any(|(id, supplied)| id.as_ref() != Some(supplied))
+        {
+            return Err("positional defense differs from canonical assignments".into());
+        }
+    }
+    if Some(fielders[0].as_str()) != defense.pitcher.active_id()
         || fielders.iter().enumerate().any(|(i, id)| {
             id.is_empty()
                 || fielders[..i].contains(id)
-                || !(id == &defense.pitcher
+                || !(Some(id.as_str()) == defense.pitcher.active_id()
                     || defense
                         .batting_order
                         .iter()
@@ -84,7 +96,7 @@ pub fn project(
                             actor == id && defense.dh_slot.map(usize::from) != Some(slot)
                         }))
                 || offense.batting_order.contains(id)
-                || &offense.pitcher == id
+                || offense.pitcher.active_id() == Some(id.as_str())
                 || offense.bench.contains(id)
                 || offense.removed.contains(id)
                 || defense.bench.contains(id)
@@ -98,7 +110,11 @@ pub fn project(
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("validated active pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: SAFE[usize::from(decision.value - 1)],
@@ -288,7 +304,13 @@ pub fn project(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("validated active pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {

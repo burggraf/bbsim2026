@@ -27,9 +27,10 @@ fn state(mask: u8, outs: u8, half: Half, dh: bool) -> GameState {
             batting_order[8] = pitcher.clone();
         }
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order,
             next_batter: 0,
-            pitcher,
+            pitcher: (pitcher).into(),
             dh_slot: dh.then_some(8),
             dh_must_bat: false,
             bench: vec![format!("{prefix}x"), format!("{prefix}q")],
@@ -71,7 +72,11 @@ fn event(before: &GameState, shape: Shape) -> Event {
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: target,
@@ -151,7 +156,13 @@ fn event(before: &GameState, shape: Shape) -> Event {
         },
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves,

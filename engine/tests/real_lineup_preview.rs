@@ -91,7 +91,7 @@ fn generic_dh_and_non_dh_have_exact_starting_roles_and_metadata() {
         assert_eq!(lineup.team_labels(), ["SFN", "LAN"]);
         let state = lineup.initial();
         for (side, prefix) in [(0, "a"), (1, "h")] {
-            assert_eq!(state.teams[side].pitcher, format!("{prefix}p"));
+            assert_eq!(state.teams[side].pitcher, format!("{prefix}p").into());
             assert_eq!(state.teams[side].dh_slot, if dh { Some(3) } else { None });
             assert_eq!(state.teams[side].dh_must_bat, dh);
             assert_eq!(
@@ -140,7 +140,7 @@ fn starting_ids_dh_and_positions_are_not_batting_ordinals() {
             state.teams[side].batting_order,
             std::array::from_fn(|i| format!("{prefix}{}", i + 1))
         );
-        assert_eq!(state.teams[side].pitcher, format!("{prefix}p"));
+        assert_eq!(state.teams[side].pitcher, format!("{prefix}p").into());
         assert_eq!(state.teams[side].dh_slot, Some(3));
         assert!(state.teams[side].dh_must_bat);
         assert!(state.teams[side].bench.is_empty() && state.teams[side].removed.is_empty());
@@ -502,8 +502,10 @@ fn two_thousand_repeated_games_keep_joint_physics_and_available_statistics() {
                 initial.teams[1].batting_order
             );
             assert_eq!(
-                t.event().participants.pitcher,
-                t.before().teams[1 - t.before().half.offense()].pitcher
+                t.event().participants.pitcher.as_deref(),
+                t.before().teams[1 - t.before().half.offense()]
+                    .pitcher
+                    .active_id()
             );
             assert!(t.event().delta.changes.is_empty());
             for from in [Base::First, Base::Second, Base::Third] {

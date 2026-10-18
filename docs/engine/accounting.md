@@ -2,6 +2,20 @@
 
 `engine/src/accounting.rs` folds **validated, contiguous** `EventTransition`s without reading `after.score` to build inning lines. It counts named `Run` credits and reconciles the result against the end-minus-start score. `None` in an inning line means the half was not in this log; `Some(0)` means it was observed with zero runs. `complete_game` requires an empty 1st/top 0–0 start and a terminal last state; it **does not** imply complete source credits or an official box.
 
+**Canonical personnel accounting (BBE33):** [personnel contract](../modeling/pinch-hitting-v1.md#canonical-personnel-prerequisite--preregistration-2026-10-18);
+[PROGRESS](../PROGRESS.md) owns verification. Pure substitutions do not accumulate
+pitching appearances, BF, outs or fielding opportunities, even when they assign
+a pitcher. A PH does not become a pitcher or defender by entering the lineup.
+In assigned mode, observed defenders come from the validated canonical positions,
+not stale starting batting membership; legacy-unassigned mode retains its broad
+compatibility participant set without claiming known positions. Ordinary plays
+require ready defense and the actual current pitcher. Runner responsibility stays
+on its carried ID through PH, long innings, relief and scoring; it is independent
+of optional substitution participants. A game may finish with an offensive
+pitching vacancy. Explicit catcher assertions/PB credits bind to assigned C,
+not merely another eligible defender. These are personnel/accounting boundaries, not an expansion of
+scorer completeness, fielding ability certification or ER reconstruction.
+
 **Reviewed errorless-half ER correction (2026-10-17):** a fully observed,
 legally completed half now certifies its charged runs as earned when every play
 has whole-chance `FieldingReview::NoMisplay`. This explicit assertion covers

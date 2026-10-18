@@ -2,6 +2,25 @@
 
 **Source:** MLB's [2019 Official Baseball Rules](https://content.mlb.com/documents/2/2/4/305750224/2019_Official_Baseball_Rules_FINAL_.pdf), retrieved 2026-10-10 as `/tmp/bbsim-2019-rulebook.pdf`, SHA-256 `d85e0e43cffaff4ed916065d5434b26b0d93d54dbd91630d585eeefdfca29e92`. A local PDFKit text extraction was used to inspect rules; the PDF is not committed. This is a baseball-rules reference, not a data-licensing determination.
 
+**Canonical personnel extension:** [contract](../modeling/pinch-hitting-v1.md#canonical-personnel-prerequisite--preregistration-2026-10-18),
+with current verification in [PROGRESS](../PROGRESS.md). Under 2019 Rules5.10(f),(g),
+a starter must finish his first batter; a reliever must finish that batter **or
+retire the side**. There is no2019 MLB three-batter minimum. Canonical completed
+batter movements release either tracked obligation; a non-PA third out releases
+only a relief obligation. Legacy unknown usage is not retroactively certified.
+Taking-the-mound and injury/illness exceptions remain unmodeled.
+
+PH retains its original batting slot, irreversibly removes the outgoing player,
+and leaves any vacated pitching/fielding assignment pending. Defense must be
+complete before another play on that team's defense; no replacement is forced
+merely because a PH bats again or the game ends. Starting-DH first-turn restriction
+and opposing-pitcher exception remain; PH/PR preserve DH. Explicit DH-to-defense
+assignment requires legal pitcher batting placement in the same atomic event and
+irreversible DH loss. Retained hitters cannot exchange slots. No double-switch,
+already-active pitching-role policy, source eligibility or complete-rules claim.
+Historical position-limit statements below apply to their legacy checkpoints;
+explicit pending/assigned defense is now represented by the extension above.
+
 - **Rule 7.01(a),(b),(g)(1)–(3):** nine innings unless tied, shortened for a home lead or called; a tie continues; home ahead after the visiting ninth ends the game without a bottom ninth; visiting lead after a completed ninth ends the game; in the bottom ninth or later, the home winning run ends the game immediately. An out-of-park game-ending HR is an exception permitting the batter and all runners to score. A modeled event that would overshoot the winning run without an explicit HR classification cannot safely award all its runs.
 - **Rules 5.05(a)(2), 5.09(a)(3):** an uncaught third strike permits the batter to become a runner only with first unoccupied or two outs; with first occupied below two outs he is automatically retired. For an explicit K, the canonical validator now rejects a safe batter destination or an explicitly after-first final-out claim under that ineligible before-state. A same-play advance that vacates first does not retroactively establish eligibility. Caught/otherwise retired strikeouts and simultaneous runner advances remain legal. Missing K/catch/touch facts are not inferred; this is not a full pitch/count model.
 - **Third-strike review checkpoint (2026-10-10):** fresh substantive Sol-high reviewer `23b63ffe-e931-4e37-90ad-751029f3db0e` (retained resume of the original scoped reviewer after maintainer reauthentication) returned **OK with notes; no issues found**. Five [strikeout matrix tests](../../engine/tests/strikeout_2019.rs) cover both entry points, 192 safe-reach cases per entry point, 48 retired-K cases, simultaneous steals, half-changing PO attribution, explicit after-first rejection and semantic safe-reach codec forgeries. Parent red/green/full evidence is in [PROGRESS.md](../PROGRESS.md); the reviewer inspected fresh logs rather than running commands or recounting raw data. Dedicated after-first codec-forgery and missing-K invariance regressions remain optional missing proof, not reported defects. Earlier full-log paths were unavailable to the reviewer; the fresh post-login logs were available and inspected. This checkpoint does not complete E-03 or sign off G1.

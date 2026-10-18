@@ -36,7 +36,7 @@ use std::{
     collections::BTreeMap,
     io::{self, Write},
 };
-const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--calibrated-ratings TREE.tsv] [--format detailed|radio|accounting]";
+const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--bench BENCH.tsv] [--calibrated-ratings TREE.tsv] [--format detailed|radio|accounting]";
 fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
     if args == ["--help"] {
         return Ok(None);
@@ -49,6 +49,7 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
             "--contact-counts",
             "--lineup",
             "--cast",
+            "--bench",
             "--seed",
             "--calibrated-ratings",
             "--format",
@@ -112,6 +113,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (true, Some(id)) if id == lineup.game_id() => {}
         _ => return Err("lineup/cast game or format mismatch".into()),
     }
+    let bench = options
+        .get("--bench")
+        .map(|path| {
+            full_simulation::bench::Bench::read_tsv(
+                &std::fs::read_to_string(path).map_err(|e| e.to_string())?,
+                lineup.game_id(),
+            )
+        })
+        .transpose()?;
     let teams = lineup.team_names().map(str::to_owned);
     let team_labels = lineup.team_labels().map(str::to_owned);
     let initial = lineup.initial();
@@ -124,14 +134,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if initial.teams[0].dh_slot.is_none() {
         required.extend(cast.names().keys().map(|id| format!("batter:{id}")));
     }
-    let ratings =
-        ratings::Ratings::from_counts(cast.ability_counts().clone(), &baseline, &required)?;
+    let mut ability_counts = cast.ability_counts().clone();
+    if let Some(bench) = &bench {
+        for (id, counts) in &bench.counts {
+            if ability_counts.insert(id.clone(), *counts).is_some() {
+                return Err("bench/cast batting-count conflict".into());
+            }
+            required.insert(id.clone());
+        }
+    }
+    let ratings = ratings::Ratings::from_counts(ability_counts.clone(), &baseline, &required)?;
     let calibrated = options
         .get("--calibrated-ratings")
         .map(|path| {
             calibrated::Ratings::read_tsv(
                 &std::fs::read_to_string(path).map_err(|e| e.to_string())?,
-                cast.ability_counts(),
+                &ability_counts,
                 &baseline,
                 &required,
             )
@@ -143,10 +161,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::array::from_fn(|i| {
             team.batting_order
                 .iter()
-                .chain(std::iter::once(&team.pitcher))
+                .map(String::as_str)
+                .chain(team.pitcher.active_id())
                 .find(|id| positions.get(*id) == Some(&labels[i]))
                 .expect("validated starting position")
-                .clone()
+                .to_owned()
         })
     });
     let mut names = lineup.names();
@@ -156,22 +175,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         names.insert(id, name);
     }
+    if let Some(bench) = &bench {
+        for (id, name) in &bench.names {
+            if names.insert(id.clone(), name.clone()).is_some() {
+                return Err("bench/initial display identity conflict".into());
+            }
+        }
+    }
     let seed = options["--seed"].parse::<u64>()?;
-    let full_simulation::Simulation { steps, draws } =
-        full_simulation::simulate_with_probabilities(
-            &initial,
-            &fielders,
-            &model,
-            Some(&cast),
-            seed,
-            |state| {
-                let probabilities = match &calibrated {
-                    Some(r) => r.probabilities(state)?,
-                    None => ratings.probabilities(state, *baseline.probabilities())?,
-                };
-                Ok(Some(model.player_probabilities(probabilities)?))
-            },
-        )?;
+    let full_simulation::Simulation { steps, draws } = full_simulation::simulate_with_personnel(
+        &initial,
+        &fielders,
+        &model,
+        Some(&cast),
+        bench.as_ref(),
+        seed,
+        |state| {
+            let probabilities = match &calibrated {
+                Some(r) => r.probabilities(state)?,
+                None => ratings.probabilities(state, *baseline.probabilities())?,
+            };
+            Ok(Some(model.player_probabilities(probabilities)?))
+        },
+    )?;
     if options["--format"] == "accounting" {
         let log: Vec<_> = steps.iter().map(|s| s.transition().clone()).collect();
         let stats = bbsim_engine::accounting::derive_accounting(&log)
@@ -182,7 +208,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ["SEA".into(), "OAK".into()]
         };
         let mut text = Vec::new();
-        season_accounting::write(&mut text, &stats, lineup.game_id(), seed, &ids)?;
+        if bench.is_some() {
+            season_accounting::write_with_personnel(
+                &mut text,
+                &stats,
+                lineup.game_id(),
+                seed,
+                &ids,
+                Some((
+                    full_simulation::pinch::POLICY_VERSION,
+                    full_simulation::bench::AVAILABILITY,
+                    full_simulation::bench::DEFENSE_BASIS,
+                    if calibrated.is_some() {
+                        calibrated::MODEL_VERSION
+                    } else {
+                        ratings::MODEL_VERSION
+                    },
+                )),
+            )?;
+        } else {
+            season_accounting::write(&mut text, &stats, lineup.game_id(), seed, &ids)?;
+        }
         io::stdout().lock().write_all(&text)?;
         return Ok(());
     }
@@ -190,7 +236,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut output = io::stdout().lock();
     if options["--format"] == "radio" {
         writeln!(output, "{} at {} — radio transcript", teams[0], teams[1])?;
-        if lineup.is_generic() {
+        if bench.is_some() {
+            writeln!(
+                output,
+                "PH policy: {} | {} | {}",
+                full_simulation::pinch::POLICY_VERSION,
+                full_simulation::bench::AVAILABILITY,
+                full_simulation::bench::DEFENSE_BASIS
+            )?;
+        } else if lineup.is_generic() {
             writeln!(output,"Controlled historical lineup/closed cast, not season fidelity; no pinch hitting or daily eligibility. Explicit zero-count roles use the neutral prior.")?;
         }
         writeln!(
@@ -240,7 +294,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         teams[1],
         lineup.date()
     )?;
-    if lineup.is_generic() {
+    if bench.is_some() {
+        writeln!(
+            output,
+            "PH policy: {} | {} | {}",
+            full_simulation::pinch::POLICY_VERSION,
+            full_simulation::bench::AVAILABILITY,
+            full_simulation::bench::DEFENSE_BASIS
+        )?;
+    } else if lineup.is_generic() {
         writeln!(output,"Controlled historical lineup/closed cast, not season fidelity; no pinch hitting or daily eligibility. Explicit zero-count roles use the neutral prior.")?;
     }
     if calibrated.is_some() {
@@ -251,7 +313,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(output,"Pooled reference counts: {counts:?}; interference alone retains pooled parent mass. Generated contact geometry/handling, runner/error/steal conditionals remain shared provisional priors; not observed mechanisms or validated individual speed/arm/fielding.")?;
     writeln!(output,"PA MODEL records the actual consumed vector, raw RNG word and selected parent (K, BB, HBP, 1B, 2B, 3B, HR, ROE, contact, interference). Tactical IBB overrides and runner-only events have no PA draw. Credited walkoff hit value may be shorter than the selected parent.")?;
     writeln!(output,"Manager: {} | {}. Recorded nonstarters assumed available at start; not verified eligibility. Individual outing budgets with bounded scoreless/no-hit extensions; no additional early-performance hook, measured pitch counts or fatigue. No automatic seventh-inning hook; exhausted cast keeps last pitcher.", full_manager::POLICY_VERSION, cast.workload_mode())?;
-    writeln!(output,"KNOWN MISSING GENERATION: automatic uncaught-K out plus same-delivery runner advance, pinch hitting/running/defensive replacements, ground-rule doubles, inside-park home runs and appeal double-offs. Joint hits/runner tags and eligible recovered-K advances use provisional priors. No complete major-event coverage claim.")?;
+    let missing_personnel = if bench.is_some() {
+        "pinch running/tactical defensive replacements"
+    } else {
+        "pinch hitting/running/defensive replacements"
+    };
+    writeln!(output,"KNOWN MISSING GENERATION: automatic uncaught-K out plus same-delivery runner advance, {missing_personnel}, ground-rule doubles, inside-park home runs and appeal double-offs. Joint hits/runner tags and eligible recovered-K advances use provisional priors. No complete major-event coverage claim.")?;
     writeln!(output, "Source witness {}; accepted 2019 snapshot d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528; supplement 554632467416eef202b7a55cadad2d09e5355ce98c83868b26b5267f98852b82.",lineup.game_id())?;
     writeln!(output, "INTEGRITY CHECKS: contiguous canonical log; event-summed runs/PA/BF/outs/cursors and observed PO/A/E/PB reconciliation. Not complete official accounting.")?;
     writeln!(output, "Engine {} | Mechanics {} | 2019 pilot rules; incomplete official accounting; individual participant-proxy means, not validated player abilities.",env!("CARGO_PKG_VERSION"), full_simulation::MODEL_VERSION)?;
@@ -264,7 +331,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .batter
                 .as_ref()
                 .ok_or("ordinary PA lacks batter")?;
-            let pitcher = &event.participants.pitcher;
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .ok_or("ordinary PA lacks pitcher")?;
             writeln!(output, "PA MODEL {} | Batter: {} ({batter}) | Pitcher: {} ({pitcher}) | Word: {} | Parent: {} | Probabilities: {:?}",i+1,names.get(batter).ok_or("missing rated batter name")?,names.get(pitcher).ok_or("missing rated pitcher name")?,draw.word,draw.parent,draw.probabilities)?;
         }
         full_transcript::write_step(&mut output, i + 1, step, &team_labels, &names)?;

@@ -1,13 +1,14 @@
 //! Versions 25 (legacy), 26 (air catch), 27 (ordinary walk-off hit facts),
 //! 28 (caught-sacrifice-fly), 29 (bunt), 30 (force relay), 31 (hit/runner tag),
-//! 32 (recovered K before First after runner advances).
+//! 32 (recovered K before First after runner advances),
+//! 33 (typed personnel, optional substitution actors, and explicit position assignments).
 //! Little-endian, length-prefixed UTF-8;
 //! no database or external serialization dependency. Decoding always revalidates the contract.
 use super::*;
 
 type Decode<T> = Result<T, TransitionError>;
 
-struct Reader<'a>(&'a [u8]);
+struct Reader<'a>(&'a [u8], bool);
 impl<'a> Reader<'a> {
     fn take(&mut self, count: usize) -> Decode<&'a [u8]> {
         let part = self
@@ -319,15 +320,115 @@ binary_struct!(Runner {
     player_id,
     responsible_pitcher
 });
-binary_struct!(TeamState {
-    batting_order,
-    next_batter,
-    pitcher,
-    dh_slot,
-    dh_must_bat,
-    bench,
-    removed
-});
+binary_enum!(PitcherObligation { UntrackedLegacy = 0, StartingBatter = 1, ReliefBatter = 2, Satisfied = 3 });
+impl Binary for PitcherRole {
+    fn encode(&self, out: &mut Vec<u8>) {
+        match self {
+            Self::Active {
+                player_id,
+                obligation,
+            } => {
+                0u8.encode(out);
+                player_id.encode(out);
+                obligation.encode(out);
+            }
+            Self::Vacant { batting_slot } => {
+                1u8.encode(out);
+                batting_slot.encode(out);
+            }
+        }
+    }
+    fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
+        match u8::decode(reader)? {
+            0 => Ok(Self::Active {
+                player_id: Binary::decode(reader)?,
+                obligation: Binary::decode(reader)?,
+            }),
+            1 => Ok(Self::Vacant {
+                batting_slot: Binary::decode(reader)?,
+            }),
+            _ => Err(TransitionError::InvalidEncoding),
+        }
+    }
+}
+impl Binary for DefenseState {
+    fn encode(&self, out: &mut Vec<u8>) {
+        match self {
+            Self::LegacyUnassigned => 0u8.encode(out),
+            Self::Assigned(positions) => {
+                1u8.encode(out);
+                positions.encode(out);
+            }
+        }
+    }
+    fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
+        match u8::decode(reader)? {
+            0 => Ok(Self::LegacyUnassigned),
+            1 => Ok(Self::Assigned(Box::new(Binary::decode(reader)?))),
+            _ => Err(TransitionError::InvalidEncoding),
+        }
+    }
+}
+impl TeamState {
+    fn encode_personnel(&self, out: &mut Vec<u8>, extended: bool) {
+        self.batting_order.encode(out);
+        self.next_batter.encode(out);
+        if extended {
+            self.pitcher.encode(out);
+        } else {
+            self.pitcher
+                .active_id()
+                .expect("legacy pitcher")
+                .to_owned()
+                .encode(out);
+        }
+        self.dh_slot.encode(out);
+        self.dh_must_bat.encode(out);
+        self.bench.encode(out);
+        self.removed.encode(out);
+        if extended {
+            self.defense.encode(out);
+        }
+    }
+}
+impl Binary for TeamState {
+    fn encode(&self, out: &mut Vec<u8>) {
+        self.encode_personnel(out, false);
+    }
+    fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
+        Ok(Self {
+            batting_order: Binary::decode(reader)?,
+            next_batter: Binary::decode(reader)?,
+            pitcher: if reader.1 {
+                Binary::decode(reader)?
+            } else {
+                String::decode(reader)?.into()
+            },
+            dh_slot: Binary::decode(reader)?,
+            dh_must_bat: Binary::decode(reader)?,
+            bench: Binary::decode(reader)?,
+            removed: Binary::decode(reader)?,
+            defense: if reader.1 {
+                Binary::decode(reader)?
+            } else {
+                DefenseState::LegacyUnassigned
+            },
+        })
+    }
+}
+impl GameState {
+    fn encode_personnel(&self, out: &mut Vec<u8>, extended: bool) {
+        self.inning.encode(out);
+        self.half.encode(out);
+        self.outs.encode(out);
+        self.score.encode(out);
+        for team in &self.teams {
+            team.encode_personnel(out, extended);
+        }
+        self.bases.encode(out);
+        self.over.encode(out);
+    }
+}
 binary_struct!(GameState {
     inning,
     half,
@@ -338,7 +439,25 @@ binary_struct!(GameState {
     over
 });
 binary_struct!(RunnerMove { runner, from, to });
-binary_struct!(Participants { batter, pitcher });
+impl Binary for Participants {
+    fn encode(&self, out: &mut Vec<u8>) {
+        self.batter.encode(out);
+        self.pitcher
+            .as_ref()
+            .expect("legacy participant pitcher")
+            .encode(out);
+    }
+    fn decode(reader: &mut Reader<'_>) -> Decode<Self> {
+        Ok(Self {
+            batter: Binary::decode(reader)?,
+            pitcher: if reader.1 {
+                Binary::decode(reader)?
+            } else {
+                Some(String::decode(reader)?)
+            },
+        })
+    }
+}
 binary_struct!(Credit { player_id, kind });
 binary_struct!(ThirdOut {
     runner_id,
@@ -348,6 +467,28 @@ binary_struct!(ThirdOut {
 impl Binary for PersonnelChange {
     fn encode(&self, out: &mut Vec<u8>) {
         match self {
+            Self::PinchHitter { outgoing, incoming } => {
+                3u8.encode(out);
+                outgoing.encode(out);
+                incoming.encode(out);
+            }
+            Self::AssignPitcher { team, incoming } => {
+                4u8.encode(out);
+                team.encode(out);
+                incoming.encode(out);
+            }
+            Self::AssignDefense {
+                team,
+                position,
+                outgoing,
+                incoming,
+            } => {
+                5u8.encode(out);
+                team.encode(out);
+                position.encode(out);
+                outgoing.encode(out);
+                incoming.encode(out);
+            }
             Self::Pitcher {
                 team,
                 outgoing,
@@ -397,6 +538,20 @@ impl Binary for PersonnelChange {
             }),
             2 => Ok(Self::PinchRunner {
                 base: Binary::decode(reader)?,
+                outgoing: Binary::decode(reader)?,
+                incoming: Binary::decode(reader)?,
+            }),
+            3 if reader.1 => Ok(Self::PinchHitter {
+                outgoing: Binary::decode(reader)?,
+                incoming: Binary::decode(reader)?,
+            }),
+            4 if reader.1 => Ok(Self::AssignPitcher {
+                team: Binary::decode(reader)?,
+                incoming: Binary::decode(reader)?,
+            }),
+            5 if reader.1 => Ok(Self::AssignDefense {
+                team: Binary::decode(reader)?,
+                position: Binary::decode(reader)?,
                 outgoing: Binary::decode(reader)?,
                 incoming: Binary::decode(reader)?,
             }),
@@ -519,6 +674,40 @@ binary_struct!(Event {
 impl EventTransition {
     /// Stable versioned record; cannot be decoded without passing transition validation.
     pub fn to_bytes(&self) -> Vec<u8> {
+        let extended = self
+            .before
+            .teams
+            .iter()
+            .chain(&self.after.teams)
+            .any(|team| !team.legacy_personnel())
+            || !super::personnel::legacy_event(&self.event);
+        if extended {
+            let mut out = b"BBE33".to_vec();
+            self.before.encode_personnel(&mut out, true);
+            let event = &self.event;
+            event.kind.encode(&mut out);
+            event.participants.batter.encode(&mut out);
+            event.participants.pitcher.encode(&mut out);
+            event.fielding_review.encode(&mut out);
+            event.delta.encode(&mut out);
+            event.two_out_contact.encode(&mut out);
+            event.single_delivery.encode(&mut out);
+            event.balk.encode(&mut out);
+            event.ordinary_ground_throw.encode(&mut out);
+            event.caught_strikeout.encode(&mut out);
+            event.protected_award.encode(&mut out);
+            event.sole_home_run.encode(&mut out);
+            event.sole_safe_hit.encode(&mut out);
+            event.muffed_ground_ball.encode(&mut out);
+            self.after.encode_personnel(&mut out, true);
+            event.ordinary_air_catch.encode(&mut out);
+            self.walkoff_hit.encode(&mut out);
+            self.caught_sacrifice_fly.encode(&mut out);
+            self.sacrifice_bunt_throw.encode(&mut out);
+            self.ground_force_double_play.encode(&mut out);
+            self.hit_runner_tag.encode(&mut out);
+            return out;
+        }
         let mut out = if self.event.single_delivery.as_ref().is_some_and(|facts| {
             matches!(
                 facts.recovery,
@@ -565,7 +754,9 @@ impl EventTransition {
         out
     }
     pub fn from_bytes(bytes: &[u8]) -> Decode<Self> {
-        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE32") {
+        let (payload, version) = if let Some(payload) = bytes.strip_prefix(b"BBE33") {
+            (payload, 33)
+        } else if let Some(payload) = bytes.strip_prefix(b"BBE32") {
             (payload, 32)
         } else if let Some(payload) = bytes.strip_prefix(b"BBE31") {
             (payload, 31)
@@ -587,7 +778,7 @@ impl EventTransition {
                 25,
             )
         };
-        let mut reader = Reader(payload);
+        let mut reader = Reader(payload, version == 33);
         let before = GameState::decode(&mut reader)?;
         let mut event = Event::decode(&mut reader)?;
         let new_recovery = event.single_delivery.as_ref().is_some_and(|facts| {
@@ -596,10 +787,31 @@ impl EventTransition {
                 RecoveryReview::RecoveredThirdStrikeBatterBeforeFirstAfterAdvances { .. }
             )
         });
-        if new_recovery != (version == 32) {
+        if version != 33 && new_recovery != (version == 32) {
             return Err(TransitionError::InvalidEncoding);
         }
         let after = GameState::decode(&mut reader)?;
+        if version == 33 {
+            event.ordinary_air_catch = Binary::decode(&mut reader)?;
+            let walkoff = Binary::decode(&mut reader)?;
+            let sacrifice_fly = Binary::decode(&mut reader)?;
+            let bunt = Binary::decode(&mut reader)?;
+            let force = Binary::decode(&mut reader)?;
+            let tag = Binary::decode(&mut reader)?;
+            if !reader.0.is_empty() {
+                return Err(TransitionError::InvalidEncoding);
+            }
+            return Self::try_new_with_hit_runner_tag_inner(
+                before,
+                event,
+                after,
+                walkoff,
+                sacrifice_fly,
+                bunt,
+                force,
+                tag,
+            );
+        }
         if version == 26 || version == 28 {
             event.ordinary_air_catch = Some(OrdinaryAirCatchFacts::decode(&mut reader)?);
         }

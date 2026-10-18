@@ -8,9 +8,10 @@ use std::collections::BTreeMap;
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let team = |prefix: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}-{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}-pitcher"),
+        pitcher: (format!("{prefix}-pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}-bench")],
@@ -47,14 +48,24 @@ fn event(before: &GameState, contact: AirContact) -> Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
             moves: vec![RunnerMove {
                 runner: Runner {
                     player_id: batter.clone(),
-                    responsible_pitcher: defense.pitcher.clone(),
+                    responsible_pitcher: defense
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned(),
                 },
                 from: Base::Plate,
                 to: Destination::Out,
@@ -340,7 +351,8 @@ fn held_movements_and_credit_order_preserve_physical_state_and_independent_boxes
                                     derive_accounting(std::slice::from_ref(&t)).unwrap();
                                 let side = 1 - half.offense();
                                 let defense = &before.teams[side];
-                                let pitcher = &box_score.pitchers[side][&defense.pitcher];
+                                let pitcher =
+                                    &box_score.pitchers[side][defense.pitcher.active_id().unwrap()];
                                 assert_eq!(
                                     (
                                         pitcher.batters_faced,
@@ -418,10 +430,18 @@ fn catcher_actor_eligibility_uses_before_defense_including_a_pitcher_catch() {
 #[test]
 fn no_dh_pitcher_catch_is_observed_once_not_as_two_defensive_actors() {
     let mut before = state(0, 0, Half::Top);
-    let pitcher_id = before.teams[1].pitcher.clone();
+    let pitcher_id = before.teams[1]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let defense = &mut before.teams[1];
     defense.dh_slot = None;
-    defense.batting_order[0] = defense.pitcher.clone();
+    defense.batting_order[0] = defense
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let mut action = event(&before, AirContact::PopUp);
     action.ordinary_air_catch.as_mut().unwrap().fielder_id = pitcher_id.clone();
     action

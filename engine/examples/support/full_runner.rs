@@ -149,7 +149,7 @@ fn event(
         kind: EventKind::RunnerOnly(kind),
         participants: Participants {
             batter: Some(batter),
-            pitcher: fielders[PITCHER].clone(),
+            pitcher: Some(fielders[PITCHER].clone()),
         },
         fielding_review,
         delta,

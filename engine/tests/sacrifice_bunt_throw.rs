@@ -13,9 +13,10 @@ fn state(mask: u8, outs: u8, half: Half, cursor: u8, dh: bool) -> GameState {
             order[7] = pitcher.clone();
         }
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: order,
             next_batter: cursor,
-            pitcher,
+            pitcher: (pitcher).into(),
             dh_slot: dh.then_some(8),
             dh_must_bat: false,
             bench: vec![format!("{prefix}bench")],
@@ -53,7 +54,11 @@ fn plate_move(before: &GameState, to: Destination) -> RunnerMove {
     RunnerMove {
         runner: Runner {
             player_id: batter(before),
-            responsible_pitcher: before.teams[1 - before.half.offense()].pitcher.clone(),
+            responsible_pitcher: before.teams[1 - before.half.offense()]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to,
@@ -70,7 +75,13 @@ fn plain(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter(before)),
-            pitcher: before.teams[1 - before.half.offense()].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - before.half.offense()]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -105,12 +116,20 @@ fn facts(before: &GameState, role: u8) -> SacrificeBuntThrowFacts {
             .as_ref()
             .map_or("absent".into(), |r| r.player_id.clone()),
         thrower_id: if role == 1 {
-            defense.pitcher.clone()
+            defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned()
         } else {
             defense.batting_order[3].clone()
         },
         receiver_id: if role == 2 {
-            defense.pitcher.clone()
+            defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned()
         } else {
             defense.batting_order[1].clone()
         },
@@ -215,7 +234,7 @@ fn checked(before: &GameState, event: &Event, facts: &SacrificeBuntThrowFacts) -
         ),
         (1, Some(0), Some(0), 1, 0, Some(0))
     );
-    let pitch = &stats.pitchers[defense][&event.participants.pitcher];
+    let pitch = &stats.pitchers[defense][event.participants.pitcher.as_deref().unwrap()];
     assert_eq!(
         (
             pitch.batters_faced,
@@ -371,7 +390,7 @@ fn missing_unknown_wrong_units_participants_charges_and_geometry_refuse() {
             5 => {
                 bad.delta.moves.pop();
             }
-            6 => bad.participants.pitcher = "foreign".into(),
+            6 => bad.participants.pitcher = Some("foreign".into()),
             7 => bad.participants.batter = Some("a1".into()),
             8 => bad.kind = EventKind::OutOfParkHomeRun,
             _ => bad.delta.outs = 0,
@@ -409,15 +428,20 @@ fn named_fielders_must_be_distinct_before_eligible_actors() {
             let before = state(5, 1, half, 2, dh);
             let defense = &before.teams[1 - half.offense()];
             for receiver in [false, true] {
-                for actor in defense.batting_order.iter().chain([&defense.pitcher]) {
+                for actor in defense
+                    .batting_order
+                    .iter()
+                    .map(String::as_str)
+                    .chain(defense.pitcher.active_id())
+                {
                     let mut supplied = facts(&before, 0);
                     if receiver {
-                        supplied.receiver_id = actor.clone();
+                        supplied.receiver_id = actor.to_owned();
                     } else {
-                        supplied.thrower_id = actor.clone();
+                        supplied.thrower_id = actor.to_owned();
                     }
                     let event = action(&before, &supplied);
-                    if (dh && actor == &defense.batting_order[8])
+                    if (dh && actor == defense.batting_order[8])
                         || supplied.thrower_id == supplied.receiver_id
                     {
                         rejected(&before, &event, &supplied);
@@ -431,7 +455,7 @@ fn named_fielders_must_be_distinct_before_eligible_actors() {
                 "foreign",
                 &defense.bench[0],
                 &defense.removed[0],
-                &before.teams[half.offense()].pitcher,
+                before.teams[half.offense()].pitcher.active_id().unwrap(),
             ] {
                 for receiver in [false, true] {
                     let mut supplied = facts(&before, 0);
@@ -459,7 +483,7 @@ fn known_canonical_errors_precede_unknown_scorer_judgment() {
         Err(TransitionError::InvalidState)
     );
     let mut invalid = event.clone();
-    invalid.participants.pitcher = "foreign".into();
+    invalid.participants.pitcher = Some("foreign".into());
     assert_eq!(
         apply_with_sacrifice_bunt_throw_facts(&before, invalid, supplied.clone()),
         Err(TransitionError::InvalidParticipants)

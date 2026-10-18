@@ -7,9 +7,10 @@ use bbsim_engine::{
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let team = |prefix: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}p"),
+        pitcher: (format!("{prefix}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -42,7 +43,11 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 
 fn projection(before: &GameState, value: usize, destinations: [usize; 3]) -> Event {
     let batter = before.teams[before.half.offense()].batting_order[0].clone();
-    let pitcher = before.teams[1 - before.half.offense()].pitcher.clone();
+    let pitcher = before.teams[1 - before.half.offense()]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let targets = [
         Destination::First,
         Destination::Second,
@@ -94,7 +99,7 @@ fn projection(before: &GameState, value: usize, destinations: [usize; 3]) -> Eve
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         delta: Delta {
             moves,
@@ -166,7 +171,10 @@ fn every_ordered_safe_projection_keeps_canonical_state_codec_and_independent_acc
                             lines.batters[half.offense()][batter].classified_rbi,
                             Some(u32::from(event.delta.runs))
                         );
-                        let current = &before.teams[1 - half.offense()].pitcher;
+                        let current = before.teams[1 - half.offense()]
+                            .pitcher
+                            .active_id()
+                            .unwrap();
                         assert_eq!(lines.pitchers[1 - half.offense()][current].batters_faced, 1);
                         assert_eq!(lines.pitchers[1 - half.offense()][current].runs_allowed, 0);
                         if event.delta.runs > 0 {

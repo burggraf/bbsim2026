@@ -7,9 +7,10 @@ use bbsim_engine::{
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let team = |prefix: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}-{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}-pitcher"),
+        pitcher: (format!("{prefix}-pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -61,7 +62,11 @@ fn award(
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: Destination::First,
@@ -102,7 +107,13 @@ fn award(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: review,
         delta: Delta {
@@ -140,7 +151,12 @@ fn sole_protected_award_has_named_independent_rbi_in_every_force_context() {
                                 let snapshot = before.clone();
                                 let event = award(&before, hbp, holds, reverse, review);
                                 let batter = event.participants.batter.clone().unwrap();
-                                let pitcher = event.participants.pitcher.clone();
+                                let pitcher = event
+                                    .participants
+                                    .pitcher
+                                    .as_deref()
+                                    .expect("legacy fixture pitcher")
+                                    .to_owned();
                                 let rbi = u32::from(mask == 7);
                                 let t = apply(&before, event.clone()).unwrap();
                                 assert_eq!(before, snapshot);
@@ -235,7 +251,7 @@ fn event_bytes(event: &Event) -> Vec<u8> {
     assert_eq!(event.kind, EventKind::PlateAppearance);
     let mut bytes = vec![0, 1];
     string(&mut bytes, event.participants.batter.as_ref().unwrap());
-    string(&mut bytes, &event.participants.pitcher);
+    string(&mut bytes, event.participants.pitcher.as_deref().unwrap());
     bytes.push(u8::from(event.fielding_review == FieldingReview::NoMisplay));
     bytes.extend((event.delta.moves.len() as u64).to_le_bytes());
     for m in &event.delta.moves {
@@ -543,7 +559,12 @@ fn ordinary_and_intentional_walkoff_awards_keep_rbi_and_inherited_charge_separat
                     }
                 }
                 let batter = event.participants.batter.clone().unwrap();
-                let pitcher = event.participants.pitcher.clone();
+                let pitcher = event
+                    .participants
+                    .pitcher
+                    .as_deref()
+                    .expect("legacy fixture pitcher")
+                    .to_owned();
                 let t = apply(&before, event).unwrap();
                 assert!(t.after().over);
                 assert_eq!(t.after().score, [0, 1]);

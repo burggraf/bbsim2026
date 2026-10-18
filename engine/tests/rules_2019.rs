@@ -13,6 +13,7 @@ fn state(inning: u16, half: Half, outs: u8, score: [u16; 2]) -> GameState {
         over: false,
         teams: [
             TeamState {
+                defense: bbsim_engine::DefenseState::LegacyUnassigned,
                 batting_order: std::array::from_fn(|i| match i {
                     5 => "r1".into(),
                     6 => "r2".into(),
@@ -27,6 +28,7 @@ fn state(inning: u16, half: Half, outs: u8, score: [u16; 2]) -> GameState {
                 removed: vec![],
             },
             TeamState {
+                defense: bbsim_engine::DefenseState::LegacyUnassigned,
                 batting_order: std::array::from_fn(|i| match i {
                     5 => "r1".into(),
                     6 => "r2".into(),
@@ -55,7 +57,11 @@ fn batter_event(
     let offense = before.half.offense();
     let batter =
         before.teams[offense].batting_order[before.teams[offense].next_batter as usize].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let mut credits = vec![Credit {
         player_id: batter.clone(),
         kind: CreditKind::PlateAppearance,
@@ -70,7 +76,7 @@ fn batter_event(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         delta: Delta {
             moves: runner_moves,
@@ -101,7 +107,11 @@ fn batter_out(before: &GameState) -> RunnerMove {
             player_id: before.teams[offense].batting_order
                 [before.teams[offense].next_batter as usize]
                 .clone(),
-            responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+            responsible_pitcher: before.teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: Destination::Out,

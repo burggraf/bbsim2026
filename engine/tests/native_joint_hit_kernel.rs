@@ -377,9 +377,10 @@ fn game(c: Context, half: Half, dh: bool, cursor: u8, inherited: bool) -> GameSt
             batting_order[8] = pitcher.clone();
         }
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order,
             next_batter: cursor,
-            pitcher,
+            pitcher: (pitcher).into(),
             dh_slot: dh.then_some(8),
             dh_must_bat: false,
             bench: vec![],
@@ -394,7 +395,11 @@ fn game(c: Context, half: Half, dh: bool, cursor: u8, inherited: bool) -> GameSt
             responsible_pitcher: if inherited {
                 format!("prior{i}")
             } else {
-                teams[1 - offense].pitcher.clone()
+                teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             },
         })
     });
@@ -440,9 +445,9 @@ fn all_joint_vectors_project_explicit_modeled_cause_actors_charges_codec_and_ind
                             let offense = half.offense();
                             let defense = 1 - offense;
                             let batter = &before.teams[offense].batting_order[usize::from(cursor)];
-                            let pitcher = &before.teams[defense].pitcher;
+                            let pitcher = before.teams[defense].pitcher.active_id().unwrap();
                             assert_eq!(event.participants.batter.as_ref(), Some(batter));
-                            assert_eq!(&event.participants.pitcher, pitcher);
+                            assert_eq!(event.participants.pitcher.as_deref().unwrap(), pitcher);
                             assert_eq!(event.fielding_review, FieldingReview::NoMisplay);
                             assert_eq!(&event.sole_safe_hit.as_ref().unwrap().batter_id, batter);
                             assert_eq!(event.delta.outs, 0);
@@ -562,6 +567,16 @@ fn every_bottom_inning_ge9_refuses_even_nonwinning_empty_base_projection_and_top
 }
 
 #[test]
+fn vacant_defense_returns_an_error_not_a_panicking_string_assumption() {
+    let c = context(1, 1, 0);
+    let kernel = Kernel::fit(&training(), c, Model::BaseOut).unwrap();
+    let mut before = game(c, Half::Top, true, 0, false);
+    before.teams[1].pitcher = bbsim_engine::PitcherRole::Vacant { batting_slot: 8 };
+    assert!(kernel
+        .project(&before, 0, ModeledCause::UnaidedNoMisplay)
+        .is_err());
+}
+#[test]
 fn unknown_cause_context_over_invalid_actor_charge_and_score_overflow_fail_without_mutation() {
     let cells = training();
     let c = context(1, 1, 0);
@@ -594,7 +609,7 @@ fn unknown_cause_context_over_invalid_actor_charge_and_score_overflow_fail_witho
     cursor.teams[0].next_batter = 255;
     cases.push(cursor);
     let mut pitcher = before.clone();
-    pitcher.teams[1].pitcher.clear();
+    pitcher.teams[1].pitcher = String::new().into();
     cases.push(pitcher);
     let mut actor = before.clone();
     actor.bases[0].as_mut().unwrap().player_id = "alien".into();

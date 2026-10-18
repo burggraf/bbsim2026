@@ -10,9 +10,10 @@ mod presentation;
 
 fn team(name: &str) -> TeamState {
     TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{name}-{}", i + 1)),
         next_batter: 0,
-        pitcher: format!("{name}-pitcher"),
+        pitcher: (format!("{name}-pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: true,
         bench: vec![],
@@ -44,7 +45,11 @@ pub fn scripted_game() -> Result<Vec<EventTransition>, TransitionError> {
         let offense = state.half.offense();
         let batter =
             state.teams[offense].batting_order[state.teams[offense].next_batter as usize].clone();
-        let pitcher = state.teams[1 - offense].pitcher.clone();
+        let pitcher = state.teams[1 - offense]
+            .pitcher
+            .active_id()
+            .expect("validated active pitcher")
+            .to_owned();
         let mut kind = EventKind::PlateAppearance;
         let mut moves = vec![RunnerMove {
             runner: Runner {
@@ -121,7 +126,7 @@ pub fn scripted_game() -> Result<Vec<EventTransition>, TransitionError> {
             kind,
             participants: Participants {
                 batter: Some(batter),
-                pitcher,
+                pitcher: Some(pitcher),
             },
             delta: Delta {
                 moves,

@@ -16,16 +16,21 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 
 fn fixture(half: Half, outs: u8, mask: u8) -> (GameState, Event) {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_relief")],
         removed: vec![],
     });
     let offense = half.offense();
-    let pitcher = teams[1 - offense].pitcher.clone();
+    let pitcher = teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let batter = teams[offense].batting_order[0].clone();
     let bases: [Option<Runner>; 3] = std::array::from_fn(|i| {
         (mask & (1 << i) != 0).then(|| Runner {
@@ -52,7 +57,7 @@ fn fixture(half: Half, outs: u8, mask: u8) -> (GameState, Event) {
         kind: EventKind::RunnerOnly(RunnerEvent::Balk),
         participants: Participants {
             batter: Some(batter),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
@@ -114,7 +119,12 @@ fn one_imposed_ordinary_occurrence_counts_once_for_all_exact_award_masks() {
                 for reviewed in [false, true] {
                     for reverse in [false, true] {
                         let (before, mut event) = fixture(half, outs, mask);
-                        let pitcher = event.participants.pitcher.clone();
+                        let pitcher = event
+                            .participants
+                            .pitcher
+                            .as_deref()
+                            .expect("legacy fixture pitcher")
+                            .to_owned();
                         if reviewed {
                             event.fielding_review = FieldingReview::NoMisplay;
                         }
@@ -157,7 +167,12 @@ fn current_pitcher_balk_and_inherited_scoring_responsibility_are_separate() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..=2 {
             let (mut before, mut event) = fixture(half, outs, 5);
-            let current = event.participants.pitcher.clone();
+            let current = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             before.bases[2].as_mut().unwrap().responsible_pitcher = "prior_pitcher".into();
             event
                 .delta
@@ -586,7 +601,7 @@ fn known_current_participant_mismatch_precedes_unknown_balk_resolution() {
         let mut bad = event.clone();
         bad.balk.as_mut().unwrap().resolution = BalkResolution::Unknown;
         if mismatch == 0 {
-            bad.participants.pitcher = "prior_pitcher".into();
+            bad.participants.pitcher = Some("prior_pitcher".into());
         } else {
             bad.participants.batter = None;
         }

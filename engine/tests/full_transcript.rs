@@ -23,9 +23,10 @@ fn fixture() -> (GameState, [String; 9], BTreeMap<String, String>) {
         outs: 1,
         score: [2, 3],
         teams: ["a", "h"].map(|p| TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|i| format!("{p}{i}")),
             next_batter: 0,
-            pitcher: format!("{p}p"),
+            pitcher: (format!("{p}p")).into(),
             dh_slot: Some(8),
             dh_must_bat: false,
             bench: vec![],
@@ -51,10 +52,15 @@ fn fixture() -> (GameState, [String; 9], BTreeMap<String, String>) {
     let names = before
         .teams
         .iter()
-        .flat_map(|t| t.batting_order.iter().chain(std::iter::once(&t.pitcher)))
+        .flat_map(|t| {
+            t.batting_order
+                .iter()
+                .map(String::as_str)
+                .chain(t.pitcher.active_id())
+        })
         .map(|id| {
             (
-                id.clone(),
+                id.to_owned(),
                 format!("Name {}", id.replace('a', "Away ").replace('h', "Home ")),
             )
         })
@@ -131,7 +137,10 @@ fn line_score_game(
         let team = &state.teams[1 - state.half.offense()];
         let fielders = std::array::from_fn(|i| {
             if i == 0 {
-                team.pitcher.clone()
+                team.pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else {
                 team.batting_order[i - 1].clone()
             }
@@ -263,7 +272,10 @@ fn radio_line_score_matches_raw_transition_totals_across_seeded_games() {
     let fielders = initial.teams.each_ref().map(|team| {
         std::array::from_fn(|i| {
             if i == 0 {
-                team.pitcher.clone()
+                team.pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else {
                 team.batting_order[i - 1].clone()
             }
@@ -347,7 +359,7 @@ fn radio_line_score_matches_raw_transition_totals_across_seeded_games() {
             assert_eq!(batting[2].parse::<u32>().unwrap(), stats.runs[side]);
             assert_eq!(batting[3].parse::<u32>().unwrap(), hits[side]);
             let section = format!("{team} — Pitching");
-            let p = &stats.pitchers[side][&initial.teams[side].pitcher];
+            let p = &stats.pitchers[side][initial.teams[side].pitcher.active_id().unwrap()];
             let pitching = box_cells(&text, &section, "Totals");
             assert_eq!(
                 pitching[0],
@@ -407,7 +419,10 @@ fn append_er_play(
     let team = &state.teams[1 - state.half.offense()];
     let fielders = std::array::from_fn(|i| {
         if i == 0 {
-            team.pitcher.clone()
+            team.pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned()
         } else {
             team.batting_order[i - 1].clone()
         }
@@ -746,7 +761,11 @@ fn radio_box_score_keeps_pitcher_entry_order_inherited_runs_and_base_three_ip() 
             let incoming = if i == 1 { "zrelief" } else { "arelief" };
             let fielders = std::array::from_fn(|p| {
                 if p == 0 {
-                    state.teams[1].pitcher.clone()
+                    state.teams[1]
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned()
                 } else {
                     format!("h{}", p - 1)
                 }
@@ -767,7 +786,11 @@ fn radio_box_score_keeps_pitcher_entry_order_inherited_runs_and_base_three_ip() 
                 third_out: None,
                 changes: vec![PersonnelChange::Pitcher {
                     team: TeamSide::Home,
-                    outgoing: state.teams[1].pitcher.clone(),
+                    outgoing: state.teams[1]
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned(),
                     incoming: incoming.into(),
                 }],
             };
@@ -778,7 +801,10 @@ fn radio_box_score_keeps_pitcher_entry_order_inherited_runs_and_base_three_ip() 
         let team = &state.teams[1 - state.half.offense()];
         let fielders = std::array::from_fn(|p| {
             if p == 0 {
-                team.pitcher.clone()
+                team.pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else {
                 team.batting_order[p - 1].clone()
             }

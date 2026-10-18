@@ -6,9 +6,10 @@ use contact_consequence::{project, ContactDecision, POLICY_VERSION};
 
 fn state(mask: u8, outs: u8) -> GameState {
     let teams = ["a", "h"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}p"),
+        pitcher: (format!("{prefix}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}bench")],
@@ -39,6 +40,13 @@ fn roundtrip(transition: &EventTransition, version: &[u8]) {
     assert_eq!(format!("{decoded:#?}"), format!("{transition:#?}"));
 }
 
+#[test]
+fn vacant_defense_returns_an_error_not_a_panicking_string_assumption() {
+    let mut before = state(4, 0);
+    let choice = decision(&before, 0, 0, AirContact::Fly);
+    before.teams[1].pitcher = PitcherRole::Vacant { batting_slot: 8 };
+    rejected(&before, &choice);
+}
 #[test]
 fn supplied_caught_sacrifice_fly_constructs_one_canonical_pa() {
     let before = state(4, 0);
@@ -129,7 +137,11 @@ fn matrix_state(mask: u8, outs: u8, half: Half, inning: u16, cursor: u8, dh: boo
         team.next_batter = cursor;
         team.dh_slot = dh.then_some(8);
         if !dh {
-            team.batting_order[7] = team.pitcher.clone();
+            team.batting_order[7] = team
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned();
         }
     }
     before.bases = std::array::from_fn(|i| {
@@ -151,7 +163,11 @@ fn decision(before: &GameState, family: u8, role: u8, contact: AirContact) -> Co
             catch: OrdinaryAirCatchFacts {
                 batter_id: batter,
                 fielder_id: if role == 2 {
-                    defense.pitcher.clone()
+                    defense
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned()
                 } else {
                     defense.batting_order[5 + usize::from(role)].clone()
                 },
@@ -168,12 +184,20 @@ fn decision(before: &GameState, family: u8, role: u8, contact: AirContact) -> Co
             batter_id: batter,
             advancing_runner_id: before.bases[0].as_ref().unwrap().player_id.clone(),
             thrower_id: if role == 1 {
-                defense.pitcher.clone()
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else {
                 defense.batting_order[3].clone()
             },
             receiver_id: if role == 2 {
-                defense.pitcher.clone()
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else {
                 defense.batting_order[1].clone()
             },
@@ -183,19 +207,31 @@ fn decision(before: &GameState, family: u8, role: u8, contact: AirContact) -> Co
             batter_id: batter,
             forced_runner_id: before.bases[0].as_ref().unwrap().player_id.clone(),
             initial_fielder_id: if matches!(role, 2 | 5) {
-                defense.pitcher.clone()
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else if role == 1 {
                 defense.batting_order[1].clone()
             } else {
                 defense.batting_order[3].clone()
             },
             pivot_id: if role == 3 {
-                defense.pitcher.clone()
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else {
                 defense.batting_order[2].clone()
             },
             first_receiver_id: if matches!(role, 4 | 5) {
-                defense.pitcher.clone()
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()
             } else {
                 defense.batting_order[1].clone()
             },
@@ -348,7 +384,7 @@ fn checked(before: &GameState, choice: &ContactDecision, family: u8) {
             0
         )
     );
-    let pitcher = &stats.pitchers[defense][&before.teams[defense].pitcher];
+    let pitcher = &stats.pitchers[defense][before.teams[defense].pitcher.active_id().unwrap()];
     assert_eq!(
         (
             pitcher.batters_faced,
@@ -544,7 +580,11 @@ fn canonical_fixture(
     choice: &ContactDecision,
 ) -> Result<EventTransition, TransitionError> {
     let offense = &before.teams[before.half.offense()];
-    let pitcher = before.teams[1 - before.half.offense()].pitcher.clone();
+    let pitcher = before.teams[1 - before.half.offense()]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let batter = offense.batting_order[usize::from(offense.next_batter)].clone();
     let family = match choice {
         ContactDecision::CaughtSacrificeFly { .. } => 0,
@@ -630,7 +670,7 @@ fn canonical_fixture(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -671,7 +711,11 @@ fn canonical_fixture(
 fn ordinary(before: &GameState, walk: bool, steal: bool) -> EventTransition {
     let team = &before.teams[before.half.offense()];
     let batter = team.batting_order[usize::from(team.next_batter)].clone();
-    let pitcher = before.teams[1 - before.half.offense()].pitcher.clone();
+    let pitcher = before.teams[1 - before.half.offense()]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let mut moves = Vec::new();
     let credits = if steal {
         let runner = before.bases[1].as_ref().unwrap();
@@ -727,7 +771,7 @@ fn ordinary(before: &GameState, walk: bool, steal: bool) -> EventTransition {
             },
             participants: Participants {
                 batter: Some(batter.clone()),
-                pitcher,
+                pitcher: Some(pitcher),
             },
             fielding_review: if steal {
                 FieldingReview::NoMisplay

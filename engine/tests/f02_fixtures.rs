@@ -17,6 +17,7 @@ fn state(
 ) -> GameState {
     let mut teams = [
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|i| format!("away_{i}")),
             next_batter: 0,
             pitcher: "other_away_pitcher".into(),
@@ -26,6 +27,7 @@ fn state(
             removed: vec![],
         },
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|i| format!("home_{i}")),
             next_batter: 0,
             pitcher: "other_home_pitcher".into(),
@@ -95,7 +97,13 @@ fn event(
         kind,
         participants: Participants {
             batter: Some(batter),
-            pitcher: before.teams[1 - offense].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves,

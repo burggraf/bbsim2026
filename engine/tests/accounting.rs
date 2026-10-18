@@ -7,6 +7,7 @@ use bbsim_engine::{
 
 fn team(prefix: &str, pitcher: &str) -> TeamState {
     TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
         pitcher: pitcher.into(),
@@ -62,7 +63,13 @@ fn event(
                 before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
                     .clone(),
             ),
-            pitcher: before.teams[1 - offense].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves,
@@ -98,7 +105,11 @@ fn batter_move(before: &GameState, to: Destination) -> RunnerMove {
             player_id: before.teams[offense].batting_order
                 [before.teams[offense].next_batter as usize]
                 .clone(),
-            responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+            responsible_pitcher: before.teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to,
@@ -114,7 +125,11 @@ fn explicit_no_hit_covers_observed_pa_without_inventing_ab_or_fielding() {
             before.bases = [None, None, None];
             let offense = half.offense();
             let batter = before.teams[offense].batting_order[0].clone();
-            let pitcher = before.teams[1 - offense].pitcher.clone();
+            let pitcher = before.teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let mut credits = vec![credit(&batter, CreditKind::NoHit)];
             if supplied_ab {
                 credits.push(credit(&batter, CreditKind::AtBat));
@@ -164,7 +179,11 @@ fn hit_classification_does_not_infer_value_and_bare_ab_is_unknown() {
             before.bases = [None, None, None];
             let offense = half.offense();
             let b = before.teams[offense].batting_order[0].clone();
-            let p = before.teams[1 - offense].pitcher.clone();
+            let p = before.teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let retired = matches!(kind, CreditKind::AtBat | CreditKind::Strikeout);
             let t = apply(
                 &before,
@@ -2376,7 +2395,13 @@ fn bound_ground_er_certifies_observed_masks_outs_halves_and_held_vectors() {
                         }
                         let a = derive_accounting(&log).unwrap();
                         let side = 1 - half.offense();
-                        let pitcher = log[index].event().participants.pitcher.clone();
+                        let pitcher = log[index]
+                            .event()
+                            .participants
+                            .pitcher
+                            .as_deref()
+                            .expect("legacy fixture pitcher")
+                            .to_owned();
                         let p = &a.pitchers[side][&pitcher];
                         let runs = if outs == 2 { 1 } else { mask.count_ones() + 2 };
                         let ab = if outs == 2 { 4 } else { 5 };
@@ -2418,7 +2443,13 @@ fn ground_er_requires_review_history_and_completion_not_throw_facts() {
         for outs in 0..3 {
             let (clean, ground_index) = clean_ground_half(7, outs, half, true, true);
             let side = 1 - half.offense();
-            let pitcher = clean[ground_index].event().participants.pitcher.clone();
+            let pitcher = clean[ground_index]
+                .event()
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             for missing in 0..3 {
                 let log: Vec<_> = clean
                     .iter()
@@ -2603,7 +2634,7 @@ fn exact_forced_award_er_has_literal_observed_mask_out_half_and_award_lines() {
                             }
                             let a = derive_accounting(&log).unwrap();
                             let p = &a.pitchers[1 - half.offense()]
-                                [&log[index].event().participants.pitcher];
+                                [log[index].event().participants.pitcher.as_deref().unwrap()];
                             let runners = mask.count_ones();
                             assert_eq!(p.earned_runs, Some(runners+3), "{half:?} outs{outs} mask{mask} {kind:?} holds{holds} reverse{reverse}");
                             assert_eq!(
@@ -2662,13 +2693,23 @@ fn reviewed_award_er_allows_nonexact_advances_but_requires_review_and_history() 
         for kind in [CreditKind::Walk, CreditKind::HitByPitch] {
             for mask in [1, 2] {
                 let (log, _) = forced_award_half(mask, 1, half, kind, true, true, true);
-                let p = &derive_accounting(&log).unwrap().pitchers[1 - half.offense()]
-                    [&log[0].before().teams[1 - half.offense()].pitcher];
+                let p = &derive_accounting(&log).unwrap().pitchers[1 - half.offense()][log[0]
+                    .before()
+                    .teams[1 - half.offense()]
+                .pitcher
+                .active_id()
+                .unwrap()];
                 assert_eq!(p.runs_allowed, mask.count_ones() + 3);
                 assert_eq!(p.earned_runs, Some(mask.count_ones() + 3));
             }
             let (clean, index) = forced_award_half(7, 1, half, kind, true, true, false);
-            let pitcher = clean[index].event().participants.pitcher.clone();
+            let pitcher = clean[index]
+                .event()
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let side = 1 - half.offense();
             for missing in 0..3 {
                 let log: Vec<_> = clean
@@ -2851,7 +2892,11 @@ fn reviewed_fc_half(
             } else {
                 TeamSide::Home
             },
-            outgoing: before.teams[defense].pitcher.clone(),
+            outgoing: before.teams[defense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
             incoming: before.teams[defense].bench[0].clone(),
         }],
     ));
@@ -2951,7 +2996,7 @@ fn reviewed_clean_fc_replacement_preserves_earned_charge_not_actual_participatio
             let offense = half.offense();
             let defense = 1 - offense;
             let charge = &fc.after().bases[0].as_ref().unwrap().responsible_pitcher;
-            let reliever = &fc.before().teams[defense].pitcher;
+            let reliever = fc.before().teams[defense].pitcher.active_id().unwrap();
             assert_ne!(charge, reliever);
             let result = derive_accounting(&log).unwrap();
             assert_eq!(result.runs[offense], 2);
@@ -2991,7 +3036,10 @@ fn clean_fc_cannot_certify_unknown_origin_review_or_unfinished_half() {
                     .as_ref()
                     .unwrap()
                     .responsible_pitcher;
-                let reliever = &log[fc_index].before().teams[defense].pitcher;
+                let reliever = log[fc_index].before().teams[defense]
+                    .pitcher
+                    .active_id()
+                    .unwrap();
                 let mut uncertain = vec![&log[fc_index..], &log[..log.len() - 1]];
                 if walk_review == FieldingReview::Unknown || fc_review == FieldingReview::Unknown {
                     uncertain.push(&log);
@@ -3108,7 +3156,11 @@ fn reviewed_clean_terminal_third_out_certifies_only_observed_completed_segment()
         let s = log.last().unwrap().after();
         assert_eq!((s.inning, s.half, s.outs), (9, half, 0));
         let offense = half.offense();
-        let pitcher = s.teams[1 - offense].pitcher.clone();
+        let pitcher = s.teams[1 - offense]
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned();
         let batter = &s.teams[offense].batting_order[s.teams[offense].next_batter as usize];
         let homer = reviewed(event(
             s,
@@ -3255,7 +3307,8 @@ fn bound_caught_k_er_has_literal_observed_lines_in_384_hold_and_order_frames() {
                             }
                             let a = derive_accounting(&log).unwrap();
                             let side = 1 - half.offense();
-                            let pitcher = &log[index].event().participants.pitcher;
+                            let pitcher =
+                                log[index].event().participants.pitcher.as_deref().unwrap();
                             let catcher = &log[index]
                                 .event()
                                 .caught_strikeout
@@ -3310,7 +3363,12 @@ fn caught_k_er_requires_review_origin_and_completion_not_catch_facts() {
         for outs in 0..3 {
             let (clean, index) = clean_caught_half(7, outs, half, true, true, true);
             let side = 1 - half.offense();
-            let pitcher = &clean[index].event().participants.pitcher;
+            let pitcher = clean[index]
+                .event()
+                .participants
+                .pitcher
+                .as_deref()
+                .unwrap();
             let start = usize::from(half == Half::Bottom) * 3;
             for missing in 0..3 {
                 let mut log = clean.clone();
@@ -3364,7 +3422,13 @@ fn generic_single_movement_strikeout_retains_legacy_clean_er_proof() {
     for half in [Half::Top, Half::Bottom] {
         for holds in [false, true] {
             let (mut log, index) = clean_caught_half(0, 1, half, holds, true, true);
-            let pitcher = log[index].event().participants.pitcher.clone();
+            let pitcher = log[index]
+                .event()
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let mut e = log[index].event().clone();
             e.caught_strikeout = None;
             log[index] = apply(log[index].before(), e).unwrap();
@@ -3404,7 +3468,11 @@ fn clean_imposed_balk_half(
                 } else {
                     TeamSide::Home
                 },
-                outgoing: before.teams[defense].pitcher.clone(),
+                outgoing: before.teams[defense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
                 incoming: before.teams[defense].bench[0].clone(),
             }],
         );
@@ -3414,7 +3482,10 @@ fn clean_imposed_balk_half(
     for _ in 0..occurrences {
         let mut moves = vec![];
         let mut credits = vec![credit(
-            &before.teams[1 - half.offense()].pitcher,
+            before.teams[1 - half.offense()]
+                .pitcher
+                .active_id()
+                .unwrap(),
             CreditKind::Balk,
         )];
         for (i, runner) in before.bases.iter().enumerate() {
@@ -3524,7 +3595,7 @@ fn exact_imposed_balk_er_has_literal_observed_lines_in_168_order_frames() {
                             assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
                         }
                         let a = derive_accounting(&log).unwrap();
-                        let pitcher = &log[index].event().participants.pitcher;
+                        let pitcher = log[index].event().participants.pitcher.as_deref().unwrap();
                         let p = &a.pitchers[1 - half.offense()][pitcher];
                         let runs = mask.count_ones() + 2;
                         assert_eq!(p.earned_runs, Some(runs), "{half:?} outs{outs} mask{mask} moves{reverse_moves} credits{reverse_credits}");
@@ -3562,7 +3633,12 @@ fn reviewed_balk_er_requires_review_origin_and_completion_not_occurrence_classif
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..3 {
             let (clean, index) = clean_imposed_balk_half(7, outs, half, true, true, false, 1);
-            let pitcher = &clean[index].event().participants.pitcher;
+            let pitcher = clean[index]
+                .event()
+                .participants
+                .pitcher
+                .as_deref()
+                .unwrap();
             let side = 1 - half.offense();
             let start = usize::from(half == Half::Bottom) * 3;
             for missing in 0..6 {
@@ -3631,8 +3707,13 @@ fn exact_imposed_balk_er_retains_inherited_charges_and_distinct_occurrences() {
                     clean_imposed_balk_half(7, outs, half, true, true, true, occurrences);
                 let a = derive_accounting(&log).unwrap();
                 let side = 1 - half.offense();
-                let prior = &log[index - 1].event().participants.pitcher;
-                let current = &log[index].event().participants.pitcher;
+                let prior = log[index - 1]
+                    .event()
+                    .participants
+                    .pitcher
+                    .as_deref()
+                    .unwrap();
+                let current = log[index].event().participants.pitcher.as_deref().unwrap();
                 assert_ne!(prior, current);
                 let old = &a.pitchers[side][prior];
                 let new = &a.pitchers[side][current];
@@ -3820,7 +3901,8 @@ fn sole_safe_hit_er_has_literal_observed_lines_in_1152_legal_policy_frames() {
                                     );
                                 }
                                 let a = derive_accounting(&log).unwrap();
-                                let pitcher = &log[index].event().participants.pitcher;
+                                let pitcher =
+                                    log[index].event().participants.pitcher.as_deref().unwrap();
                                 let p = &a.pitchers[1 - half.offense()][pitcher];
                                 let runs = mask.count_ones() + 3;
                                 assert_eq!(p.earned_runs, Some(runs), "{half:?} outs{outs} mask{mask} value{value} policy{policy} moves{reverse_moves} credits{reverse_credits}");
@@ -3855,7 +3937,12 @@ fn nonstation_hit_er_requires_review_and_history_not_exclusive_rbi_cause() {
     for half in [Half::Top, Half::Bottom] {
         for outs in 0..3 {
             let (clean, index) = clean_sole_safe_hit_half(7, outs, half, 1, false, true, true);
-            let pitcher = &clean[index].event().participants.pitcher;
+            let pitcher = clean[index]
+                .event()
+                .participants
+                .pitcher
+                .as_deref()
+                .unwrap();
             let side = 1 - half.offense();
             let start = usize::from(half == Half::Bottom) * 3;
             for missing in 0..4 {
@@ -3990,7 +4077,10 @@ fn literal_reviewed_game(reverse_moves: bool, reverse_credits: bool) -> Vec<Even
                     CreditKind::Putout,
                 ));
                 if outcome == CreditKind::AtBat {
-                    credits.push(credit(&defense.pitcher, CreditKind::Assist));
+                    credits.push(credit(
+                        defense.pitcher.active_id().unwrap(),
+                        CreditKind::Assist,
+                    ));
                 }
             } else if !award && !homer {
                 credits.push(credit(&batter, CreditKind::Hit));
@@ -4051,7 +4141,11 @@ fn literal_reviewed_game(reverse_moves: bool, reverse_credits: bool) -> Vec<Even
             } else if outcome == CreditKind::AtBat {
                 action.ordinary_ground_throw = Some(bbsim_engine::OrdinaryGroundThrowFacts {
                     batter_id: batter,
-                    thrower_id: defense.pitcher.clone(),
+                    thrower_id: defense
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned(),
                     receiver_id: defense.batting_order[0].clone(),
                 });
             } else if outcome == CreditKind::Strikeout {
@@ -4181,7 +4275,7 @@ fn literal_reviewed_game_reconciles_player_lines_and_independent_coverage() {
                 let team = &log[0].before().teams[side];
                 assert_eq!(a.pitchers[side].len(), 1);
                 assert_eq!(
-                    a.pitchers[side][&team.pitcher],
+                    a.pitchers[side][team.pitcher.active_id().unwrap()],
                     PitcherLine {
                         outs_recorded: outs,
                         batters_faced: bf,
@@ -4212,7 +4306,11 @@ fn literal_reviewed_game_reconciles_player_lines_and_independent_coverage() {
                     } else {
                         0
                     };
-                    let assists = if id == &team.pitcher { ground } else { 0 };
+                    let assists = if id == team.pitcher.active_id().unwrap() {
+                        ground
+                    } else {
+                        0
+                    };
                     assert_eq!(
                         *line,
                         FieldingCoverageLine {
@@ -4371,7 +4469,11 @@ fn sole_ground_muff_has_literal_positive_fielding_in_384_review_order_frames() {
                                 (mask & (1 << i) != 0).then(|| Runner {
                                     // Future batter slot1 must not remain on base after this PA.
                                     player_id: before.teams[offense].batting_order[i + 5].clone(),
-                                    responsible_pitcher: before.teams[side].pitcher.clone(),
+                                    responsible_pitcher: before.teams[side]
+                                        .pitcher
+                                        .active_id()
+                                        .expect("legacy fixture pitcher")
+                                        .to_owned(),
                                 })
                             });
                             let batter = before.teams[offense].batting_order[0].clone();
@@ -4856,7 +4958,7 @@ fn sole_ground_muff_missing_binding_cannot_invent_a_universal_assist_ban() {
     let mut marker = vec![1];
     for id in [
         e.participants.batter.as_ref().unwrap(),
-        &e.participants.pitcher,
+        e.participants.pitcher.as_deref().unwrap(),
     ] {
         marker.extend((id.len() as u64).to_le_bytes());
         marker.extend(id.as_bytes());
@@ -4998,7 +5100,7 @@ fn sole_ground_muff_unbound_label_does_not_hide_a_foreign_steal_actor() {
     let mut review = vec![1];
     for id in [
         e.participants.batter.as_ref().unwrap(),
-        &e.participants.pitcher,
+        e.participants.pitcher.as_deref().unwrap(),
     ] {
         review.extend((id.len() as u64).to_le_bytes());
         review.extend(id.as_bytes());
@@ -5236,7 +5338,11 @@ fn two_out_muff_rbi_has_literal_named_zero_in_384_causal_frames() {
                             before.bases = std::array::from_fn(|i| {
                                 (mask & (1 << i) != 0).then(|| Runner {
                                     player_id: before.teams[offense].batting_order[i + 5].clone(),
-                                    responsible_pitcher: before.teams[side].pitcher.clone(),
+                                    responsible_pitcher: before.teams[side]
+                                        .pitcher
+                                        .active_id()
+                                        .expect("legacy fixture pitcher")
+                                        .to_owned(),
                                 })
                             });
                             let batter = before.teams[offense].batting_order[0].clone();
@@ -5732,8 +5838,8 @@ fn two_out_muff_er_zero_has_literal_observed_masks_halves_and_order_frames() {
                         assert_eq!(EventTransition::from_bytes(&t.to_bytes()).unwrap(), *t);
                     }
                     let a = derive_accounting(&log).unwrap();
-                    let p =
-                        &a.pitchers[1 - half.offense()][&log[index].event().participants.pitcher];
+                    let p = &a.pitchers[1 - half.offense()]
+                        [log[index].event().participants.pitcher.as_deref().unwrap()];
                     assert_eq!(p.runs_allowed, mask.count_ones() + 2);
                     assert_eq!(
                         (
@@ -5842,7 +5948,7 @@ fn two_out_muff_er_missing_review_origin_completion_or_bounded_shape_stays_unkno
     log.push(t);
     for t in &model[index + 1..] {
         let mut e = t.event().clone();
-        e.participants.pitcher = "home_reliever".into();
+        e.participants.pitcher = Some("home_reliever".into());
         for m in &mut e.delta.moves {
             if m.from == Base::Plate {
                 m.runner.responsible_pitcher = "home_reliever".into();
@@ -6226,7 +6332,14 @@ fn empty_muff_er_has_literal_earned_and_unearned_runs_in_48_order_frames() {
                         }
                         let a = derive_accounting(&log).unwrap();
                         let defense = 1 - half.offense();
-                        let pitcher = &log.last().unwrap().event().participants.pitcher;
+                        let pitcher = log
+                            .last()
+                            .unwrap()
+                            .event()
+                            .participants
+                            .pitcher
+                            .as_deref()
+                            .unwrap();
                         let p = &a.pitchers[defense][pitcher];
                         let homers = if pattern == 1 { 1 } else { 2 };
                         assert_eq!(
@@ -6374,7 +6487,7 @@ fn empty_muff_er_missing_or_outside_history_retains_unknown() {
         for t in &control[index + 1..] {
             let mut e = t.event().clone();
             if pitcher_change {
-                e.participants.pitcher = "home_reliever".into();
+                e.participants.pitcher = Some("home_reliever".into());
                 for m in &mut e.delta.moves {
                     if m.from == Base::Plate {
                         m.runner.responsible_pitcher = "home_reliever".into();
@@ -6600,7 +6713,11 @@ fn ground_muff_er_suffix(
                 let before = t.before();
                 let defense = &before.teams[1 - before.half.offense()];
                 let thrower = if pitcher_thrower {
-                    defense.pitcher.clone()
+                    defense
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned()
                 } else {
                     defense.batting_order[3].clone()
                 };
@@ -6674,7 +6791,8 @@ fn ground_muff_er_suffix_has_literal_earned_runs_in_192_mixed_retirement_frames(
                                 let a = derive_accounting(&log).unwrap();
                                 let defense = 1 - half.offense();
                                 let final_before = log.last().unwrap().before();
-                                let p = &a.pitchers[defense][&final_before.teams[defense].pitcher];
+                                let p = &a.pitchers[defense]
+                                    [final_before.teams[defense].pitcher.active_id().unwrap()];
                                 let homers = if pattern == 1 { 1 } else { 2 };
                                 let expected_ground = if mixed {
                                     (3 - u32::from(outs)).div_ceil(2)
@@ -6703,7 +6821,7 @@ fn ground_muff_er_suffix_has_literal_earned_runs_in_192_mixed_retirement_frames(
                                 let field = &a.classified_fielding[defense];
                                 let team = &final_before.teams[defense];
                                 let thrower = if pitcher_thrower {
-                                    &team.pitcher
+                                    team.pitcher.active_id().unwrap()
                                 } else {
                                     &team.batting_order[3]
                                 };
@@ -6798,8 +6916,14 @@ fn ground_muff_er_suffix_repeated_actor_and_two_out_integration_keep_scope() {
                     let (log, grounds) = ground_muff_er_suffix(&model, false, false);
                     assert_eq!(grounds, 1);
                     let a = derive_accounting(&log).unwrap();
-                    let p = &a.pitchers[1 - half.offense()]
-                        [&log.last().unwrap().event().participants.pitcher];
+                    let p = &a.pitchers[1 - half.offense()][log
+                        .last()
+                        .unwrap()
+                        .event()
+                        .participants
+                        .pitcher
+                        .as_deref()
+                        .unwrap()];
                     assert_eq!(
                         (p.runs_allowed, p.outs_recorded, p.earned_runs),
                         (mask.count_ones() + 2, 3, Some(0))
@@ -6961,8 +7085,14 @@ fn station_muff_er_has_literal_earned_runs_in_144_hit_order_frames() {
                             let log = station_muff_er_half(half, outs, &actions, rm, rc);
                             let a = derive_accounting(&log).unwrap();
                             let defense = 1 - half.offense();
-                            let p = &a.pitchers[defense]
-                                [&log.last().unwrap().event().participants.pitcher];
+                            let p = &a.pitchers[defense][log
+                                .last()
+                                .unwrap()
+                                .event()
+                                .participants
+                                .pitcher
+                                .as_deref()
+                                .unwrap()];
                             assert_eq!(
                                 (
                                     p.runs_allowed,
@@ -7270,7 +7400,7 @@ fn force_muff_er_has_literal_earned_runs_in_576_award_order_frames() {
                                 let a = derive_accounting(&log).unwrap();
                                 let defense = 1 - half.offense();
                                 let team = &log.last().unwrap().before().teams[defense];
-                                let p = &a.pitchers[defense][&team.pitcher];
+                                let p = &a.pitchers[defense][team.pitcher.active_id().unwrap()];
                                 assert_eq!(
                                     (
                                         p.runs_allowed,
@@ -7351,8 +7481,14 @@ fn force_muff_er_leading_gap_keeps_clean_runner_positions_and_earned_runs() {
                             force_muff_er_append(&mut log, 0, 0, false, rm, rc);
                         }
                         let a = derive_accounting(&log).unwrap();
-                        let p = &a.pitchers[1 - half.offense()]
-                            [&log.last().unwrap().event().participants.pitcher];
+                        let p = &a.pitchers[1 - half.offense()][log
+                            .last()
+                            .unwrap()
+                            .event()
+                            .participants
+                            .pitcher
+                            .as_deref()
+                            .unwrap()];
                         assert_eq!(
                             (
                                 p.runs_allowed,
@@ -7536,7 +7672,10 @@ fn force_muff_er_accumulates_but_never_repairs_prior_unknown() {
 fn balk_muff_er_append(log: &mut Vec<EventTransition>, rm: bool, rc: bool) {
     let before = log.last().unwrap().after();
     let mut credits = vec![credit(
-        &before.teams[1 - before.half.offense()].pitcher,
+        before.teams[1 - before.half.offense()]
+            .pitcher
+            .active_id()
+            .unwrap(),
         CreditKind::Balk,
     )];
     let mut moves = vec![];
@@ -7634,7 +7773,7 @@ fn balk_muff_er_has_literal_earned_runs_in_288_hit_award_order_frames() {
                                 let a = derive_accounting(&log).unwrap();
                                 let defense = 1 - half.offense();
                                 let team = &log.last().unwrap().before().teams[defense];
-                                let p = &a.pitchers[defense][&team.pitcher];
+                                let p = &a.pitchers[defense][team.pitcher.active_id().unwrap()];
                                 assert_eq!(
                                     (
                                         p.runs_allowed,
@@ -7701,8 +7840,14 @@ fn balk_muff_er_error_only_awards_do_not_earn_or_add_plate_appearances() {
                     for rc in [false, true] {
                         let log = balk_muff_er_half(half, outs, 0, n, 0, rm, rc);
                         let a = derive_accounting(&log).unwrap();
-                        let p = &a.pitchers[1 - half.offense()]
-                            [&log.last().unwrap().event().participants.pitcher];
+                        let p = &a.pitchers[1 - half.offense()][log
+                            .last()
+                            .unwrap()
+                            .event()
+                            .participants
+                            .pitcher
+                            .as_deref()
+                            .unwrap()];
                         assert_eq!(
                             (
                                 p.runs_allowed,
@@ -7909,7 +8054,7 @@ fn sequential_muff_er_has_literal_earned_runs_in_48_empty_episode_frames() {
                         let a = derive_accounting(&log).unwrap();
                         let defense = 1 - half.offense();
                         let team = &log.last().unwrap().before().teams[defense];
-                        let p = &a.pitchers[defense][&team.pitcher];
+                        let p = &a.pitchers[defense][team.pitcher.active_id().unwrap()];
                         assert_eq!(
                             (
                                 p.runs_allowed,
@@ -8005,7 +8150,10 @@ fn sequential_muff_er_intervening_retirements_close_the_virtual_inning() {
                 }
                 let a = derive_accounting(&log).unwrap();
                 let defense = 1 - half.offense();
-                let id = &log.last().unwrap().before().teams[defense].pitcher;
+                let id = log.last().unwrap().before().teams[defense]
+                    .pitcher
+                    .active_id()
+                    .unwrap();
                 let p = &a.pitchers[defense][id];
                 assert_eq!(
                     (
@@ -8032,7 +8180,10 @@ fn sequential_muff_er_intervening_retirements_close_the_virtual_inning() {
         force_muff_er_append(&mut log, 0, 0, false, false, false);
         let a = derive_accounting(&log).unwrap();
         let defense = 1 - half.offense();
-        let p = &a.pitchers[defense][&log.last().unwrap().before().teams[defense].pitcher];
+        let p = &a.pitchers[defense][log.last().unwrap().before().teams[defense]
+            .pitcher
+            .active_id()
+            .unwrap()];
         assert_eq!(
             (p.runs_allowed, p.outs_recorded, p.batters_faced),
             (4, 3, 7)
@@ -8190,7 +8341,7 @@ fn sequential_muff_er_missing_history_or_qualified_second_episode_stays_unknown(
             let before = log.last().unwrap().after();
             let mut e = t.event().clone();
             if pitcher_change {
-                e.participants.pitcher = "home_reliever".into();
+                e.participants.pitcher = Some("home_reliever".into());
                 for m in &mut e.delta.moves {
                     m.runner.responsible_pitcher = "home_reliever".into();
                 }
@@ -8389,7 +8540,7 @@ fn missed_third_muff_suffix_has_literal_zero_er_in_192_occupied_order_frames() {
                         let a = derive_accounting(&log).unwrap();
                         let defense = 1 - half.offense();
                         let team = &log.last().unwrap().before().teams[defense];
-                        let p = &a.pitchers[defense][&team.pitcher];
+                        let p = &a.pitchers[defense][team.pitcher.active_id().unwrap()];
                         let m = mask.count_ones();
                         assert_eq!(
                             (
@@ -8670,7 +8821,7 @@ fn missed_third_muff_suffix_cannot_give_relief_a_predecessors_missed_out() {
             let before = log.last().unwrap().after();
             let mut e = t.event().clone();
             if pitcher_change {
-                e.participants.pitcher = "home_reliever".into();
+                e.participants.pitcher = Some("home_reliever".into());
                 for m in &mut e.delta.moves {
                     if m.from == Base::Plate {
                         m.runner.responsible_pitcher = "home_reliever".into();
@@ -8897,7 +9048,7 @@ fn clean_prefix_muff_er_has_literal_earned_runs_in_144_prefix_episode_frames() {
                             let offense = half.offense();
                             let defense = 1 - offense;
                             let team = &log.last().unwrap().before().teams[defense];
-                            let p = &a.pitchers[defense][&team.pitcher];
+                            let p = &a.pitchers[defense][team.pitcher.active_id().unwrap()];
                             assert_eq!(
                                 (
                                     p.runs_allowed,
@@ -9141,7 +9292,7 @@ fn clean_prefix_muff_er_personnel_and_relief_cannot_seed_a_false_scalar() {
             let before = log.last().unwrap().after();
             let mut e = t.event().clone();
             if pitcher_change {
-                e.participants.pitcher = "home_reliever".into();
+                e.participants.pitcher = Some("home_reliever".into());
                 for m in &mut e.delta.moves {
                     if m.from == Base::Plate {
                         m.runner.responsible_pitcher = "home_reliever".into();

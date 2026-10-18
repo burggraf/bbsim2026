@@ -36,7 +36,14 @@ pub fn project(before: &GameState, decision: &ContactDecision) -> Result<EventTr
         .get(usize::from(offense.next_batter))
         .ok_or("invalid supplied-contact batting cursor")?
         .clone();
-    let pitcher = before.teams[1 - before.half.offense()].pitcher.clone();
+    before
+        .validate_play_ready()
+        .map_err(|e| format!("unready personnel: {e:?}"))?;
+    let pitcher = before.teams[1 - before.half.offense()]
+        .pitcher
+        .active_id()
+        .expect("validated active pitcher")
+        .to_owned();
     let sf = matches!(decision, ContactDecision::CaughtSacrificeFly { .. });
     let dp = matches!(decision, ContactDecision::GroundForceDoublePlay(_));
     let mut credits = vec![
@@ -122,7 +129,7 @@ pub fn project(before: &GameState, decision: &ContactDecision) -> Result<EventTr
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {

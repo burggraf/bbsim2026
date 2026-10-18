@@ -11,16 +11,21 @@ use full_strikeout::{project, StrikeoutDecision};
 
 fn state(half: Half, outs: u8, mask: u8) -> GameState {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
         removed: vec![],
     });
     let offense = half.offense();
-    let pitcher = teams[1 - offense].pitcher.clone();
+    let pitcher = teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     GameState {
         inning: 2,
         half,
@@ -40,7 +45,11 @@ fn state(half: Half, outs: u8, mask: u8) -> GameState {
 fn fielders(before: &GameState) -> [String; 9] {
     let defense = &before.teams[1 - before.half.offense()];
     [
-        defense.pitcher.clone(),
+        defense
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
         defense.batting_order[0].clone(),
         defense.batting_order[1].clone(),
         defense.batting_order[2].clone(),
@@ -165,14 +174,17 @@ fn automatic_k_is_a_first_ineligible_retirement_with_runners_held() {
     let fielders = fielders(&before);
     let transition = accepted(&before, &fielders, StrikeoutDecision::Automatic);
     let batter = &before.teams[0].batting_order[0];
-    let pitcher = &before.teams[1].pitcher;
+    let pitcher = before.teams[1].pitcher.active_id().unwrap();
     let catcher = &fielders[1];
 
     assert_eq!(
         transition.event().participants.batter.as_deref(),
         Some(batter.as_str())
     );
-    assert_eq!(transition.event().participants.pitcher, *pitcher);
+    assert_eq!(
+        transition.event().participants.pitcher.as_deref(),
+        Some(pitcher)
+    );
     assert!(transition.event().single_delivery.is_none());
     assert!(transition.event().caught_strikeout.is_none());
     assert_eq!(transition.event().delta.outs, 1);
@@ -395,7 +407,7 @@ fn recovered_third_out_clears_bases_without_scoring() {
     let box_score = derive_accounting(std::slice::from_ref(&transition)).unwrap();
     assert_eq!(box_score.runs, [0, 0]);
     let batter = &before.teams[0].batting_order[0];
-    let pitcher = &before.teams[1].pitcher;
+    let pitcher = before.teams[1].pitcher.active_id().unwrap();
     assert_eq!(box_score.batters[0][batter].plate_appearances, 1);
     assert_eq!(box_score.batters[0][batter].credited_strikeouts, 1);
     assert_eq!(box_score.batters[0][batter].at_bats, Some(1));
@@ -1127,7 +1139,7 @@ fn recovered_advance_preserves_inherited_run_charge_without_new_er_rbi_or_fieldi
         before.bases[2].as_mut().unwrap().responsible_pitcher = "previous-pitcher".into();
         let t = recovered_advances(&before, handling);
         let a = derive_accounting(&[t]).unwrap();
-        let current = &before.teams[1].pitcher;
+        let current = before.teams[1].pitcher.active_id().unwrap();
         assert_eq!(a.pitchers[1][current].runs_allowed, 0);
         assert_eq!(a.pitchers[1][current].batters_faced, 1);
         assert_eq!(a.pitchers[1]["previous-pitcher"].runs_allowed, 1);

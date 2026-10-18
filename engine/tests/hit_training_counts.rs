@@ -165,9 +165,10 @@ fn every_fixed_model_keeps_exact_support_grid_edges_sampling_and_explicit_projec
         }
     }
     let teams = std::array::from_fn(|side| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("side{side}b{i}")),
         next_batter: 0,
-        pitcher: format!("side{side}p"),
+        pitcher: (format!("side{side}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],

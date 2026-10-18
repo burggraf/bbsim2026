@@ -20,9 +20,10 @@ const CLASSES: [ProxyClass; 4] = [
 ];
 fn state(mask: u8, outs: u8) -> GameState {
     let teams = ["a", "h"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}p"),
+        pitcher: (format!("{prefix}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}bench")],

@@ -16,9 +16,10 @@ use preview::{Baseline, Outcome, Rng, ALL};
 
 fn initial() -> GameState {
     let team = |name: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{name}-{}", i + 1)),
         next_batter: 0,
-        pitcher: format!("{name}-pitcher"),
+        pitcher: (format!("{name}-pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: true,
         bench: vec![],
@@ -361,7 +362,11 @@ fn only_chosen_roe_binds_muff_review_without_changing_physics_or_other_coverage(
                 before.bases = std::array::from_fn(|i| {
                     (mask & (1 << i) != 0).then(|| Runner {
                         player_id: before.teams[offense].batting_order[i + 5].clone(),
-                        responsible_pitcher: before.teams[side].pitcher.clone(),
+                        responsible_pitcher: before.teams[side]
+                            .pitcher
+                            .active_id()
+                            .expect("legacy fixture pitcher")
+                            .to_owned(),
                     })
                 });
                 for outcome in ALL {
@@ -493,7 +498,11 @@ fn all_masks_outs_halves_and_winning_contexts_use_legal_policy() {
                                 before.bases[base] = Some(bbsim_engine::Runner {
                                     player_id: before.teams[offense].batting_order[base + 5]
                                         .clone(),
-                                    responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+                                    responsible_pitcher: before.teams[1 - offense]
+                                        .pitcher
+                                        .active_id()
+                                        .expect("legacy fixture pitcher")
+                                        .to_owned(),
                                 });
                             }
                         }
@@ -821,7 +830,9 @@ fn radio_covers_all_before_runners_moving_scoring_or_holding_without_changing_tr
                                     .clone(),
                                 responsible_pitcher: before.teams[1 - half.offense()]
                                     .pitcher
-                                    .clone(),
+                                    .active_id()
+                                    .expect("legacy fixture pitcher")
+                                    .to_owned(),
                             });
                         }
                     }

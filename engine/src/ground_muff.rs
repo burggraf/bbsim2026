@@ -41,7 +41,7 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
         event
             .muffed_ground_ball
             .as_ref()
-            .map(|_| event.participants.pitcher.as_str()),
+            .and(event.participants.pitcher.as_deref()),
     )?;
     let total_outs = rules::validate_outs(before, event)?;
     rules::validate_run_credits(before, event, total_outs)?;

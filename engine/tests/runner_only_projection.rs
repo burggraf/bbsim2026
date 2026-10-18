@@ -15,9 +15,10 @@ fn state(mask: u8, outs: u8, half: Half, dh: bool) -> GameState {
             batting_order[7] = pitcher.clone();
         }
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order,
             next_batter: 0,
-            pitcher,
+            pitcher: (pitcher).into(),
             dh_slot: dh.then_some(8),
             dh_must_bat: dh,
             bench: vec![format!("{prefix}bench")],
@@ -49,7 +50,11 @@ fn decision(before: &GameState, origin: usize, caught: bool) -> StealDecision {
         result: if caught {
             StealResult::Caught {
                 putout: defense.batting_order[2].clone(),
-                assists: vec![defense.pitcher.clone()],
+                assists: vec![defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned()],
             }
         } else {
             StealResult::Safe
@@ -90,8 +95,8 @@ fn check(before: &GameState, value: &StealDecision, origin: usize, caught: bool)
         Some(before.teams[before.half.offense()].batting_order[0].as_str())
     );
     assert_eq!(
-        event.participants.pitcher,
-        before.teams[1 - before.half.offense()].pitcher
+        event.participants.pitcher.as_deref(),
+        before.teams[1 - before.half.offense()].pitcher.active_id()
     );
     assert_eq!(transition.after().teams, before.teams);
     assert_eq!(transition.after().score, before.score);
@@ -219,6 +224,13 @@ fn check(before: &GameState, value: &StealDecision, origin: usize, caught: bool)
     } else {
         assert_eq!(count(CreditKind::Putout) + count(CreditKind::Assist), 0);
     }
+}
+#[test]
+fn vacant_defense_returns_an_error_not_a_panicking_string_assumption() {
+    let mut before = state(1, 0, Half::Top, true);
+    let value = decision(&before, 0, false);
+    before.teams[1].pitcher = bbsim_engine::PitcherRole::Vacant { batting_slot: 8 };
+    refused(&before, &value);
 }
 #[test]
 fn standalone_projector_version_is_explicit() {
@@ -360,14 +372,15 @@ fn named_fielding_actors_must_be_eligible_and_assist_units_unique() {
             for actor in defense
                 .batting_order
                 .iter()
-                .chain(std::iter::once(&defense.pitcher))
+                .map(String::as_str)
+                .chain(defense.pitcher.active_id())
             {
                 let mut value = decision(&before, 0, true);
                 value.result = StealResult::Caught {
-                    putout: actor.clone(),
-                    assists: vec![actor.clone()],
+                    putout: actor.to_owned(),
+                    assists: vec![actor.to_owned()],
                 };
-                if dh && actor == &defense.batting_order[8] {
+                if dh && actor == defense.batting_order[8] {
                     refused(&before, &value);
                 } else {
                     check(&before, &value, 0, true);
@@ -378,7 +391,11 @@ fn named_fielding_actors_must_be_eligible_and_assist_units_unique() {
                 "foreign".into(),
                 defense.bench[0].clone(),
                 defense.removed[0].clone(),
-                before.teams[half.offense()].pitcher.clone(),
+                before.teams[half.offense()]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
             ];
             if dh {
                 bad_actors.push(defense.batting_order[8].clone());
@@ -393,7 +410,11 @@ fn named_fielding_actors_must_be_eligible_and_assist_units_unique() {
                         }
                     } else {
                         StealResult::Caught {
-                            putout: defense.pitcher.clone(),
+                            putout: defense
+                                .pitcher
+                                .active_id()
+                                .expect("legacy fixture pitcher")
+                                .to_owned(),
                             assists: vec![actor.clone()],
                         }
                     };
@@ -402,13 +423,21 @@ fn named_fielding_actors_must_be_eligible_and_assist_units_unique() {
             }
             let mut repeated = decision(&before, 0, true);
             repeated.result = StealResult::Caught {
-                putout: defense.pitcher.clone(),
+                putout: defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
                 assists: vec![defense.batting_order[1].clone(); 2],
             };
             refused(&before, &repeated);
             let mut multiple = decision(&before, 0, true);
             multiple.result = StealResult::Caught {
-                putout: defense.pitcher.clone(),
+                putout: defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
                 assists: vec![
                     defense.batting_order[1].clone(),
                     defense.batting_order[2].clone(),
@@ -417,7 +446,11 @@ fn named_fielding_actors_must_be_eligible_and_assist_units_unique() {
             check(&before, &multiple, 0, true);
             let mut unassisted = decision(&before, 0, true);
             unassisted.result = StealResult::Caught {
-                putout: defense.pitcher.clone(),
+                putout: defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
                 assists: vec![],
             };
             check(&before, &unassisted, 0, true);

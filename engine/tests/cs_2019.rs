@@ -6,9 +6,10 @@ use bbsim_engine::{
 
 fn state(half: Half, mask: u8, outs: u8) -> GameState {
     let teams = ["a", "h"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}p"),
+        pitcher: (format!("{prefix}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -18,7 +19,11 @@ fn state(half: Half, mask: u8, outs: u8) -> GameState {
     let bases = std::array::from_fn(|i| {
         (mask & (1 << i) != 0).then(|| Runner {
             player_id: teams[offense].batting_order[3 + i].clone(),
-            responsible_pitcher: teams[1 - offense].pitcher.clone(),
+            responsible_pitcher: teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         })
     });
     GameState {
@@ -46,7 +51,13 @@ fn event(before: &GameState, kind: EventKind, review: FieldingReview) -> Event {
                 before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
                     .clone(),
             ),
-            pitcher: before.teams[1 - offense].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: review,
         two_out_contact: None,
@@ -269,7 +280,8 @@ fn check_steal(before: &GameState, action: Event) {
             .sum::<u32>(),
         0
     );
-    let pitcher = &folded.pitchers[1 - offense][&before.teams[1 - offense].pitcher];
+    let pitcher =
+        &folded.pitchers[1 - offense][before.teams[1 - offense].pitcher.active_id().unwrap()];
     assert_eq!(pitcher.outs_recorded, count);
     assert_eq!(pitcher.batters_faced, 0);
     // Multiple putouts by one fielder are units, not duplicate data to discard.
@@ -318,7 +330,12 @@ fn pa(before: &GameState, walk: bool) -> Event {
     action.delta.moves.push(RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: action.participants.pitcher.clone(),
+            responsible_pitcher: action
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: if walk {
@@ -385,7 +402,8 @@ fn strikeout_cs_keeps_participation_and_boundary_attribution_but_rejects_multipl
                     (1, Some(1), 1)
                 );
                 assert_eq!(folded.batters[offense][runner].credited_caught_stealing, 1);
-                let pitcher = &folded.pitchers[1 - offense][&action.participants.pitcher];
+                let pitcher =
+                    &folded.pitchers[1 - offense][action.participants.pitcher.as_deref().unwrap()];
                 assert_eq!((pitcher.batters_faced, pitcher.outs_recorded), (1, 2));
                 assert_eq!(valid.after().teams[offense].next_batter, 1);
                 if outs == 1 {
@@ -481,7 +499,12 @@ fn two_run_home_run_preserves_two_rbi_units_for_one_batter() {
             RunnerMove {
                 runner: Runner {
                     player_id: batter.clone(),
-                    responsible_pitcher: action.participants.pitcher.clone(),
+                    responsible_pitcher: action
+                        .participants
+                        .pitcher
+                        .as_deref()
+                        .expect("legacy fixture pitcher")
+                        .to_owned(),
                 },
                 from: Base::Plate,
                 to: Destination::Home,
@@ -509,7 +532,8 @@ fn two_run_home_run_preserves_two_rbi_units_for_one_batter() {
         let folded = derive_accounting(&[next]).unwrap();
         assert_eq!(folded.batters[offense][&batter].credited_rbi, 2);
         assert_eq!(
-            folded.pitchers[1 - offense][&before.teams[1 - offense].pitcher].runs_allowed,
+            folded.pitchers[1 - offense][before.teams[1 - offense].pitcher.active_id().unwrap()]
+                .runs_allowed,
             2
         );
     }

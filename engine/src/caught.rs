@@ -9,8 +9,7 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
     if event.participants.batter.as_ref() != Some(&facts.batter_id) {
         return Err(TransitionError::InvalidParticipants);
     }
-    if !rules::fielding_eligible(defense, &facts.catcher_id) || facts.catcher_id == defense.pitcher
-    {
+    if !rules::catcher_eligible(defense, &facts.catcher_id) {
         return Err(TransitionError::IllegalCredit);
     }
     if event.kind != EventKind::PlateAppearance {

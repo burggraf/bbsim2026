@@ -6,9 +6,10 @@ use bbsim_engine::{
 
 fn team(prefix: &str) -> TeamState {
     TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec!["sub".into(), "reliever".into(), "runner".into()],
@@ -35,7 +36,13 @@ fn substitution(before: &GameState, changes: Vec<PersonnelChange>) -> Event {
                 before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
                     .clone(),
             ),
-            pitcher: before.teams[1 - offense].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves: vec![],
@@ -64,13 +71,23 @@ fn batter_out(before: &GameState) -> Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(id.clone()),
-            pitcher: before.teams[0].pitcher.clone(),
+            pitcher: Some(
+                before.teams[0]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves: vec![RunnerMove {
                 runner: Runner {
                     player_id: id.clone(),
-                    responsible_pitcher: before.teams[0].pitcher.clone(),
+                    responsible_pitcher: before.teams[0]
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned(),
                 },
                 from: Base::Plate,
                 to: Destination::Out,
@@ -130,7 +147,7 @@ fn pitcher_replacement_without_dh_requires_matching_batting_change() {
         incoming: "reliever".into(),
     };
     let next = apply(&before, substitution(&before, vec![pitching, lineup])).unwrap();
-    assert_eq!(next.after().teams[1].pitcher, "reliever");
+    assert_eq!(next.after().teams[1].pitcher, "reliever".into());
     assert_eq!(next.after().teams[1].batting_order[8], "reliever");
     assert_eq!(next.after().teams[1].removed, ["home_pitcher"]);
 }
@@ -280,7 +297,11 @@ fn configuration(half: Half, dh: bool) -> GameState {
     if !dh {
         for team in &mut before.teams {
             team.dh_slot = None;
-            team.batting_order[8] = team.pitcher.clone();
+            team.batting_order[8] = team
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned();
         }
     }
     before
@@ -498,7 +519,11 @@ fn chained_personnel_cases() -> Vec<(EventTransition, Event)> {
                 if dh {
                     changes.push(PersonnelChange::Pitcher {
                         team,
-                        outgoing: before.teams[side].pitcher.clone(),
+                        outgoing: before.teams[side]
+                            .pitcher
+                            .active_id()
+                            .expect("legacy fixture pitcher")
+                            .to_owned(),
                         incoming: "runner".into(),
                     });
                 }
@@ -514,7 +539,11 @@ fn chained_personnel_cases() -> Vec<(EventTransition, Event)> {
                 let offense = before.half.offense();
                 let outgoing = Runner {
                     player_id: before.teams[offense].batting_order[1].clone(),
-                    responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+                    responsible_pitcher: before.teams[1 - offense]
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned(),
                 };
                 before.bases[index] = Some(outgoing.clone());
                 cases.push((
@@ -626,6 +655,11 @@ fn encoded_change(change: &PersonnelChange) -> Vec<u8> {
                 bytes.extend(encoded_name(&runner.responsible_pitcher));
             }
             bytes
+        }
+        PersonnelChange::PinchHitter { .. }
+        | PersonnelChange::AssignPitcher { .. }
+        | PersonnelChange::AssignDefense { .. } => {
+            panic!("legacy wire helper received an extended change")
         }
     }
 }

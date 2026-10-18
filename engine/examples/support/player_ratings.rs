@@ -60,7 +60,7 @@ fn roles(lineup: &real::Lineup) -> BTreeSet<String> {
             t.batting_order
                 .iter()
                 .map(|id| format!("batter:{id}"))
-                .chain(std::iter::once(format!("pitcher:{}", t.pitcher)))
+                .chain(t.pitcher.active_id().map(|id| format!("pitcher:{id}")))
         })
         .collect()
 }
@@ -166,7 +166,10 @@ impl Ratings {
             .batting_order
             .get(state.teams[offense].next_batter as usize)
             .ok_or("invalid rating batting cursor")?;
-        let pitcher = &state.teams[1 - offense].pitcher;
+        let pitcher = state.teams[1 - offense]
+            .pitcher
+            .active_id()
+            .ok_or("no active rating pitcher")?;
         let b = *self
             .counts
             .get(&format!("batter:{batter}"))
@@ -229,7 +232,10 @@ impl Ratings {
                     "MATCHUP {name} {} {} {}: {p:?}",
                     slot + 1,
                     state.teams[side].batting_order[slot as usize],
-                    state.teams[1 - side].pitcher
+                    state.teams[1 - side]
+                        .pitcher
+                        .active_id()
+                        .ok_or_else(|| io::Error::other("no active rating pitcher"))?
                 )?;
             }
         }

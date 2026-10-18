@@ -14,9 +14,10 @@ use bbsim_engine::{
 const COUNTS: [u64; 9] = [42823, 15142, 1984, 25947, 8531, 785, 6776, 1470, 82245];
 fn initial() -> GameState {
     let team = |side: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{side}-{}", i + 1)),
         next_batter: 0,
-        pitcher: format!("{side}-pitcher"),
+        pitcher: (format!("{side}-pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: true,
         bench: vec![],
@@ -36,7 +37,11 @@ fn occupied(mut state: GameState, mask: usize) -> GameState {
     for i in 0..3 {
         state.bases[i] = (mask & (1 << i) != 0).then(|| Runner {
             player_id: state.teams[state.half.offense()].batting_order[i + 4].clone(),
-            responsible_pitcher: state.teams[1 - state.half.offense()].pitcher.clone(),
+            responsible_pitcher: state.teams[1 - state.half.offense()]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         });
     }
     state
@@ -885,7 +890,11 @@ fn terminal_fixture(mask: u8, outs: u8, inning: u16, deficit: u8) -> GameState {
 fn terminal_candidate(before: &GameState, value: u8, vector: &[u8]) -> bbsim_engine::Event {
     use bbsim_engine::{Delta, Event, FieldingReview, Participants, SoleSafeHitFacts};
     let batter = before.teams[1].batting_order[0].clone();
-    let pitcher = before.teams[0].pitcher.clone();
+    let pitcher = before.teams[0]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let credit = |player: &str, kind| Credit {
         player_id: player.to_owned(),
         kind,
@@ -943,7 +952,7 @@ fn terminal_candidate(before: &GameState, value: u8, vector: &[u8]) -> bbsim_eng
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         delta: Delta {
             moves,

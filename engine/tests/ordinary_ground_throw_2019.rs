@@ -6,9 +6,10 @@ use bbsim_engine::{
 
 fn state(mask: usize, outs: u8, half: Half, dh: bool) -> GameState {
     let mut teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_bench")],
@@ -17,12 +18,20 @@ fn state(mask: usize, outs: u8, half: Half, dh: bool) -> GameState {
     let offense = half.offense();
     if !dh {
         teams[1 - offense].dh_slot = None;
-        teams[1 - offense].batting_order[8] = teams[1 - offense].pitcher.clone();
+        teams[1 - offense].batting_order[8] = teams[1 - offense]
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned();
     }
     let bases = std::array::from_fn(|i| {
         (mask & (1 << i) != 0).then(|| Runner {
             player_id: teams[offense].batting_order[i + 5].clone(),
-            responsible_pitcher: teams[1 - offense].pitcher.clone(),
+            responsible_pitcher: teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         })
     });
     GameState {
@@ -46,19 +55,23 @@ fn play(before: &GameState, holds: bool, pitcher_throws: bool, pitcher_receives:
     let defense = &before.teams[1 - offense];
     let batter = before.teams[offense].batting_order[0].clone();
     let thrower = if pitcher_throws {
-        &defense.pitcher
+        defense.pitcher.active_id().unwrap()
     } else {
         &defense.batting_order[3]
     };
     let receiver = if pitcher_receives {
-        &defense.pitcher
+        defense.pitcher.active_id().unwrap()
     } else {
         &defense.batting_order[1]
     };
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: Destination::Out,
@@ -85,7 +98,13 @@ fn play(before: &GameState, holds: bool, pitcher_throws: bool, pitcher_receives:
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -117,8 +136,8 @@ fn play(before: &GameState, holds: bool, pitcher_throws: bool, pitcher_receives:
         muffed_ground_ball: None,
         ordinary_ground_throw: Some(OrdinaryGroundThrowFacts {
             batter_id: batter,
-            thrower_id: thrower.clone(),
-            receiver_id: receiver.clone(),
+            thrower_id: thrower.to_owned(),
+            receiver_id: receiver.to_owned(),
         }),
     }
 }
@@ -150,7 +169,7 @@ fn event_bytes(event: &Event) -> Vec<u8> {
     } else {
         out.push(0);
     }
-    string(&mut out, &event.participants.pitcher);
+    string(&mut out, event.participants.pitcher.as_deref().unwrap());
     out.push(u8::from(event.fielding_review == FieldingReview::NoMisplay));
     out.extend_from_slice(&(event.delta.moves.len() as u64).to_le_bytes());
     for m in &event.delta.moves {
@@ -384,8 +403,11 @@ fn direct_ground_throw_has_independent_event_local_po_a_in_all_contexts() {
                                 let box_lines =
                                     derive_accounting(std::slice::from_ref(&t)).unwrap();
                                 let batter = &box_lines.batters[half.offense()][&f.batter_id];
-                                let pitcher = &box_lines.pitchers[1 - half.offense()]
-                                    [&before.teams[1 - half.offense()].pitcher];
+                                let pitcher = &box_lines.pitchers[1 - half.offense()][before.teams
+                                    [1 - half.offense()]
+                                .pitcher
+                                .active_id()
+                                .unwrap()];
                                 assert_eq!(
                                     (
                                         batter.plate_appearances,

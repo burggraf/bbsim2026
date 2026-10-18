@@ -110,7 +110,7 @@ pub(crate) fn validate(
     for actor in [&facts.thrower_id, &facts.tagger_id] {
         if !rules::fielding_eligible(defense, actor)
             || offense.batting_order.contains(actor)
-            || &offense.pitcher == actor
+            || offense.pitcher.active_id() == Some(actor.as_str())
             || offense.bench.contains(actor)
             || offense.removed.contains(actor)
         {
@@ -150,7 +150,7 @@ pub(crate) fn validate(
     }) {
         return Err(TransitionError::IllegalCredit);
     }
-    rules::validate_move_origins(&before.bases, event, Some(&defense.pitcher))?;
+    rules::validate_move_origins(&before.bases, event, defense.pitcher.active_id())?;
     let total_outs = rules::validate_outs(before, event)?;
     let retired = event
         .delta

@@ -1,43 +1,12 @@
 //! Bounded 2019 scoring, lineup and regulation-ending rules.
 use super::{
-    Base, CreditKind, Destination, Event, EventKind, GameState, Half, PersonnelChange, Runner,
-    TeamState, ThirdOutKind, TransitionError,
+    Base, CreditKind, Destination, Event, EventKind, GameState, Half, Runner, ThirdOutKind,
+    TransitionError,
 };
 
-pub(crate) fn valid_team(team: &TeamState) -> bool {
-    if team.next_batter > 8
-        || team.pitcher.is_empty()
-        || team.dh_slot.is_some_and(|s| s > 8)
-        || (team.dh_must_bat && team.dh_slot.is_none())
-    {
-        return false;
-    }
-    let pitcher_count = team
-        .batting_order
-        .iter()
-        .filter(|id| **id == team.pitcher)
-        .count();
-    if pitcher_count != usize::from(team.dh_slot.is_none()) {
-        return false;
-    }
-    let ids: Vec<&str> = team
-        .batting_order
-        .iter()
-        .chain(team.bench.iter())
-        .chain(team.removed.iter())
-        .map(String::as_str)
-        .collect();
-    if ids.iter().any(|id| {
-        id.is_empty()
-            || *id == team.pitcher
-                && (team.bench.iter().any(|b| b == id) || team.removed.iter().any(|r| r == id))
-    }) {
-        return false;
-    }
-    ids.iter()
-        .enumerate()
-        .all(|(i, id)| !ids[i + 1..].contains(id))
-}
+pub(crate) use super::personnel::{
+    catcher_eligible, fielding_eligible, project_personnel, valid_team,
+};
 
 /// Existing canonical state predicates, shared before deferred balk history.
 pub(crate) fn validate_snapshot(snapshot: &GameState) -> Result<(), TransitionError> {
@@ -74,12 +43,18 @@ pub(crate) fn validate_participants(
     event: &Event,
 ) -> Result<(), TransitionError> {
     let offense = before.half.offense();
-    if event.participants.pitcher != before.teams[1 - offense].pitcher
-        || event.participants.batter.as_deref()
-            != Some(
-                before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
-                    .as_str(),
-            )
+    let personnel = event.kind == EventKind::Substitution;
+    if !personnel {
+        before.validate_play_ready()?;
+    }
+    if ((!personnel || event.participants.pitcher.is_some())
+        && event.participants.pitcher.as_deref() != before.teams[1 - offense].pitcher.active_id())
+        || ((!personnel || event.participants.batter.is_some())
+            && event.participants.batter.as_deref()
+                != Some(
+                    before.teams[offense].batting_order[before.teams[offense].next_batter as usize]
+                        .as_str(),
+                ))
     {
         return Err(TransitionError::InvalidParticipants);
     }
@@ -182,10 +157,10 @@ pub(crate) fn credit_role_eligible(
         CreditKind::Putout | CreditKind::Assist | CreditKind::Error => {
             fielding_eligible(defense, &credit.player_id)
         }
-        CreditKind::PassedBall => {
-            credit.player_id != defense.pitcher && fielding_eligible(defense, &credit.player_id)
+        CreditKind::PassedBall => catcher_eligible(defense, &credit.player_id),
+        CreditKind::WildPitch | CreditKind::Balk => {
+            Some(credit.player_id.as_str()) == defense.pitcher.active_id()
         }
-        CreditKind::WildPitch | CreditKind::Balk => credit.player_id == defense.pitcher,
     }
 }
 
@@ -217,175 +192,6 @@ pub(crate) fn validate_strikeout_eligibility(
                 .is_some_and(|out| out.kind == ThirdOutKind::BatterAfterFirstTiming))
     {
         return Err(TransitionError::IllegalStateChange);
-    }
-    Ok(())
-}
-
-pub(crate) fn fielding_eligible(team: &TeamState, id: &str) -> bool {
-    id == team.pitcher
-        || team.batting_order.iter().enumerate().any(|(slot, player)| {
-            Some(slot) != team.dh_slot.map(usize::from) && player.as_str() == id
-        })
-}
-
-/// Project personnel once, with every outgoing assignment bound to the before-state.
-pub(crate) fn project_personnel(
-    before: &GameState,
-    event: &Event,
-    teams: &mut [TeamState; 2],
-    bases: &mut [Option<Runner>; 3],
-) -> Result<(), TransitionError> {
-    let offense = before.half.offense();
-    for change in &event.delta.changes {
-        match change {
-            PersonnelChange::Pitcher {
-                team,
-                outgoing,
-                incoming,
-            } => {
-                let pitcher = &mut teams[team.index()].pitcher;
-                if outgoing != &before.teams[team.index()].pitcher
-                    || pitcher != outgoing
-                    || incoming.is_empty()
-                    || outgoing == incoming
-                {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                *pitcher = incoming.clone();
-            }
-            PersonnelChange::BattingSlot {
-                team,
-                slot,
-                outgoing,
-                incoming,
-            } => {
-                if teams[team.index()].dh_slot.is_some()
-                    && teams[team.index()].pitcher == *incoming
-                    && teams[team.index()].dh_slot != Some(*slot)
-                {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                let batter = teams[team.index()]
-                    .batting_order
-                    .get_mut(*slot as usize)
-                    .ok_or(TransitionError::DeltaMismatch)?;
-                if before.teams[team.index()].batting_order.get(*slot as usize) != Some(outgoing)
-                    || batter != outgoing
-                    || incoming.is_empty()
-                    || outgoing == incoming
-                {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                *batter = incoming.clone();
-            }
-            PersonnelChange::PinchRunner {
-                base,
-                outgoing,
-                incoming,
-            } => {
-                let index = match base {
-                    Base::First => 0,
-                    Base::Second => 1,
-                    Base::Third => 2,
-                    Base::Plate => return Err(TransitionError::DeltaMismatch),
-                };
-                if before.bases[index].as_ref() != Some(outgoing)
-                    || bases[index].as_ref() != Some(outgoing)
-                    || incoming.player_id.is_empty()
-                    || incoming.player_id == outgoing.player_id
-                    || incoming.responsible_pitcher != outgoing.responsible_pitcher
-                {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                let slot = before.teams[offense]
-                    .batting_order
-                    .iter()
-                    .position(|id| id == &outgoing.player_id)
-                    .ok_or(TransitionError::DeltaMismatch)?;
-                if teams[offense].batting_order[slot] != outgoing.player_id
-                    || incoming.player_id == teams[offense].pitcher
-                        && teams[offense].dh_slot != Some(slot as u8)
-                {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                teams[offense].batting_order[slot] = incoming.player_id.clone();
-                bases[index] = Some(incoming.clone());
-            }
-        }
-    }
-    finalize_personnel(&before.teams, teams, event, offense)
-}
-
-/// Derive one-way bench/removed transfers from active roles.
-fn finalize_personnel(
-    before: &[TeamState; 2],
-    after: &mut [TeamState; 2],
-    event: &Event,
-    offense: usize,
-) -> Result<(), TransitionError> {
-    for (side, (old, new)) in before.iter().zip(after.iter_mut()).enumerate() {
-        // Rule 5.04(a)(2): substitutions replace occupants, not the batting
-        // slots of players who remain in the order (including pitchers).
-        for (slot, id) in old.batting_order.iter().enumerate() {
-            if new.batting_order.contains(id) && &new.batting_order[slot] != id {
-                return Err(TransitionError::IllegalStateChange);
-            }
-        }
-        if let Some(slot) = old.dh_slot {
-            if new.batting_order[slot as usize] == new.pitcher {
-                new.dh_slot = None;
-            }
-            if old.dh_must_bat {
-                let dh_batted = side == offense
-                    && event.kind.is_pa()
-                    && event.participants.batter.as_deref()
-                        == Some(old.batting_order[slot as usize].as_str());
-                let opposing_pitcher_changed = event.delta.changes.iter().any(|change| {
-                    matches!(change, super::PersonnelChange::Pitcher { team, .. } if team.index() != side)
-                });
-                if !dh_batted
-                    && !opposing_pitcher_changed
-                    && (new.dh_slot.is_none()
-                        || new.batting_order[slot as usize] != old.batting_order[slot as usize])
-                {
-                    return Err(TransitionError::IllegalStateChange);
-                }
-                if dh_batted || opposing_pitcher_changed {
-                    new.dh_must_bat = false;
-                }
-            }
-        }
-        let old_active: Vec<_> = old
-            .batting_order
-            .iter()
-            .chain(std::iter::once(&old.pitcher))
-            .collect();
-        let new_active: Vec<_> = new
-            .batting_order
-            .iter()
-            .chain(std::iter::once(&new.pitcher))
-            .collect();
-        for id in &old_active {
-            if !new_active.contains(id) && !new.removed.contains(id) {
-                new.removed.push((*id).clone());
-            }
-        }
-        for (position, id) in new_active.iter().enumerate() {
-            if new_active[..position].contains(id) {
-                continue;
-            }
-            if !old_active.contains(id) {
-                let index = new
-                    .bench
-                    .iter()
-                    .position(|candidate| candidate == *id)
-                    .ok_or(TransitionError::IllegalStateChange)?;
-                new.bench.remove(index);
-            }
-        }
-        if !valid_team(new) {
-            return Err(TransitionError::IllegalStateChange);
-        }
     }
     Ok(())
 }
@@ -444,7 +250,7 @@ pub(crate) fn validate_held_batter_before_first(
 ) -> Result<(), TransitionError> {
     let defense = &before.teams[1 - before.half.offense()];
     validate_event_shape(event)?;
-    validate_move_origins(&before.bases, event, Some(&defense.pitcher))?;
+    validate_move_origins(&before.bases, event, defense.pitcher.active_id())?;
     validate_outs(before, event)?;
     if event.delta.outs != 1
         || event.delta.runs != 0
@@ -485,7 +291,7 @@ pub(crate) fn batter_charge<'a>(
     sacrifice_bunt_throw: Option<&super::SacrificeBuntThrowFacts>,
     ground_force_double_play: Option<&super::GroundForceDoublePlayFacts>,
     hit_runner_tag: Option<&super::HitRunnerTagFacts>,
-) -> Result<&'a str, TransitionError> {
+) -> Result<Option<&'a str>, TransitionError> {
     if let Some(facts) = hit_runner_tag {
         if walkoff_hit.is_some()
             || caught_sacrifice_fly.is_some()
@@ -529,7 +335,7 @@ pub(crate) fn batter_charge<'a>(
     super::contact::validate(before, event)?;
     super::balk::validate(before, event)?;
     super::pitch::validate(before, event)?;
-    let current = before.teams[1 - before.half.offense()].pitcher.as_str();
+    let current = before.teams[1 - before.half.offense()].pitcher.active_id();
     if event.kind == EventKind::FieldersChoice {
         if (before.bases.iter().flatten().count() != 1 && before.bases[0].is_none())
             || event.delta.moves.len() != 2
@@ -573,7 +379,7 @@ pub(crate) fn batter_charge<'a>(
         }) {
             return Err(TransitionError::IllegalCredit);
         }
-        return Ok(&runner.responsible_pitcher);
+        return Ok(Some(&runner.responsible_pitcher));
     }
     if event.kind == EventKind::PlateAppearance
         && (before.outs.saturating_add(event.delta.outs) < 3
@@ -594,7 +400,7 @@ pub(crate) fn batter_charge<'a>(
         && event.delta.moves.iter().any(|m| {
             m.from != Base::Plate
                 && m.to == Destination::Out
-                && m.runner.responsible_pitcher != current
+                && Some(m.runner.responsible_pitcher.as_str()) != current
         })
         && !event.delta.credits.iter().any(|c| {
             matches!(

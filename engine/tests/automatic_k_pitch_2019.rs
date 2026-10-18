@@ -15,16 +15,21 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 
 fn fixture(half: Half, outs: u8, mask: u8, advancing: u8, passed: bool) -> (GameState, Event) {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_relief")],
         removed: vec![],
     });
     let offense = half.offense();
-    let pitcher = teams[1 - offense].pitcher.clone();
+    let pitcher = teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let batter = teams[offense].batting_order[0].clone();
     let catcher = teams[1 - offense].batting_order[1].clone();
     let before = GameState {
@@ -45,7 +50,7 @@ fn fixture(half: Half, outs: u8, mask: u8, advancing: u8, passed: bool) -> (Game
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: pitcher.clone(),
+            pitcher: Some(pitcher.clone()),
         },
         fielding_review: if passed {
             FieldingReview::Unknown
@@ -197,7 +202,12 @@ fn positive_matrix(passed: bool) {
                     }
                     for reverse in [false, true] {
                         let (before, mut event) = fixture(half, outs, mask, advancing, passed);
-                        let pitcher = event.participants.pitcher.clone();
+                        let pitcher = event
+                            .participants
+                            .pitcher
+                            .as_deref()
+                            .expect("legacy fixture pitcher")
+                            .to_owned();
                         let batter = event.participants.batter.clone().unwrap();
                         let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
                         event
@@ -372,7 +382,7 @@ fn automatic_unit_actor_opposite_duplicate_and_pb_review_errors_precede_missing_
                 2 => {
                     event.delta.credits[2] = credit(
                         if passed {
-                            &event.participants.pitcher
+                            event.participants.pitcher.as_deref().unwrap()
                         } else {
                             &event.single_delivery.as_ref().unwrap().catcher_id
                         },
@@ -425,7 +435,7 @@ fn known_errors(cases: &[u8]) {
                     TransitionError::InvalidState
                 }
                 4 => {
-                    event.participants.pitcher = "not_current".into();
+                    event.participants.pitcher = Some("not_current".into());
                     TransitionError::InvalidParticipants
                 }
                 5 => {
@@ -461,8 +471,12 @@ fn known_errors(cases: &[u8]) {
                     TransitionError::DeltaMismatch
                 }
                 10 => {
-                    event.delta.moves[1].runner.responsible_pitcher =
-                        event.participants.pitcher.clone();
+                    event.delta.moves[1].runner.responsible_pitcher = event
+                        .participants
+                        .pitcher
+                        .as_deref()
+                        .expect("legacy fixture pitcher")
+                        .to_owned();
                     TransitionError::DeltaMismatch
                 }
                 11 => {
@@ -664,7 +678,12 @@ fn inherited_scorer_and_current_delivery_participation_have_literal_separate_lin
                 .find(|m| m.from == Base::Third)
                 .unwrap()
                 .runner = before.bases[2].clone().unwrap();
-            let pitcher = event.participants.pitcher.clone();
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let accounting = derive_accounting(&[accepted(&before, event)]).unwrap();
             assert_eq!(
                 accounting.pitchers[1 - half.offense()]["prior_pitcher"],
@@ -778,7 +797,12 @@ fn after_first_throw_fixture(
     let batter = event.participants.batter.clone().unwrap();
     let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
     let receiver = if pitcher_receiver {
-        event.participants.pitcher.clone()
+        event
+            .participants
+            .pitcher
+            .as_deref()
+            .expect("legacy fixture pitcher")
+            .to_owned()
     } else {
         before.teams[1 - half.offense()].batting_order[2].clone()
     };
@@ -896,7 +920,7 @@ fn after_first_throw_accounting_keeps_participation_charge_and_fielding_distinct
                 let transition = accepted(&before, event.clone());
                 let accounting = derive_accounting(&[transition]).unwrap();
                 let batter = event.participants.batter.as_ref().unwrap();
-                let pitcher = &event.participants.pitcher;
+                let pitcher = event.participants.pitcher.as_deref().unwrap();
                 let catcher = &event.single_delivery.as_ref().unwrap().catcher_id;
                 let receiver = &before.teams[defense].batting_order[2];
                 assert_eq!(
@@ -1009,7 +1033,12 @@ fn after_first_throw_known_contradictions_precede_unrelated_missing_review() {
                 }
                 7 => {
                     let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
-                    let pitcher = event.participants.pitcher.clone();
+                    let pitcher = event
+                        .participants
+                        .pitcher
+                        .as_deref()
+                        .expect("legacy fixture pitcher")
+                        .to_owned();
                     let unit = event
                         .delta
                         .credits
@@ -1618,7 +1647,12 @@ fn first_touch_controls_preserve_before_first_k_and_partial_after_first_retireme
             for passed in [false, true] {
                 let (before, mut event) = eligible_first_touch_retirement(half, mask, passed);
                 without_units(&mut event);
-                let pitcher = event.participants.pitcher.clone();
+                let pitcher = event
+                    .participants
+                    .pitcher
+                    .as_deref()
+                    .expect("legacy fixture pitcher")
+                    .to_owned();
                 let batter = event.participants.batter.clone().unwrap();
                 event.delta.third_out.as_mut().unwrap().kind = ThirdOutKind::BatterAfterFirstTiming;
                 let transition = accepted(&before, event.clone());
@@ -1864,7 +1898,12 @@ fn mixed_recovery_positive_matrix(passed: bool) {
                                 advancing_base,
                                 passed,
                             );
-                            let pitcher = event.participants.pitcher.clone();
+                            let pitcher = event
+                                .participants
+                                .pitcher
+                                .as_deref()
+                                .expect("legacy fixture pitcher")
+                                .to_owned();
                             let batter = event.participants.batter.clone().unwrap();
                             let catcher =
                                 event.single_delivery.as_ref().unwrap().catcher_id.clone();
@@ -2061,7 +2100,8 @@ fn automatic_k_separate_before_any_recovery_suppresses_the_episode_not_the_pa() 
             let transition = accepted(&before, event.clone());
             assert_eq!(transition.event().kind, EventKind::PlateAppearance);
             let accounting = derive_accounting(std::slice::from_ref(&transition)).unwrap();
-            let pitcher = &accounting.pitchers[1 - half.offense()][&event.participants.pitcher];
+            let pitcher = &accounting.pitchers[1 - half.offense()]
+                [event.participants.pitcher.as_deref().unwrap()];
             assert_eq!(
                 (
                     pitcher.outs_recorded,
@@ -2077,7 +2117,7 @@ fn automatic_k_separate_before_any_recovery_suppresses_the_episode_not_the_pa() 
                 if passed {
                     &event.single_delivery.as_ref().unwrap().catcher_id
                 } else {
-                    &event.participants.pitcher
+                    event.participants.pitcher.as_deref().unwrap()
                 },
                 if passed {
                     CreditKind::PassedBall
@@ -2110,7 +2150,12 @@ fn automatic_k_separate_recovery_inherited_run_does_not_transfer_current_partici
                 .unwrap()
                 .runner
                 .responsible_pitcher = prior.into();
-            let pitcher = event.participants.pitcher.clone();
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
             let transition = accepted(&before, event);
             let accounting = derive_accounting(std::slice::from_ref(&transition)).unwrap();
@@ -2385,7 +2430,12 @@ fn two_legal_simultaneous_k_delivery_episodes_accumulate_without_cross_event_ded
     for half in [Half::Top, Half::Bottom] {
         for passed in [false, true] {
             let (before, first_event) = fixture(half, 0, 5, 4, passed);
-            let pitcher = first_event.participants.pitcher.clone();
+            let pitcher = first_event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let catcher = first_event
                 .single_delivery
                 .as_ref()
@@ -2520,7 +2570,7 @@ fn wire_event(event: &Event) -> Vec<u8> {
         }
         None => bytes.push(0),
     }
-    wire_string(&mut bytes, &event.participants.pitcher);
+    wire_string(&mut bytes, event.participants.pitcher.as_deref().unwrap());
     bytes.push(u8::from(event.fielding_review == FieldingReview::NoMisplay));
     bytes.extend_from_slice(&(event.delta.moves.len() as u64).to_le_bytes());
     for m in &event.delta.moves {
@@ -2880,7 +2930,12 @@ fn extra_home_advancement_of_several_runners_remains_one_delivery_unit() {
                 advance.reached = Destination::Home;
             }
             event.delta.runs = 3;
-            let pitcher = event.participants.pitcher.clone();
+            let pitcher = event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned();
             let catcher = event.single_delivery.as_ref().unwrap().catcher_id.clone();
             let transition = accepted(&before, event);
             assert!(transition.after().bases.iter().all(Option::is_none));

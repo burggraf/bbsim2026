@@ -135,7 +135,13 @@ fn call(t: &EventTransition, positions: &std::collections::BTreeMap<String, &str
     } else {
         "recorded play; see full event facts for the result.".into()
     };
-    let mut text = format!("{} to {batter}: {result}", e.participants.pitcher);
+    let mut text = format!(
+        "{} to {batter}: {result}",
+        e.participants
+            .pitcher
+            .as_deref()
+            .unwrap_or("no active pitcher")
+    );
     // Unknown causal sequences remain unknown; supplied credits can still name fielders.
     if e.ordinary_ground_throw.is_none()
         && e.ordinary_air_catch.is_none()

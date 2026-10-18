@@ -7,9 +7,10 @@ use bbsim_engine::{
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let team = |prefix: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}p"),
+        pitcher: (format!("{prefix}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -40,7 +41,11 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 fn hit(before: &GameState, value: usize, cause: bool, review: FieldingReview) -> Event {
     let offense = &before.teams[before.half.offense()];
     let id = offense.batting_order[offense.next_batter as usize].clone();
-    let pitcher = before.teams[1 - before.half.offense()].pitcher.clone();
+    let pitcher = before.teams[1 - before.half.offense()]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let targets = [
         Destination::First,
         Destination::Second,
@@ -86,7 +91,7 @@ fn hit(before: &GameState, value: usize, cause: bool, review: FieldingReview) ->
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(id.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         delta: Delta {
             moves,
@@ -142,7 +147,7 @@ fn event_bytes(event: &Event) -> Vec<u8> {
     }];
     out.push(1);
     string(&mut out, event.participants.batter.as_ref().unwrap());
-    string(&mut out, &event.participants.pitcher);
+    string(&mut out, event.participants.pitcher.as_deref().unwrap());
     out.push(u8::from(event.fielding_review == FieldingReview::NoMisplay));
     out.extend((event.delta.moves.len() as u64).to_le_bytes());
     for m in &event.delta.moves {
@@ -325,9 +330,12 @@ fn literal_rbi_across_three_values_masks_outs_halves_and_independent_orders() {
                             assert_eq!(lines.batters[half.offense()][id].plate_appearances, 1);
                             assert_eq!(lines.batters[half.offense()][id].at_bats, Some(1));
                             assert_eq!(
-                                lines.pitchers[1 - half.offense()]
-                                    [&before.teams[1 - half.offense()].pitcher]
-                                    .batters_faced,
+                                lines.pitchers[1 - half.offense()][before.teams
+                                    [1 - half.offense()]
+                                .pitcher
+                                .active_id()
+                                .unwrap()]
+                                .batters_faced,
                                 1
                             );
                             if runs > 0 {
@@ -387,7 +395,7 @@ fn subtype_current_participants_and_legal_run_conservation_are_required() {
     actor.sole_safe_hit.as_mut().unwrap().batter_id = "a2".into();
     reject(&before, &valid, actor, TransitionError::InvalidParticipants);
     let mut pitcher = valid.clone();
-    pitcher.participants.pitcher = "oldp".into();
+    pitcher.participants.pitcher = Some("oldp".into());
     reject(
         &before,
         &valid,
@@ -723,8 +731,8 @@ fn reviewed_exclusive_safe_hits_prove_zero_po_a_in_576_independent_frames() {
                                 .iter()
                                 .enumerate()
                                 .filter(|(slot, _)| Some(*slot as u8) != defense.dh_slot)
-                                .map(|(_, id)| id)
-                                .chain([&defense.pitcher])
+                                .map(|(_, id)| id.as_str())
+                                .chain(defense.pitcher.active_id())
                                 .collect();
                             assert_eq!(fielders.len(), 9);
                             for id in fielders {

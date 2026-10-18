@@ -19,9 +19,10 @@ fn initial() -> GameState {
         outs: 0,
         score: [0, 0],
         teams: ["a", "h"].map(|p| TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|i| format!("{p}{i}")),
             next_batter: 0,
-            pitcher: format!("{p}p"),
+            pitcher: (format!("{p}p")).into(),
             dh_slot: Some(8),
             dh_must_bat: false,
             bench: vec![],
@@ -48,6 +49,118 @@ fn model() -> full_simulation::Model {
         [17188, 19528, 5379, 536, 39614],
     )
     .unwrap()
+}
+#[test]
+fn pending_defense_is_refused_before_any_rng_word() {
+    for vacancy in [false, true] {
+        let mut before = initial();
+        let mut positions = defense()[1].clone().map(Some);
+        positions[1] = None;
+        before.teams[1].defense = bbsim_engine::DefenseState::Assigned(Box::new(positions));
+        if vacancy {
+            before.teams[1].dh_slot = None;
+            before.teams[1].pitcher = bbsim_engine::PitcherRole::Vacant { batting_slot: 8 };
+            if let bbsim_engine::DefenseState::Assigned(positions) = &mut before.teams[1].defense {
+                positions[0] = None;
+            }
+        }
+        before.bases[0] = Some(bbsim_engine::Runner {
+            player_id: "a1".into(),
+            responsible_pitcher: "hp".into(),
+        });
+        let mut rng = preview::Rng::new(67);
+        let expected = preview::Rng::new(67).next_u64();
+        assert!(model().next(&before, &defense()[1], &mut rng).is_err());
+        assert_eq!(
+            rng.next_u64(),
+            expected,
+            "vacancy={vacancy}: refusal consumed randomness"
+        );
+        let mut calls = 0;
+        assert!(preview::game_from_transitions(67, before.clone(), |_, _| {
+            calls += 1;
+            Err("producer called before readiness".into())
+        })
+        .is_err());
+        assert_eq!(calls, 0);
+        assert!(preview::event_for(&before, preview::Outcome::Walk).is_err());
+    }
+}
+#[test]
+fn stale_or_pending_positions_refuse_before_rng_or_probability_callback() {
+    let mut before = initial();
+    before.teams[1].defense =
+        bbsim_engine::DefenseState::Assigned(Box::new(defense()[1].clone().map(Some)));
+    let mut stale = defense()[1].clone();
+    stale.swap(1, 2);
+    let mut rng = preview::Rng::new(67);
+    let model = model();
+    assert!(model.next(&before, &stale, &mut rng).is_err());
+    assert_eq!(rng.next_u64(), preview::Rng::new(67).next_u64());
+    if let bbsim_engine::DefenseState::Assigned(positions) = &mut before.teams[1].defense {
+        positions[1] = None;
+    }
+    let mut calls = 0;
+    assert!(full_simulation::simulate_with_probabilities(
+        &before,
+        &defense(),
+        &model,
+        None,
+        67,
+        |_| {
+            calls += 1;
+            Ok(None)
+        }
+    )
+    .is_err());
+    assert_eq!(calls, 0);
+}
+#[test]
+fn preview_event_construction_uses_explicit_position_assignments() {
+    let mut before = initial();
+    let mut positions = defense()[1].clone();
+    positions.swap(1, 5);
+    before.teams[1].defense =
+        bbsim_engine::DefenseState::Assigned(Box::new(positions.clone().map(Some)));
+    let strikeout = preview::event_for(&before, preview::Outcome::Strikeout).unwrap();
+    assert_eq!(
+        strikeout.caught_strikeout.as_ref().unwrap().catcher_id,
+        positions[1]
+    );
+    let out = preview::event_for(&before, preview::Outcome::ContactOut).unwrap();
+    assert_eq!(
+        out.ordinary_ground_throw.as_ref().unwrap().thrower_id,
+        positions[5]
+    );
+    assert_eq!(
+        out.ordinary_ground_throw.as_ref().unwrap().receiver_id,
+        positions[2]
+    );
+    for event in [strikeout, out] {
+        let t = bbsim_engine::apply(&before, event).unwrap();
+        let bytes = t.to_bytes();
+        assert!(bytes.starts_with(b"BBE33"));
+        assert_eq!(EventTransition::from_bytes(&bytes).unwrap(), t);
+    }
+}
+#[test]
+fn simulation_refreshes_all_canonical_positions_not_only_the_pitcher() {
+    let mut before = initial();
+    let stale = defense();
+    let mut assigned = stale.clone();
+    assigned[1].swap(1, 2);
+    for (side, positions) in assigned.iter().enumerate() {
+        before.teams[side].defense =
+            bbsim_engine::DefenseState::Assigned(Box::new(positions.clone().map(Some)));
+    }
+    let model = model();
+    let first = full_simulation::simulate(&before, &stale, &model, None, 67).unwrap();
+    let correct = full_simulation::simulate(&before, &assigned, &model, None, 67).unwrap();
+    assert_eq!(first, correct);
+    assert!(first.last().unwrap().transition().after().over);
+    for step in first {
+        assert!(step.transition().to_bytes().starts_with(b"BBE33"));
+    }
 }
 #[test]
 fn ordinary_seeded_games_complete_with_canonical_continuity_and_independent_totals() {
@@ -236,7 +349,11 @@ fn constructed_ground_opportunities_generate_fc_dp_and_failed_bunt_with_held_sec
                 before.bases = std::array::from_fn(|i| {
                     (mask & (1 << i) != 0).then(|| Runner {
                         player_id: before.teams[half.offense()].batting_order[i + 3].clone(),
-                        responsible_pitcher: before.teams[1 - half.offense()].pitcher.clone(),
+                        responsible_pitcher: before.teams[1 - half.offense()]
+                            .pitcher
+                            .active_id()
+                            .expect("legacy fixture pitcher")
+                            .to_owned(),
                     })
                 });
                 let mut seen = [false; 4];

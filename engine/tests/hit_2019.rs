@@ -9,9 +9,10 @@ fn state(mask: u8, half: Half) -> GameState {
     let teams = std::array::from_fn(|side| {
         let prefix = ["away", "home"][side];
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|slot| format!("{prefix}{slot}")),
             next_batter: 0,
-            pitcher: format!("{prefix}_pitcher"),
+            pitcher: (format!("{prefix}_pitcher")).into(),
             dh_slot: Some(8),
             dh_must_bat: false,
             bench: vec![],
@@ -22,7 +23,11 @@ fn state(mask: u8, half: Half) -> GameState {
     let bases = std::array::from_fn(|base| {
         (mask & (1 << base) != 0).then(|| Runner {
             player_id: teams[offense].batting_order[5 + base].clone(),
-            responsible_pitcher: teams[1 - offense].pitcher.clone(),
+            responsible_pitcher: teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         })
     });
     GameState {
@@ -39,7 +44,11 @@ fn state(mask: u8, half: Half) -> GameState {
 fn force_event(before: &GameState, out_base: usize, reverse: bool) -> Event {
     let offense = before.half.offense();
     let batter = before.teams[offense].batting_order[0].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let runner_id = before.bases[out_base].as_ref().unwrap().player_id.clone();
     let mut moves = vec![RunnerMove {
         runner: Runner {
@@ -67,7 +76,7 @@ fn force_event(before: &GameState, out_base: usize, reverse: bool) -> Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         delta: Delta {
             moves,
@@ -134,7 +143,7 @@ fn with_hit(mut event: Event) -> Event {
 fn assert_line(transition: &EventTransition, hits: u32) {
     let offense = transition.before().half.offense();
     let batter = transition.event().participants.batter.as_ref().unwrap();
-    let pitcher = &transition.event().participants.pitcher;
+    let pitcher = transition.event().participants.pitcher.as_deref().unwrap();
     let line = derive_accounting(std::slice::from_ref(transition)).unwrap();
     assert_eq!(line.batters[offense][batter].plate_appearances, 1);
     assert_eq!(line.batters[offense][batter].at_bats, Some(1));
@@ -239,7 +248,8 @@ fn uncaught_third_strike_can_retire_a_forced_runner_without_a_hit() {
             1
         );
         assert_eq!(
-            line.pitchers[1 - offense][&before.teams[1 - offense].pitcher].credited_strikeouts,
+            line.pitchers[1 - offense][before.teams[1 - offense].pitcher.active_id().unwrap()]
+                .credited_strikeouts,
             1
         );
     }
@@ -269,13 +279,23 @@ fn supplied_hits_with_other_retirements_are_not_inferred_as_force_outs() {
                 kind: EventKind::PlateAppearance,
                 participants: Participants {
                     batter: Some(batter.clone()),
-                    pitcher: before.teams[1 - half.offense()].pitcher.clone(),
+                    pitcher: Some(
+                        before.teams[1 - half.offense()]
+                            .pitcher
+                            .active_id()
+                            .expect("legacy fixture pitcher")
+                            .to_owned(),
+                    ),
                 },
                 delta: Delta {
                     moves: vec![RunnerMove {
                         runner: Runner {
                             player_id: batter.clone(),
-                            responsible_pitcher: before.teams[1 - half.offense()].pitcher.clone(),
+                            responsible_pitcher: before.teams[1 - half.offense()]
+                                .pitcher
+                                .active_id()
+                                .expect("legacy fixture pitcher")
+                                .to_owned(),
                         },
                         from: Base::Plate,
                         to: Destination::Out,

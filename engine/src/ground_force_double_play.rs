@@ -46,7 +46,7 @@ pub(crate) fn validate(
     ] {
         if !rules::fielding_eligible(defense, actor)
             || offense.batting_order.contains(actor)
-            || &offense.pitcher == actor
+            || offense.pitcher.active_id() == Some(actor.as_str())
             || offense.bench.contains(actor)
             || offense.removed.contains(actor)
         {
@@ -62,7 +62,7 @@ pub(crate) fn validate(
     // Preserve known canonical contradictions before missing contact history.
     // No guessed retirement order or credit cause.
     rules::validate_event_shape(event)?;
-    rules::validate_move_origins(&before.bases, event, Some(&defense.pitcher))?;
+    rules::validate_move_origins(&before.bases, event, defense.pitcher.active_id())?;
     let outs = rules::validate_outs(before, event)?;
     rules::validate_fielding_review(event)?;
     rules::validate_pa_credits(event)?;

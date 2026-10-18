@@ -2,6 +2,47 @@
 
 `engine/` is a pure Rust library with no database, UI or RNG dependency. Run `cargo test --manifest-path engine/Cargo.toml`; `engine/tests/contract.rs` is synthetic and exercises the transition shapes in [F-02](../data-audits/2019-fixtures.md), **not** a replay or independent historical validation.
 
+## Canonical personnel extension (BBE33)
+
+[Personnel contract and acceptance](../modeling/pinch-hitting-v1.md#canonical-personnel-prerequisite--preregistration-2026-10-18);
+[PROGRESS](../PROGRESS.md) owns current verification status.
+
+`TeamState.pitcher` is `PitcherRole::Active { player_id, obligation }` or
+`Vacant { batting_slot }`; `active_id()` returns `Option<&str>`. Obligations are
+`UntrackedLegacy`, `StartingBatter`, `ReliefBatter`, and `Satisfied`. Defense is
+`LegacyUnassigned` or `Assigned(Box<[Option<String>; 9]>)`, indexed P/C/1B/2B/3B/SS/LF/CF/RF.
+The box keeps legacy snapshots small; it does not alter wire layout. A missing
+position is pending, never a fictitious defender or eligibility certification.
+Explicit caught-third-strike/delivery catcher facts and PB credits must name
+assigned C; legacy-unassigned mode never infers a catcher from batting order.
+
+`PinchHitter`, `AssignPitcher`, and `AssignDefense` use one original-snapshot
+projection in reducer and constructor; decoding revalidates the same rules.
+Assignments are atomic and order-independent. PH retains the current batting
+slot and does not advance cursor/outs/score/bases or add statistics. A non-DH
+pitcher PH leaves a real pitching vacancy. Pending offense may continue batting
+or end the game; `validate_play_ready()` requires complete defensive assignments
+and an active pitcher before any ordinary PA/pitch/runner event.
+
+Only substitution participants may omit batter/pitcher. Present IDs remain bound
+to the before-state; absent IDs do not create actors or pitching appearances.
+Strict actions never accept untracked legacy usage as satisfied. Legacy personnel
+behavior requires both before teams to be legacy and the event to have both
+participants and only old personnel variants. Already-active pitching-role changes
+and double switches remain unsupported in this checkpoint.
+
+BBE33 carries extended snapshots in either before or after, optional participants,
+and new personnel tags. Entirely legacy-representable records retain BBE25–32
+layouts/oldest-applicable selection. Old decodes explicitly retain unknown usage
+and unassigned defense. Legacy native Debug records retain their existing text
+for preview compatibility; extended roles/defense and absent actors stay explicit.
+No production roster/bench schema or automatic manager is enabled by these types.
+
+## Earlier contract and checkpoint history
+
+The version-specific/position-limit notes below describe their original checkpoints;
+the canonical personnel extension above supersedes them for explicit assigned state.
+
 - `GameState` has 1-based inning, top/bottom, 0–2 outs, away/home score and team state, nine batting slots with a next-batter cursor, current pitchers, predeclared DH/no-DH role, eligible bench and removed players, and first/second/third occupants carrying player ID **and responsible pitcher**. A valid `EventTransition` owns immutable before/event/after snapshots. `follows` compares the complete adjoining snapshots.
 - `Event` distinguishes a generic PA, an explicitly out-of-park HR PA, a runner-only event and a substitution. Its explicit `Delta` includes every batter/runner movement (plate/base → base/home/out), outs, runs, player-typed statistical credits and personnel changes (pitcher, batting slot, pinch runner). PA advances the batting cursor once and requires one PA credit; non-PA events never advance it or receive PA credit. A strikeout plus stolen base, and a strikeout on a passed ball with the batter safe, are **one PA each**, not multiple events.
 - Validation matches each moving runner to an occupied origin (or the batter at plate), preserves their responsibility, rejects duplicate occupants/origins/destinations, reconciles outs with movements and legally credited runs with third-out reason/timing and offense score, and checks resulting bases/lineups/pitcher against the delta. The third out belongs to the event delta even though the next-half state has zero outs and empty bases; top → bottom in the same inning, bottom → next top. Stranded runners are cleared at this boundary. The constructor checks terminal snapshots against the bounded E-03 regulation-ending rules; unrepresented third-out timing and walk-off overshoot still return an explicit error.

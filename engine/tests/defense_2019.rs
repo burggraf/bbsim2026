@@ -6,9 +6,10 @@ use bbsim_engine::{
 
 fn state(half: Half, defense_dh: bool) -> GameState {
     let mut teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_pitcher"),
+        pitcher: (format!("{prefix}_pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -17,11 +18,19 @@ fn state(half: Half, defense_dh: bool) -> GameState {
     let offense = half.offense();
     if !defense_dh {
         teams[1 - offense].dh_slot = None;
-        teams[1 - offense].batting_order[0] = teams[1 - offense].pitcher.clone();
+        teams[1 - offense].batting_order[0] = teams[1 - offense]
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned();
     }
     let runner = Runner {
         player_id: teams[offense].batting_order[7].clone(),
-        responsible_pitcher: teams[1 - offense].pitcher.clone(),
+        responsible_pitcher: teams[1 - offense]
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
     };
     GameState {
         inning: 2,
@@ -37,7 +46,11 @@ fn state(half: Half, defense_dh: bool) -> GameState {
 fn play(before: &GameState, kind: CreditKind, fielder: &str) -> Event {
     let offense = before.half.offense();
     let batter = before.teams[offense].batting_order[0].clone();
-    let pitcher = before.teams[1 - offense].pitcher.clone();
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let pb = kind == CreditKind::PassedBall;
     let movement = if pb {
         RunnerMove {
@@ -79,7 +92,7 @@ fn play(before: &GameState, kind: CreditKind, fielder: &str) -> Event {
         },
         participants: Participants {
             batter: Some(batter),
-            pitcher,
+            pitcher: Some(pitcher),
         },
         fielding_review: FieldingReview::Unknown,
         two_out_contact: None,
@@ -174,7 +187,10 @@ fn current_pitcher_cannot_be_charged_a_passed_ball_with_or_without_dh() {
                 &before,
                 CreditKind::PassedBall,
                 11,
-                &before.teams[1 - half.offense()].pitcher,
+                before.teams[1 - half.offense()]
+                    .pitcher
+                    .active_id()
+                    .unwrap(),
             );
         }
     }
@@ -194,7 +210,7 @@ fn known_role_restrictions_preserve_eligible_fielder_and_pitcher_credits() {
             ] {
                 let mut actors = vec![before.teams[defense].batting_order[1].as_str()];
                 if kind != CreditKind::PassedBall {
-                    actors.push(&before.teams[defense].pitcher);
+                    actors.push(before.teams[defense].pitcher.active_id().unwrap());
                 }
                 if !dh {
                     actors.push(&before.teams[defense].batting_order[8]);

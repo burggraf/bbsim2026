@@ -63,6 +63,12 @@ fn matchup(
         return writeln!(output, "No next plate appearance — game over.");
     }
     let offense = state.half.offense();
+    if state.teams[1 - offense].pitcher.active_id().is_none() {
+        return writeln!(
+            output,
+            "No next plate appearance — pitching assignment pending."
+        );
+    }
     let batter = state.teams[offense]
         .batting_order
         .get(usize::from(state.teams[offense].next_batter))
@@ -71,7 +77,13 @@ fn matchup(
         output,
         "Batter: {} | Pitcher: {}",
         name(names, batter)?,
-        name(names, &state.teams[1 - offense].pitcher)?
+        name(
+            names,
+            state.teams[1 - offense]
+                .pitcher
+                .active_id()
+                .ok_or_else(|| io::Error::other("no active transcript pitcher"))?
+        )?
     )
 }
 fn box_count(value: Option<u32>) -> String {
@@ -245,9 +257,10 @@ pub fn write_box_score(
 
         let mut pitchers = Vec::new();
         for state in std::iter::once(log[0].before()).chain(log.iter().map(|t| t.after())) {
-            let id = &state.teams[side].pitcher;
-            if !pitchers.contains(id) {
-                pitchers.push(id.clone());
+            if let Some(id) = state.teams[side].pitcher.active_id() {
+                if !pitchers.iter().any(|pitcher| pitcher == id) {
+                    pitchers.push(id.to_owned());
+                }
             }
         }
         let mut rows = Vec::new();
@@ -397,16 +410,20 @@ fn radio_heading(
     teams: &[String; 2],
     names: &BTreeMap<String, String>,
 ) -> io::Result<()> {
+    let pitching = match state.teams[1 - state.half.offense()].pitcher.active_id() {
+        Some(id) => format!("{} pitching", name(names, id)?),
+        None => "pitching assignment pending".into(),
+    };
     writeln!(
         output,
-        "\n{} of inning {} — {} batting; {} pitching.",
+        "\n{} of inning {} — {} batting; {}.",
         match state.half {
             Half::Top => "Top",
             Half::Bottom => "Bottom",
         },
         state.inning,
         teams[state.half.offense()],
-        name(names, &state.teams[1 - state.half.offense()].pitcher)?
+        pitching
     )
 }
 fn write_step_mode(
@@ -483,6 +500,11 @@ fn write_step_mode(
                         name(names, incoming)?,
                         name(names, outgoing)?
                     )?,
+                    PersonnelChange::AssignPitcher { incoming, .. } => write!(
+                        text,
+                        "Pitching assignment: {} takes the mound. ",
+                        name(names, incoming)?
+                    )?,
                     PersonnelChange::BattingSlot { slot, incoming, .. } => write!(
                         text,
                         "{} takes batting slot {}. ",
@@ -495,6 +517,30 @@ fn write_step_mode(
                             "unexpected managerial change",
                         ))
                     }
+                }
+            }
+            writeln!(text)?;
+        }
+        Step::PinchHit(_) => {
+            for change in &t.event().delta.changes {
+                match change {
+                    PersonnelChange::PinchHitter {
+                        incoming, outgoing, ..
+                    } => write!(
+                        text,
+                        "Pinch hitter: {} bats for {}. ",
+                        name(names, incoming)?,
+                        name(names, outgoing)?
+                    )?,
+                    PersonnelChange::AssignDefense {
+                        position, incoming, ..
+                    } => write!(
+                        text,
+                        "Defensive assignment: {} at {}. ",
+                        name(names, incoming)?,
+                        LOCATIONS[usize::from(*position) - 1]
+                    )?,
+                    _ => return Err(io::Error::other("unexpected PH personnel change")),
                 }
             }
             writeln!(text)?;

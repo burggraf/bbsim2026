@@ -36,7 +36,7 @@ pub(crate) fn validate(before: &GameState, event: &Event) -> Result<(), Transiti
         return Err(TransitionError::IllegalCredit);
     }
     rules::validate_event_shape(event)?;
-    rules::validate_move_origins(&before.bases, event, Some(&event.participants.pitcher))?;
+    rules::validate_move_origins(&before.bases, event, event.participants.pitcher.as_deref())?;
     rules::validate_outs(before, event)?;
     rules::validate_home_run(before, event)?;
     if !event.delta.changes.is_empty() {

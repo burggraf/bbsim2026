@@ -6,6 +6,7 @@ use bbsim_engine::{
 
 fn team(prefix: &str, pitcher: &str) -> TeamState {
     TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
         pitcher: pitcher.into(),
@@ -52,7 +53,7 @@ fn wild_pitch_event(before: &GameState) -> Event {
         kind: EventKind::RunnerOnly(RunnerEvent::WildPitch),
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![
@@ -134,7 +135,7 @@ fn strikeout_and_steal_share_a_single_pa_transition() {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![
@@ -198,7 +199,7 @@ fn third_out_retains_play_outs_but_normalizes_next_half() {
         kind: EventKind::RunnerOnly(RunnerEvent::StealAttempt),
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![RunnerMove {
@@ -267,7 +268,7 @@ fn continuity_uses_complete_snapshots() {
             kind: EventKind::Substitution,
             participants: Participants {
                 batter: Some("home0".into()),
-                pitcher: "away_pitcher".into(),
+                pitcher: Some("away_pitcher".into()),
             },
             delta: Delta {
                 moves: vec![],
@@ -357,7 +358,7 @@ fn substitution_preserves_batting_cursor_and_roundtrips() {
         kind: EventKind::Substitution,
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![],
@@ -411,7 +412,7 @@ fn strikeout_passed_ball_can_reach_without_an_out() {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![RunnerMove {
@@ -478,7 +479,7 @@ fn substitution_records_lineup_and_pinch_runner_responsibility() {
         kind: EventKind::Substitution,
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![],
@@ -544,7 +545,7 @@ fn simultaneous_out_and_score_reconciles_both_deltas() {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some("home0".into()),
-            pitcher: "away_pitcher".into(),
+            pitcher: Some("away_pitcher".into()),
         },
         delta: Delta {
             moves: vec![

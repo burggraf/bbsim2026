@@ -7,9 +7,10 @@ use bbsim_engine::{
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let team = |prefix: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}p"),
+        pitcher: (format!("{prefix}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![],
@@ -43,7 +44,13 @@ fn blank(before: &GameState) -> Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(offense.batting_order[offense.next_batter as usize].clone()),
-            pitcher: before.teams[1 - before.half.offense()].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - before.half.offense()]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::Unknown,
         delta: Delta {
@@ -73,7 +80,12 @@ fn batter_move(event: &Event, to: Destination) -> RunnerMove {
     RunnerMove {
         runner: Runner {
             player_id: batter(event),
-            responsible_pitcher: event.participants.pitcher.clone(),
+            responsible_pitcher: event
+                .participants
+                .pitcher
+                .as_deref()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to,
@@ -379,7 +391,11 @@ fn runner_scoring_and_pitcher_substitution_leave_known_batter_coverage_unchanged
     substitution.kind = EventKind::Substitution;
     substitution.delta.changes = vec![bbsim_engine::PersonnelChange::Pitcher {
         team: bbsim_engine::TeamSide::Home,
-        outgoing: before.teams[1].pitcher.clone(),
+        outgoing: before.teams[1]
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
         incoming: "reliever".into(),
     }];
     let t = accepted(before, substitution);

@@ -226,7 +226,14 @@ impl Kernel {
             .get(usize::from(before.teams[offense].next_batter))
             .ok_or("invalid batting cursor")?
             .clone();
-        let pitcher = before.teams[1 - offense].pitcher.clone();
+        before
+            .validate_play_ready()
+            .map_err(|e| format!("unready personnel: {e:?}"))?;
+        let pitcher = before.teams[1 - offense]
+            .pitcher
+            .active_id()
+            .expect("validated active pitcher")
+            .to_owned();
         let vector = self.sample(word);
         let destinations = [
             Destination::First,
@@ -285,7 +292,7 @@ impl Kernel {
             kind: EventKind::PlateAppearance,
             participants: Participants {
                 batter: Some(batter.clone()),
-                pitcher,
+                pitcher: Some(pitcher),
             },
             delta: Delta {
                 moves,

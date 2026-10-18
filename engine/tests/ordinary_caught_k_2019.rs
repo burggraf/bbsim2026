@@ -16,9 +16,10 @@ fn state(mask: u8, outs: u8, half: Half, dh: bool) -> GameState {
             batting_order[0] = pitcher.clone();
         }
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order,
             next_batter: 0,
-            pitcher,
+            pitcher: (pitcher).into(),
             dh_slot: dh.then_some(8),
             dh_must_bat: false,
             bench: vec![format!("{prefix}-bench")],
@@ -56,7 +57,11 @@ fn event(before: &GameState, catcher_slot: usize, holds: bool, reverse: bool) ->
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: Destination::Out,
@@ -82,7 +87,13 @@ fn event(before: &GameState, catcher_slot: usize, holds: bool, reverse: bool) ->
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves,
@@ -153,7 +164,8 @@ fn caught_k_has_independent_catcher_po_without_pitcher_assist() {
                                 assert_eq!(t.ordinary_ground_fielding(), None);
                                 let a = derive_accounting(std::slice::from_ref(&t)).unwrap();
                                 let side = 1 - half.offense();
-                                let p = &a.pitchers[side][&t.event().participants.pitcher];
+                                let p = &a.pitchers[side]
+                                    [t.event().participants.pitcher.as_deref().unwrap()];
                                 assert_eq!(
                                     (
                                         p.batters_faced,
@@ -226,7 +238,7 @@ fn event_bytes(action: &Event) -> Vec<u8> {
     assert_eq!(action.kind, EventKind::PlateAppearance);
     let mut bytes = vec![0, 1];
     bytes_string(&mut bytes, action.participants.batter.as_ref().unwrap());
-    bytes_string(&mut bytes, &action.participants.pitcher);
+    bytes_string(&mut bytes, action.participants.pitcher.as_deref().unwrap());
     bytes.push(u8::from(
         action.fielding_review == FieldingReview::NoMisplay,
     ));
@@ -533,7 +545,11 @@ fn terminal_uncaught_context_or_legal_first_touch_is_not_missing_catch_history()
         .delta
         .credits
         .retain(|c| c.kind != CreditKind::Putout);
-    partial.caught_strikeout.as_mut().unwrap().catcher_id = before.teams[1].pitcher.clone();
+    partial.caught_strikeout.as_mut().unwrap().catcher_id = before.teams[1]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     reject_all(&before, &control, &partial, TransitionError::IllegalCredit);
 }
 
@@ -543,7 +559,7 @@ fn asserted_catcher_roles_are_known_before_missing_chance_review() {
         let before = state(0, 0, half, true);
         let defense = &before.teams[1 - half.offense()];
         for id in [
-            &defense.pitcher,
+            defense.pitcher.active_id().unwrap(),
             &defense.batting_order[8],
             &defense.bench[0],
             &defense.removed[0],
@@ -555,7 +571,7 @@ fn asserted_catcher_roles_are_known_before_missing_chance_review() {
                 .delta
                 .credits
                 .retain(|c| c.kind != CreditKind::Putout);
-            action.caught_strikeout.as_mut().unwrap().catcher_id = id.clone();
+            action.caught_strikeout.as_mut().unwrap().catcher_id = id.to_owned();
             let mut generic = action.clone();
             generic.caught_strikeout = None;
             let control = apply(&before, generic).unwrap();

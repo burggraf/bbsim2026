@@ -216,11 +216,12 @@ impl Lineup {
     }
     pub fn initial(&self) -> GameState {
         let team = |side: usize| TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|i| {
                 self.players[side][i + usize::from(self.use_dh)].id.clone()
             }),
             next_batter: 0,
-            pitcher: self.fielder(side, 1).to_owned(),
+            pitcher: (self.fielder(side, 1).to_owned()).into(),
             dh_slot: self.dh_slot(side),
             dh_must_bat: self.use_dh,
             bench: vec![],
@@ -254,7 +255,7 @@ impl Lineup {
                 .iter()
                 .zip(players.iter().filter(|p| p.slot != 0))
                 .any(|(id, p)| *id != p.id)
-                || team.pitcher != self.fielder(side, 1)
+                || team.pitcher.active_id() != Some(self.fielder(side, 1))
                 || team.dh_slot != self.dh_slot(side)
                 || !team.bench.is_empty()
                 || !team.removed.is_empty()

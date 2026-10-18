@@ -261,8 +261,18 @@ pub fn event_for(state: &GameState, sample: Sample) -> Result<Event, String> {
         .filter(|(i, _)| defense.dh_slot != Some(*i as u8))
         .map(|(_, id)| id.clone())
         .collect::<Vec<_>>();
-    if !defenders.contains(&defense.pitcher) {
-        defenders.push(defense.pitcher.clone());
+    if !defense
+        .pitcher
+        .active_id()
+        .is_some_and(|p| defenders.iter().any(|id| id == p))
+    {
+        defenders.push(
+            defense
+                .pitcher
+                .active_id()
+                .expect("validated active pitcher")
+                .to_owned(),
+        );
     }
     let fielder_id = defenders
         .get(ordinal)

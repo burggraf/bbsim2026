@@ -154,14 +154,22 @@ fn all_five_policies_conserve_all_before_mask_out_half_frames_with_dh_or_no_dh()
                         for team in &mut before.teams {
                             team.dh_slot = None;
                             team.dh_must_bat = false;
-                            team.batting_order[8] = team.pitcher.clone();
+                            team.batting_order[8] = team
+                                .pitcher
+                                .active_id()
+                                .expect("legacy fixture pitcher")
+                                .to_owned();
                         }
                     }
                     for (i, base) in before.bases.iter_mut().enumerate() {
                         *base = (mask & (1 << i) != 0).then(|| Runner {
                             // Keep the next batter off base in the after snapshot (as in legacy fixtures).
                             player_id: before.teams[half.offense()].batting_order[i + 5].clone(),
-                            responsible_pitcher: before.teams[1 - half.offense()].pitcher.clone(),
+                            responsible_pitcher: before.teams[1 - half.offense()]
+                                .pitcher
+                                .active_id()
+                                .expect("legacy fixture pitcher")
+                                .to_owned(),
                         });
                     }
                     let old = apply(
@@ -344,7 +352,11 @@ fn named_before_actor_selection_excludes_each_dh_slot_and_supports_pitcher_catch
     let mut before = legacy[0].before().clone();
     before.teams[1].dh_slot = None;
     before.teams[1].dh_must_bat = false;
-    before.teams[1].batting_order[2] = before.teams[1].pitcher.clone();
+    before.teams[1].batting_order[2] = before.teams[1]
+        .pitcher
+        .active_id()
+        .expect("legacy fixture pitcher")
+        .to_owned();
     let transition = apply(&before, joint::event_for(&before, selected(11)).unwrap()).unwrap();
     assert_eq!(
         transition
@@ -352,11 +364,13 @@ fn named_before_actor_selection_excludes_each_dh_slot_and_supports_pitcher_catch
             .ordinary_air_catch
             .as_ref()
             .unwrap()
-            .fielder_id,
-        before.teams[1].pitcher
+            .fielder_id
+            .as_str(),
+        before.teams[1].pitcher.active_id().unwrap()
     );
     assert_eq!(
-        transition.ordinary_air_fielding().unwrap().putouts[&before.teams[1].pitcher],
+        transition.ordinary_air_fielding().unwrap().putouts
+            [before.teams[1].pitcher.active_id().unwrap()],
         1
     );
 }
@@ -370,11 +384,17 @@ fn terminal_or_malformed_before_state_cannot_publish_legal_joint_transition() {
         assert!(joint::event_for(&before, selected(index)).is_err());
     }
     before.over = false;
+    let legal = before.clone();
     before.teams[1].batting_order[6] = before.teams[1].batting_order[8].clone();
     for index in 8..13 {
         let frozen = before.clone();
-        let event = joint::event_for(&before, selected(index)).unwrap();
-        assert!(apply(&before, event).is_err());
+        assert!(joint::event_for(&before, selected(index)).is_err());
+        // Keep independent reducer coverage without bypassing the producer's readiness guard.
+        let event = joint::event_for(&legal, selected(index)).unwrap();
+        assert_eq!(
+            apply(&before, event),
+            Err(bbsim_engine::TransitionError::InvalidState)
+        );
         assert_eq!(before, frozen);
     }
 }
@@ -754,7 +774,11 @@ fn viewer_air_calls_name_bound_types_actors_and_held_runners_without_mutation() 
                 for (i, base) in before.bases.iter_mut().enumerate() {
                     *base = (mask & (1 << i) != 0).then(|| Runner {
                         player_id: before.teams[half.offense()].batting_order[i + 5].clone(),
-                        responsible_pitcher: before.teams[1 - half.offense()].pitcher.clone(),
+                        responsible_pitcher: before.teams[1 - half.offense()]
+                            .pitcher
+                            .active_id()
+                            .expect("legacy fixture pitcher")
+                            .to_owned(),
                     });
                 }
                 for (index, label, actor_slot) in
@@ -773,7 +797,7 @@ fn viewer_air_calls_name_bound_types_actors_and_held_runners_without_mutation() 
                     assert!(
                         text.contains(&format!(
                             "{} to {batter}: {label} caught by {fielder} — {batter} is out!",
-                            defense.pitcher
+                            defense.pitcher.active_id().unwrap()
                         )),
                         "{half:?}/{outs}/{mask}/{label}: {text}"
                     );

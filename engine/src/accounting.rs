@@ -453,7 +453,8 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             // The scalar certificate cannot cover inherited/other charges.
             if error_batter.is_none() {
                 empty_muff_half &= half_runs.keys().all(|(side, pitcher)| {
-                    *side == 1 - before.half.offense() && pitcher == &half_pitcher
+                    *side == 1 - before.half.offense()
+                        && Some(pitcher.as_str()) == half_pitcher.as_deref()
                 });
                 empty_muff_earned = half_runs.values().sum();
             }
@@ -496,7 +497,7 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         let defense = 1 - offense;
         let unchanged_personnel = event.delta.changes.is_empty()
             && event.participants.pitcher == half_pitcher
-            && transition.after().teams[defense].pitcher == half_pitcher;
+            && transition.after().teams[defense].pitcher.active_id() == half_pitcher.as_deref();
         unearned_half &= unchanged_personnel;
         empty_muff_half &= unchanged_personnel;
         if event.kind != EventKind::Substitution {
@@ -505,14 +506,15 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
             let actors: BTreeSet<_> = team
                 .batting_order
                 .iter()
-                .chain([&team.pitcher])
+                .map(String::as_str)
+                .chain(team.pitcher.active_id())
                 .filter(|id| crate::rules::fielding_eligible(team, id))
                 .collect();
             let contribution = transition.fielding_contribution();
             let misplays = transition.misplay_contribution();
             for id in actors {
                 let line = result.classified_fielding[defense]
-                    .entry(id.clone())
+                    .entry(id.to_owned())
                     .or_default();
                 line.observed_events += 1;
                 line.putouts = line
@@ -544,7 +546,14 @@ pub fn derive_accounting(log: &[EventTransition]) -> Result<GameAccounting, Acco
         let line = &mut result.innings.entry(before.inning).or_insert([None, None])[offense];
         *line = Some(line.unwrap_or(0) + credited_runs);
         result.runs[offense] += u32::from(credited_runs);
-        let current_pitcher = event.participants.pitcher.as_str();
+        if event.kind == EventKind::Substitution {
+            continue;
+        }
+        let current_pitcher = event
+            .participants
+            .pitcher
+            .as_deref()
+            .expect("validated play pitcher");
         result.pitchers[defense]
             .entry(current_pitcher.into())
             .or_default()

@@ -543,12 +543,9 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
         crate::rules::validate_participants(before, event)?;
     }
     let defense = &before.teams[1 - before.half.offense()];
-    if event
-        .delta
-        .credits
-        .iter()
-        .any(|c| c.kind == CreditKind::WildPitch && c.player_id != defense.pitcher)
-    {
+    if event.delta.credits.iter().any(|c| {
+        c.kind == CreditKind::WildPitch && Some(c.player_id.as_str()) != defense.pitcher.active_id()
+    }) {
         return Err(TransitionError::IllegalCredit);
     }
     if units(event, CreditKind::WildPitch) != 0 || event.single_delivery.is_some() {
@@ -568,8 +565,7 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
     let Some(facts) = &event.single_delivery else {
         return Ok(());
     };
-    if facts.catcher_id == defense.pitcher
-        || !crate::rules::fielding_eligible(defense, &facts.catcher_id)
+    if !crate::rules::catcher_eligible(defense, &facts.catcher_id)
         || supplied_units(event) > 1
         || event
             .delta
@@ -621,7 +617,9 @@ pub(crate) fn preflight(before: &GameState, event: &Event) -> Result<(), Transit
         crate::rules::validate_move_origins(
             &before.bases,
             event,
-            retired_batter.then_some(defense.pitcher.as_str()),
+            retired_batter
+                .then_some(())
+                .and(defense.pitcher.active_id()),
         )?;
         let _ = crate::rules::move_destinations(before.bases.clone(), event)?;
         let total_outs = crate::rules::validate_outs(before, event)?;

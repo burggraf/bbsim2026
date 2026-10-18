@@ -9,9 +9,10 @@ fn state(mask: u8, outs: u8, half: Half, cursor: u8, dh: bool) -> GameState {
             batting_order[7] = pitcher.clone();
         }
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order,
             next_batter: cursor,
-            pitcher,
+            pitcher: (pitcher).into(),
             dh_slot: dh.then_some(8),
             dh_must_bat: false,
             bench: vec![format!("{prefix}bench")],
@@ -48,19 +49,31 @@ fn credit(actor: &str, kind: CreditKind) -> Credit {
 fn fixture(before: &GameState, role: u8) -> (Event, GroundForceDoublePlayFacts) {
     let defense = &before.teams[1 - before.half.offense()];
     let initial = if matches!(role, 2 | 5) {
-        defense.pitcher.clone()
+        defense
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned()
     } else if role == 1 {
         defense.batting_order[1].clone()
     } else {
         defense.batting_order[3].clone()
     };
     let pivot = if role == 3 {
-        defense.pitcher.clone()
+        defense
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned()
     } else {
         defense.batting_order[2].clone()
     };
     let receiver = if matches!(role, 4 | 5) {
-        defense.pitcher.clone()
+        defense
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned()
     } else {
         defense.batting_order[1].clone()
     };
@@ -77,7 +90,11 @@ fn fixture(before: &GameState, role: u8) -> (Event, GroundForceDoublePlayFacts) 
         RunnerMove {
             runner: Runner {
                 player_id: batter.clone(),
-                responsible_pitcher: defense.pitcher.clone(),
+                responsible_pitcher: defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
             },
             from: Base::Plate,
             to: Destination::Out,
@@ -104,7 +121,13 @@ fn fixture(before: &GameState, role: u8) -> (Event, GroundForceDoublePlayFacts) 
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -353,8 +376,8 @@ fn cartesian_state_and_independent_accounting_oracle() {
                                         ),
                                         (0, 0, 0)
                                     );
-                                    let pitcher =
-                                        &stats.pitchers[defense][&before.teams[defense].pitcher];
+                                    let pitcher = &stats.pitchers[defense]
+                                        [before.teams[defense].pitcher.active_id().unwrap()];
                                     assert_eq!(
                                         (
                                             pitcher.batters_faced,
@@ -422,7 +445,11 @@ fn known_contradictions_and_eligible_named_roles() {
         let before = state(1, 0, Half::Top, 0, dh);
         let defense = &before.teams[1];
         let candidates = defense.batting_order.iter().cloned().chain([
-            defense.pitcher.clone(),
+            defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
             "hbench".into(),
             "hremoved".into(),
             "foreign".into(),
@@ -443,7 +470,7 @@ fn known_contradictions_and_eligible_named_roles() {
                     credit(&f.initial_fielder_id, CreditKind::Assist),
                     credit(&f.pivot_id, CreditKind::Assist),
                 ]);
-                let eligible = actor == defense.pitcher
+                let eligible = Some(actor.as_str()) == defense.pitcher.active_id()
                     || defense
                         .batting_order
                         .iter()
@@ -587,7 +614,7 @@ fn late_bottom_endings_and_unqualified_episodes_have_no_fallback() {
                 .between_outs
                 .push("h1".into()),
             26 => bad.delta.third_out.as_mut().unwrap().kind = ThirdOutKind::Timing,
-            27 => bad.participants.pitcher = "wrong".into(),
+            27 => bad.participants.pitcher = Some("wrong".into()),
             _ => bad.delta.moves[1].from = Base::Second,
         }
         rejected(&before, &bad, &facts);
@@ -747,7 +774,13 @@ fn simple_pa(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter(before)),
-            pitcher: before.teams[1 - before.half.offense()].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - before.half.offense()]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -778,7 +811,11 @@ fn plate(before: &GameState, to: Destination) -> RunnerMove {
     RunnerMove {
         runner: Runner {
             player_id: batter(before),
-            responsible_pitcher: before.teams[1 - before.half.offense()].pitcher.clone(),
+            responsible_pitcher: before.teams[1 - before.half.offense()]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to,

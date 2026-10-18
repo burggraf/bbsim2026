@@ -9,9 +9,10 @@ fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let teams = std::array::from_fn(|side| {
         let prefix = ["away", "home"][side];
         TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|slot| format!("{prefix}{slot}")),
             next_batter: 0,
-            pitcher: format!("{prefix}_pitcher"),
+            pitcher: (format!("{prefix}_pitcher")).into(),
             dh_slot: Some(8),
             dh_must_bat: false,
             bench: vec![format!("{prefix}_relief")],
@@ -27,7 +28,11 @@ fn state(mask: u8, outs: u8, half: Half) -> GameState {
         bases: std::array::from_fn(|base| {
             (mask & (1 << base) != 0).then(|| Runner {
                 player_id: teams[offense].batting_order[5 + base].clone(),
-                responsible_pitcher: teams[1 - offense].pitcher.clone(),
+                responsible_pitcher: teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
             })
         }),
         teams,
@@ -45,7 +50,11 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 fn hit(before: &GameState, to: Destination, class: Option<CreditKind>) -> Event {
     let offense = before.half.offense();
     let batter = &before.teams[offense].batting_order[before.teams[offense].next_batter as usize];
-    let pitcher = &before.teams[1 - offense].pitcher;
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .unwrap()
+        .to_owned();
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
@@ -78,7 +87,7 @@ fn hit(before: &GameState, to: Destination, class: Option<CreditKind>) -> Event 
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: pitcher.clone(),
+            pitcher: Some(pitcher.clone()),
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
@@ -221,7 +230,7 @@ fn reducer_reports_missing_hit_before_inherited_responsibility_ambiguity() {
             1
         );
         assert_eq!(
-            lines.pitchers[1 - side][&reference.event().participants.pitcher]
+            lines.pitchers[1 - side][reference.event().participants.pitcher.as_deref().unwrap()]
                 .credited_hit_breakdown_allowed,
             None
         );
@@ -264,12 +273,16 @@ fn codec_reports_parsed_missing_hit_before_inherited_responsibility_ambiguity() 
 fn strikeout(before: &GameState) -> Event {
     let offense = before.half.offense();
     let batter = &before.teams[offense].batting_order[before.teams[offense].next_batter as usize];
-    let pitcher = &before.teams[1 - offense].pitcher;
+    let pitcher = before.teams[1 - offense]
+        .pitcher
+        .active_id()
+        .unwrap()
+        .to_owned();
     Event {
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: pitcher.clone(),
+            pitcher: Some(pitcher.clone()),
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
@@ -443,7 +456,7 @@ fn classified_hits_partition_credited_h_without_inferring_final_base_value() {
                             let b = &box_lines.batters[offense]
                                 [&before.teams[offense].batting_order[0]];
                             let p = &box_lines.pitchers[1 - offense]
-                                [&before.teams[1 - offense].pitcher];
+                                [before.teams[1 - offense].pitcher.active_id().unwrap()];
                             let expected = breakdown(class);
                             assert_eq!(expected.hits(), 1);
                             assert_eq!(expected.total_bases(), value as u32);
@@ -758,8 +771,11 @@ fn explicit_hr_classifies_hits_with_unknown_review_and_preserves_walkoff_excepti
                 Some(expected.clone())
             );
             assert_eq!(
-                lines.pitchers[1 - half.offense()][&before.teams[1 - half.offense()].pitcher]
-                    .credited_hit_breakdown_allowed,
+                lines.pitchers[1 - half.offense()][before.teams[1 - half.offense()]
+                    .pitcher
+                    .active_id()
+                    .unwrap()]
+                .credited_hit_breakdown_allowed,
                 Some(expected)
             );
             if half == Half::Bottom {
@@ -804,17 +820,22 @@ fn unclassified_hit_unknown_is_irreversible_and_local_to_actor_and_actual_pitche
                 Some(breakdown(CreditKind::Single))
             );
             assert_eq!(
-                lines.pitchers[1 - side][&before.teams[1 - side].pitcher]
+                lines.pitchers[1 - side][before.teams[1 - side].pitcher.active_id().unwrap()]
                     .credited_hit_breakdown_allowed,
                 None
             );
             assert_eq!(
-                lines.pitchers[1 - side][&before.teams[1 - side].pitcher].credited_hits_allowed,
+                lines.pitchers[1 - side][before.teams[1 - side].pitcher.active_id().unwrap()]
+                    .credited_hits_allowed,
                 10
             );
         }
         let mut before = state(0, 0, half);
-        let old_pitcher = before.teams[1 - half.offense()].pitcher.clone();
+        let old_pitcher = before.teams[1 - half.offense()]
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned();
         let reach = apply(&before, hit(&before, Destination::First, None)).unwrap();
         before = reach.after().clone();
         let relief = format!("{}_relief", ["away", "home"][1 - half.offense()]);
@@ -822,7 +843,7 @@ fn unclassified_hit_unknown_is_irreversible_and_local_to_actor_and_actual_pitche
             kind: EventKind::Substitution,
             participants: Participants {
                 batter: Some(before.teams[half.offense()].batting_order[1].clone()),
-                pitcher: old_pitcher.clone(),
+                pitcher: Some(old_pitcher.clone()),
             },
             fielding_review: FieldingReview::NoMisplay,
             two_out_contact: None,

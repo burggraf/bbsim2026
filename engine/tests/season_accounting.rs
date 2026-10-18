@@ -126,3 +126,28 @@ fn output_errors_are_not_swallowed() {
     .unwrap_err();
     assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
 }
+
+#[test]
+fn ph_metadata_identifies_the_selected_ratings_model() {
+    for model in [ratings::MODEL_VERSION, "experimental-ratings-test"] {
+        let mut output = Vec::new();
+        season_accounting::write_with_personnel(
+            &mut output,
+            &fixture(true),
+            "LAN201904010",
+            1,
+            &["SFN".into(), "LAN".into()],
+            Some((
+                "ph-policy-test",
+                "assumed availability",
+                "assumed defense",
+                model,
+            )),
+        )
+        .unwrap();
+        let text = String::from_utf8(output).unwrap();
+        assert!(text.starts_with("format\tcontrolled-accounting-ph-v1\n"));
+        assert!(text.lines().any(|line| line == format!("ratings\t{model}")));
+        assert!(text.contains("pinch_hitting\tph-policy-test\n"));
+    }
+}

@@ -11,7 +11,9 @@ mod ground;
 mod ground_force_double_play;
 mod ground_muff;
 mod hit_runner_tag;
+mod personnel;
 mod pitch;
+pub use personnel::{DefenseState, PitcherObligation, PitcherRole};
 mod protected_award;
 mod reducer;
 mod rules;
@@ -68,11 +70,12 @@ pub struct Runner {
     pub responsible_pitcher: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TeamState {
     pub batting_order: [String; 9],
     pub next_batter: u8,
-    pub pitcher: String,
+    pub pitcher: PitcherRole,
+    pub defense: DefenseState,
     /// Declared before first pitch; `None` means the pitcher bats.
     /// Once lost, the DH cannot be restored in this game.
     pub dh_slot: Option<u8>,
@@ -82,6 +85,35 @@ pub struct TeamState {
     pub bench: Vec<String>,
     /// Players removed from all active roles; re-entry is prohibited.
     pub removed: Vec<String>,
+}
+
+// The native preview consumes legacy Debug records; extended state must remain explicit.
+impl std::fmt::Debug for TeamState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut team = f.debug_struct("TeamState");
+        team.field("batting_order", &self.batting_order)
+            .field("next_batter", &self.next_batter);
+        match (&self.pitcher, &self.defense) {
+            (
+                PitcherRole::Active {
+                    player_id,
+                    obligation: PitcherObligation::UntrackedLegacy,
+                },
+                DefenseState::LegacyUnassigned,
+            ) => {
+                team.field("pitcher", player_id);
+            }
+            _ => {
+                team.field("pitcher", &self.pitcher)
+                    .field("defense", &self.defense);
+            }
+        }
+        team.field("dh_slot", &self.dh_slot)
+            .field("dh_must_bat", &self.dh_must_bat)
+            .field("bench", &self.bench)
+            .field("removed", &self.removed)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -148,10 +180,21 @@ impl EventKind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Participants {
     pub batter: Option<String>,
-    pub pitcher: String,
+    pub pitcher: Option<String>,
+}
+impl std::fmt::Debug for Participants {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut actors = f.debug_struct("Participants");
+        actors.field("batter", &self.batter);
+        match &self.pitcher {
+            Some(id) => actors.field("pitcher", id),
+            None => actors.field("pitcher", &self.pitcher),
+        };
+        actors.finish()
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreditKind {
@@ -196,6 +239,20 @@ pub struct Credit {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PersonnelChange {
+    PinchHitter {
+        outgoing: String,
+        incoming: String,
+    },
+    AssignPitcher {
+        team: TeamSide,
+        incoming: String,
+    },
+    AssignDefense {
+        team: TeamSide,
+        position: u8,
+        outgoing: Option<String>,
+        incoming: String,
+    },
     Pitcher {
         team: TeamSide,
         outgoing: String,
@@ -889,7 +946,7 @@ impl EventTransition {
         if after.teams != expected_teams {
             return Err(TransitionError::IllegalStateChange);
         }
-        rules::validate_move_origins(&expected_bases, &event, Some(batter_charge))?;
+        rules::validate_move_origins(&expected_bases, &event, batter_charge)?;
         let total_outs = rules::validate_outs(&before, &event)?;
         rules::validate_home_run(&before, &event)?;
         rules::validate_run_credits(&before, &event, total_outs)?;

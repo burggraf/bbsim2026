@@ -11,9 +11,10 @@ use full_runner::{project, RunnerDecision};
 
 fn state(mask: u8, outs: u8, half: Half, inning: u16, score: [u16; 2]) -> GameState {
     let teams = ["away", "home"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|slot| format!("{prefix}{slot}")),
         next_batter: 0,
-        pitcher: format!("{prefix}_p"),
+        pitcher: (format!("{prefix}_p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}_bench")],
@@ -41,7 +42,11 @@ fn state(mask: u8, outs: u8, half: Half, inning: u16, score: [u16; 2]) -> GameSt
 fn fielders(before: &GameState) -> [String; 9] {
     let defense = &before.teams[1 - before.half.offense()];
     [
-        defense.pitcher.clone(),
+        defense
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
         defense.batting_order[1].clone(),
         defense.batting_order[2].clone(),
         defense.batting_order[3].clone(),
@@ -99,8 +104,8 @@ fn checked(before: &GameState, decision: &RunnerDecision) -> EventTransition {
         Some(before.teams[before.half.offense()].batting_order[0].as_str())
     );
     assert_eq!(
-        transition.event().participants.pitcher,
-        before.teams[1 - before.half.offense()].pitcher
+        transition.event().participants.pitcher.as_deref(),
+        before.teams[1 - before.half.offense()].pitcher.active_id()
     );
     assert_eq!(transition.event().delta.changes, []);
     assert!(!transition
@@ -721,7 +726,11 @@ fn invalid_targets_empty_origins_empty_delivery_contexts_and_selected_actors_ref
         defense.bench[0].clone(),
         defense.removed[0].clone(),
         defense.batting_order[8].clone(),
-        defense.pitcher.clone(),
+        defense
+            .pitcher
+            .active_id()
+            .expect("legacy fixture pitcher")
+            .to_owned(),
         "not-an-active-fielder".into(),
     ] {
         let mut wrong_catcher = fielders(&before);

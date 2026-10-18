@@ -6,6 +6,7 @@ use bbsim_engine::{
 
 fn team(prefix: &str, pitcher: &str) -> TeamState {
     TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
         pitcher: pitcher.into(),
@@ -50,7 +51,13 @@ fn action(
         kind,
         participants: Participants {
             batter: Some(batter),
-            pitcher: before.teams[1 - offense].pitcher.clone(),
+            pitcher: Some(
+                before.teams[1 - offense]
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         two_out_contact: None,
@@ -115,7 +122,11 @@ fn homer(before: &GameState) -> Event {
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+            responsible_pitcher: before.teams[1 - offense]
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: Destination::Home,

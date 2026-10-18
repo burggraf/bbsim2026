@@ -26,20 +26,43 @@ pub fn write(
     seed: u64,
     teams: &[String; 2],
 ) -> io::Result<()> {
+    write_with_personnel(output, stats, game, seed, teams, None)
+}
+
+pub fn write_with_personnel(
+    output: &mut dyn Write,
+    stats: &GameAccounting,
+    game: &str,
+    seed: u64,
+    teams: &[String; 2],
+    ph: Option<(&str, &str, &str, &str)>,
+) -> io::Result<()> {
     if !stats.complete_game {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "accounting requires a complete game",
         ));
     }
-    writeln!(
-        output,
-        "format\tcontrolled-accounting-v1\ngame\t{game}\nseed\t{seed}"
-    )?;
+    let format = if ph.is_some() {
+        "controlled-accounting-ph-v1"
+    } else {
+        "controlled-accounting-v1"
+    };
+    writeln!(output, "format\t{format}\ngame\t{game}\nseed\t{seed}")?;
+    if let Some((policy, availability, defense, _ratings)) = ph {
+        writeln!(
+            output,
+            "pinch_hitting\t{policy}\navailability_basis\t{availability}\ndefense_basis\t{defense}"
+        )?;
+    }
     for (key, value) in [
         ("engine", env!("CARGO_PKG_VERSION")),
         ("mechanics", super::full_simulation::MODEL_VERSION),
-        ("ratings", super::ratings::MODEL_VERSION),
+        (
+            "ratings",
+            ph.map(|(_, _, _, model)| model)
+                .unwrap_or(super::ratings::MODEL_VERSION),
+        ),
         ("manager", super::full_manager::POLICY_VERSION),
         ("rng", super::preview::RNG_VERSION),
         ("rules", "2019"),

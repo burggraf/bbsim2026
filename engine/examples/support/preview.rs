@@ -161,15 +161,23 @@ fn credit(id: &str, kind: CreditKind) -> Credit {
 
 pub fn event_for(state: &GameState, outcome: Outcome) -> Result<Event, String> {
     let defense = &state.teams[1 - state.half.offense()];
-    event_for_with_fielders(
-        state,
-        outcome,
-        [
-            &defense.batting_order[0],
-            &defense.batting_order[3],
-            &defense.batting_order[1],
+    let fielders = match &defense.defense {
+        bbsim_engine::DefenseState::LegacyUnassigned => [
+            defense.batting_order[0].as_str(),
+            defense.batting_order[3].as_str(),
+            defense.batting_order[1].as_str(),
         ],
-    )
+        bbsim_engine::DefenseState::Assigned(positions) => [
+            positions[1].as_deref().ok_or("pending canonical catcher")?,
+            positions[5]
+                .as_deref()
+                .ok_or("pending canonical shortstop")?,
+            positions[2]
+                .as_deref()
+                .ok_or("pending canonical first baseman")?,
+        ],
+    };
+    event_for_with_fielders(state, outcome, fielders)
 }
 
 /// Producer-selected catcher, ground thrower/muff actor and first-base receiver.
@@ -191,6 +199,9 @@ pub fn event_for_with_fielders(
         .get(usize::from(attack.next_batter))
         .ok_or("invalid batting cursor")?
         .clone();
+    state
+        .validate_play_ready()
+        .map_err(|e| format!("unready personnel: {e:?}"))?;
     let mut kind = EventKind::PlateAppearance;
     let mut outs = 0;
     let mut runs = 0;
@@ -319,7 +330,11 @@ pub fn event_for_with_fielders(
     moves.push(RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("validated active pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: batter_destination,
@@ -365,7 +380,13 @@ pub fn event_for_with_fielders(
         kind,
         participants: Participants {
             batter: Some(batter),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("validated active pitcher")
+                    .to_owned(),
+            ),
         },
         delta: Delta {
             moves,
@@ -405,9 +426,10 @@ where
     F: FnMut(&GameState, &mut Rng) -> Result<(Outcome, Event), String>,
 {
     let team = |name: &str| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{name}-{}", i + 1)),
         next_batter: 0,
-        pitcher: format!("{name}-pitcher"),
+        pitcher: (format!("{name}-pitcher")).into(),
         dh_slot: Some(8),
         dh_must_bat: true,
         bench: vec![],
@@ -459,6 +481,9 @@ where
                 "seed {seed}: resource ceiling reached, no winner fabricated"
             ));
         }
+        state
+            .validate_play_ready()
+            .map_err(|e| format!("unready personnel: {e:?}"))?;
         let transition = produce(&state, &mut rng)?;
         if transition.before() != &state {
             return Err(format!(

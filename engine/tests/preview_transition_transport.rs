@@ -17,9 +17,10 @@ fn state(mask: u8, outs: u8) -> GameState {
         score: [0, 0],
         over: false,
         teams: ["a", "h"].map(|p| TeamState {
+            defense: bbsim_engine::DefenseState::LegacyUnassigned,
             batting_order: std::array::from_fn(|i| format!("{p}{i}")),
             next_batter: 0,
-            pitcher: format!("{p}p"),
+            pitcher: (format!("{p}p")).into(),
             dh_slot: Some(8),
             dh_must_bat: false,
             bench: vec![format!("{p}bench")],

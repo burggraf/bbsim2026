@@ -1,7 +1,7 @@
 //! Bounded pitching changes from one explicitly assumed, recorded cast.
 use bbsim_engine::{
     accounting::derive_accounting, apply, Delta, Event, EventKind, EventTransition, FieldingReview,
-    GameState, Participants, PersonnelChange, TeamSide,
+    GameState, Participants, PersonnelChange, PitcherObligation, PitcherRole, TeamSide,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -383,7 +383,7 @@ impl Cast {
     pub fn prepare(&self, initial: &GameState) -> Result<GameState, String> {
         for side in 0..2 {
             let pitchers = &self.teams[side];
-            if initial.teams[side].pitcher != pitchers[0].id {
+            if initial.teams[side].pitcher.active_id() != Some(pitchers[0].id.as_str()) {
                 return Err("pitching cast starter does not match initial pitcher".into());
             }
             for (rank, pitcher) in pitchers.iter().enumerate() {
@@ -394,7 +394,8 @@ impl Cast {
                             "pitching cast identity conflicts with bench/removed players".into(),
                         );
                     }
-                    if team.pitcher == pitcher.id && !(own && rank == 0) {
+                    if team.pitcher.active_id() == Some(pitcher.id.as_str()) && !(own && rank == 0)
+                    {
                         return Err(
                             "pitching cast identity conflicts with pitcher membership".into()
                         );
@@ -433,6 +434,31 @@ impl Cast {
         Ok(prepared)
     }
 
+    #[allow(dead_code)] // Optional PH entry points also compile in isolated pitching-manager tests.
+    pub fn next_available<'a>(&'a self, before: &GameState, side: usize) -> Option<&'a str> {
+        self.teams[side]
+            .iter()
+            .skip(1)
+            .find(|p| {
+                before.teams[side].bench.contains(&p.id)
+                    && !before.teams[side].removed.contains(&p.id)
+            })
+            .map(|p| p.id.as_str())
+    }
+
+    /// A PH vacancy is resolved before defensive readiness or any entry/play RNG word.
+    #[allow(dead_code)]
+    pub fn restore_pitcher(&self, before: &GameState) -> Result<Option<EventTransition>, String> {
+        let side = 1 - before.half.offense();
+        if !matches!(before.teams[side].pitcher, PitcherRole::Vacant { .. }) {
+            return Ok(None);
+        }
+        let incoming = self
+            .next_available(before, side)
+            .ok_or("no unused cast pitcher for PH vacancy")?;
+        self.substitution(before, side, incoming).map(Some)
+    }
+
     pub fn workload_mode(&self) -> &'static str {
         if self.empirical {
             "empirical training outing budgets"
@@ -463,17 +489,26 @@ impl Cast {
         }
         let side = 1 - before.half.offense();
         let team = &before.teams[side];
+        if matches!(
+            team.pitcher,
+            PitcherRole::Active {
+                obligation: PitcherObligation::StartingBatter | PitcherObligation::ReliefBatter,
+                ..
+            }
+        ) {
+            return Ok(None);
+        }
         let pitchers = &self.teams[side];
         let Some(role) = pitchers
             .iter()
-            .position(|pitcher| pitcher.id == team.pitcher)
+            .position(|pitcher| Some(pitcher.id.as_str()) == team.pitcher.active_id())
         else {
             return Err("current pitcher is not in supplied cast".into());
         };
         let pa_count = log
             .iter()
             .filter(|transition| {
-                transition.event().participants.pitcher == team.pitcher
+                transition.event().participants.pitcher.as_deref() == team.pitcher.active_id()
                     && matches!(
                         transition.event().kind,
                         EventKind::PlateAppearance
@@ -482,11 +517,17 @@ impl Cast {
                     )
             })
             .count();
-        let workload = &self.workloads[&(team.pitcher.clone(), role == 0)];
+        let workload = &self.workloads[&(
+            team.pitcher
+                .active_id()
+                .expect("validated active pitcher")
+                .to_owned(),
+            role == 0,
+        )];
         let mut target = workload.budget(usage_word);
         let runs: u64 = log
             .iter()
-            .filter(|t| t.event().participants.pitcher == team.pitcher)
+            .filter(|t| t.event().participants.pitcher.as_deref() == team.pitcher.active_id())
             .map(|t| u64::from(t.event().delta.runs))
             .sum();
         let lead = i64::from(before.score[side]) - i64::from(before.score[1 - side]);
@@ -510,7 +551,11 @@ impl Cast {
                 let stats = derive_accounting(log)
                     .map_err(|e| format!("manager accounting refused: {e:?}"))?;
                 if stats.pitchers[side]
-                    .get(&team.pitcher)
+                    .get(
+                        team.pitcher
+                            .active_id()
+                            .ok_or("no active manager pitcher")?,
+                    )
                     .is_some_and(|p| p.classified_hits_allowed == Some(0))
                 {
                     target =
@@ -540,22 +585,36 @@ impl Cast {
         } else {
             TeamSide::Home
         };
-        let outgoing = before.teams[side].pitcher.clone();
-        let mut changes = vec![PersonnelChange::Pitcher {
-            team: team_side,
-            outgoing: outgoing.clone(),
-            incoming: incoming.to_owned(),
-        }];
-        if before.teams[side].dh_slot.is_none() {
-            let slot = before.teams[side]
+        let team = &before.teams[side];
+        let mut changes = match &team.pitcher {
+            PitcherRole::Active { player_id, .. } => vec![PersonnelChange::Pitcher {
+                team: team_side,
+                outgoing: player_id.clone(),
+                incoming: incoming.to_owned(),
+            }],
+            PitcherRole::Vacant { batting_slot } => vec![
+                PersonnelChange::AssignPitcher {
+                    team: team_side,
+                    incoming: incoming.to_owned(),
+                },
+                PersonnelChange::BattingSlot {
+                    team: team_side,
+                    slot: *batting_slot,
+                    outgoing: team.batting_order[*batting_slot as usize].clone(),
+                    incoming: incoming.to_owned(),
+                },
+            ],
+        };
+        if let Some(outgoing) = team.pitcher.active_id().filter(|_| team.dh_slot.is_none()) {
+            let slot = team
                 .batting_order
                 .iter()
-                .position(|player| player == &outgoing)
+                .position(|id| id == outgoing)
                 .ok_or("non-DH pitcher is absent from batting order")?;
             changes.push(PersonnelChange::BattingSlot {
                 team: team_side,
                 slot: slot as u8,
-                outgoing,
+                outgoing: outgoing.to_owned(),
                 incoming: incoming.to_owned(),
             });
         }
@@ -569,7 +628,7 @@ impl Cast {
             kind: EventKind::Substitution,
             participants: Participants {
                 batter: Some(batter),
-                pitcher: before.teams[side].pitcher.clone(),
+                pitcher: before.teams[side].pitcher.active_id().map(str::to_owned),
             },
             fielding_review: FieldingReview::Unknown,
             delta: Delta {

@@ -2,9 +2,10 @@ use bbsim_engine::{accounting::derive_accounting, *};
 
 fn state(mask: u8, outs: u8, half: Half) -> GameState {
     let teams = ["a", "h"].map(|p| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{p}{i}")),
         next_batter: 0,
-        pitcher: format!("{p}p"),
+        pitcher: (format!("{p}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{p}bench")],
@@ -53,7 +54,11 @@ fn fixture(
     let mut moves = vec![RunnerMove {
         runner: Runner {
             player_id: batter.clone(),
-            responsible_pitcher: defense.pitcher.clone(),
+            responsible_pitcher: defense
+                .pitcher
+                .active_id()
+                .expect("legacy fixture pitcher")
+                .to_owned(),
         },
         from: Base::Plate,
         to: [Destination::First, Destination::Second, Destination::Third][value - 1],
@@ -97,7 +102,13 @@ fn fixture(
         kind: EventKind::PlateAppearance,
         participants: Participants {
             batter: Some(batter.clone()),
-            pitcher: defense.pitcher.clone(),
+            pitcher: Some(
+                defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned(),
+            ),
         },
         fielding_review: FieldingReview::NoMisplay,
         delta: Delta {
@@ -240,12 +251,13 @@ fn all_masks_outs_halfs_values_and_forward_tag_targets() {
                                 value as u32
                             );
                             assert_eq!(
-                                a.pitchers[1 - half.offense()][&event.participants.pitcher]
-                                    .batters_faced,
+                                a.pitchers[1 - half.offense()]
+                                    [event.participants.pitcher.as_deref().unwrap()]
+                                .batters_faced,
                                 1
                             );
-                            let pitcher =
-                                &a.pitchers[1 - half.offense()][&event.participants.pitcher];
+                            let pitcher = &a.pitchers[1 - half.offense()]
+                                [event.participants.pitcher.as_deref().unwrap()];
                             assert_eq!(pitcher.outs_recorded, 1);
                             assert_eq!(pitcher.at_bats_against, Some(1));
                             assert_eq!(pitcher.credited_hits_allowed, 1);
@@ -417,7 +429,11 @@ fn native_tag_rejects_passing_between_surviving_runners_not_only_passing_the_tag
                     } else {
                         let batter = Runner {
                             player_id: facts.batter_id.clone(),
-                            responsible_pitcher: before.teams[1 - half.offense()].pitcher.clone(),
+                            responsible_pitcher: before.teams[1 - half.offense()]
+                                .pitcher
+                                .active_id()
+                                .expect("legacy fixture pitcher")
+                                .to_owned(),
                         };
                         if scoring {
                             [Some(batter), None, before.bases[2].clone()]
@@ -814,9 +830,17 @@ fn eligible_pitcher_roles_and_implicit_hit_at_bat_preserve_unknown_coverage() {
                 let defense = &mut s.teams[1 - half.offense()];
                 if !dh {
                     defense.dh_slot = None;
-                    defense.batting_order[8] = defense.pitcher.clone();
+                    defense.batting_order[8] = defense
+                        .pitcher
+                        .active_id()
+                        .expect("legacy fixture pitcher")
+                        .to_owned();
                 }
-                let pitcher = defense.pitcher.clone();
+                let pitcher = defense
+                    .pitcher
+                    .active_id()
+                    .expect("legacy fixture pitcher")
+                    .to_owned();
                 let (mut e, mut f) = fixture(&s, 2, 0, Destination::Home);
                 let (old, kind) = if pitcher_throws {
                     let old = f.thrower_id.clone();

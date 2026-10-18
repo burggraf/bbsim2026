@@ -15,9 +15,10 @@ use sampler::ProxyClass;
 const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 fn state(mask: u8, outs: u8) -> GameState {
     let teams = ["a", "h"].map(|prefix| TeamState {
+        defense: bbsim_engine::DefenseState::LegacyUnassigned,
         batting_order: std::array::from_fn(|i| format!("{prefix}{i}")),
         next_batter: 0,
-        pitcher: format!("{prefix}p"),
+        pitcher: (format!("{prefix}p")).into(),
         dh_slot: Some(8),
         dh_must_bat: false,
         bench: vec![format!("{prefix}bench")],
@@ -686,11 +687,14 @@ fn typed_loop_mixes_runner_only_and_produced_pa_then_stops_without_extra_callbac
 #[test]
 fn native_reducer_rejects_explicit_illegal_snapshot_before_class_word_or_callback() {
     let before = state(0, 3); // Deliberately illegal negative fixture,not new validation policy.
-    let event = joint::event_for(&before, sample()).unwrap();
-    let expected = match apply(&before, event) {
-        Err(e) => format!("ordinary contact-proxy parent refused: {e:?}"),
-        Ok(_) => panic!("illegal snapshot accepted"),
-    };
+                              // Construct on a legal frame; the public producer now refuses the illegal frame itself.
+    let event = joint::event_for(&state(0, 0), sample()).unwrap();
+    assert_eq!(
+        apply(&before, event),
+        Err(bbsim_engine::TransitionError::DeltaMismatch)
+    );
+    assert!(joint::event_for(&before, sample()).is_err());
+    let expected = "ordinary contact-proxy parent refused: unready personnel: InvalidState";
     let mut rng = preview::Rng::new(67);
     let mut reference = preview::Rng::new(67);
     assert_eq!(
