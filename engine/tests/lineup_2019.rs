@@ -482,6 +482,173 @@ fn bench_replacements_preserve_retained_slots_and_do_not_add_pa_or_bf() {
     }
 }
 
+fn chained_personnel_cases() -> Vec<(EventTransition, Event)> {
+    let mut cases = Vec::new();
+    for half in [Half::Top, Half::Bottom] {
+        for dh in [false, true] {
+            for side in 0..2 {
+                let before = configuration(half, dh);
+                let team = [TeamSide::Away, TeamSide::Home][side];
+                let mut changes = vec![PersonnelChange::BattingSlot {
+                    team,
+                    slot: 1,
+                    outgoing: before.teams[side].batting_order[1].clone(),
+                    incoming: "runner".into(),
+                }];
+                if dh {
+                    changes.push(PersonnelChange::Pitcher {
+                        team,
+                        outgoing: before.teams[side].pitcher.clone(),
+                        incoming: "runner".into(),
+                    });
+                }
+                for change in changes {
+                    cases.push((before.clone(), change));
+                }
+            }
+            for (index, base) in [Base::First, Base::Second, Base::Third]
+                .into_iter()
+                .enumerate()
+            {
+                let mut before = configuration(half, dh);
+                let offense = before.half.offense();
+                let outgoing = Runner {
+                    player_id: before.teams[offense].batting_order[1].clone(),
+                    responsible_pitcher: before.teams[1 - offense].pitcher.clone(),
+                };
+                before.bases[index] = Some(outgoing.clone());
+                cases.push((
+                    before,
+                    PersonnelChange::PinchRunner {
+                        base,
+                        outgoing: outgoing.clone(),
+                        incoming: Runner {
+                            player_id: "runner".into(),
+                            ..outgoing
+                        },
+                    },
+                ));
+            }
+        }
+    }
+    cases
+        .into_iter()
+        .map(|(before, change)| {
+            let valid = apply(&before, substitution(&before, vec![change.clone()])).unwrap();
+            let mut first = change.clone();
+            let mut second = change;
+            match (&mut first, &mut second) {
+                (
+                    PersonnelChange::Pitcher { incoming, .. },
+                    PersonnelChange::Pitcher { outgoing, .. },
+                )
+                | (
+                    PersonnelChange::BattingSlot { incoming, .. },
+                    PersonnelChange::BattingSlot { outgoing, .. },
+                ) => {
+                    *incoming = "sub".into();
+                    *outgoing = "sub".into();
+                }
+                (
+                    PersonnelChange::PinchRunner { incoming, .. },
+                    PersonnelChange::PinchRunner { outgoing, .. },
+                ) => {
+                    incoming.player_id = "sub".into();
+                    outgoing.player_id = "sub".into();
+                }
+                _ => unreachable!(),
+            }
+            (valid, substitution(&before, vec![first, second]))
+        })
+        .collect()
+}
+
+#[test]
+fn reducer_refuses_chained_personnel_without_returning_intermediate_player_to_bench() {
+    let cases = chained_personnel_cases();
+    assert_eq!(cases.len(), 24);
+    for (valid, action) in cases {
+        let before = valid.before().clone();
+        assert_eq!(apply(&before, action), Err(TransitionError::DeltaMismatch));
+        assert_eq!(&before, valid.before());
+    }
+}
+
+#[test]
+fn constructor_refuses_chained_personnel_even_with_a_legal_final_roster() {
+    for (valid, action) in chained_personnel_cases() {
+        assert_eq!(
+            EventTransition::try_new(valid.before().clone(), action, valid.after().clone()),
+            Err(TransitionError::DeltaMismatch)
+        );
+    }
+}
+
+fn encoded_change(change: &PersonnelChange) -> Vec<u8> {
+    match change {
+        PersonnelChange::Pitcher {
+            team,
+            outgoing,
+            incoming,
+        } => {
+            let mut bytes = vec![0, if *team == TeamSide::Away { 0 } else { 1 }];
+            bytes.extend(encoded_name(outgoing));
+            bytes.extend(encoded_name(incoming));
+            bytes
+        }
+        PersonnelChange::BattingSlot {
+            team,
+            slot,
+            outgoing,
+            incoming,
+        } => {
+            let mut bytes = vec![1, if *team == TeamSide::Away { 0 } else { 1 }, *slot];
+            bytes.extend(encoded_name(outgoing));
+            bytes.extend(encoded_name(incoming));
+            bytes
+        }
+        PersonnelChange::PinchRunner {
+            base,
+            outgoing,
+            incoming,
+        } => {
+            let mut bytes = vec![
+                2,
+                match base {
+                    Base::Plate => 0,
+                    Base::First => 1,
+                    Base::Second => 2,
+                    Base::Third => 3,
+                },
+            ];
+            for runner in [outgoing, incoming] {
+                bytes.extend(encoded_name(&runner.player_id));
+                bytes.extend(encoded_name(&runner.responsible_pitcher));
+            }
+            bytes
+        }
+    }
+}
+
+#[test]
+fn codec_refuses_chained_personnel_hidden_in_a_legal_final_snapshot() {
+    for (valid, action) in chained_personnel_cases() {
+        let mut bytes = valid.to_bytes();
+        let mut marker = 1u64.to_le_bytes().to_vec();
+        marker.extend(encoded_change(&valid.event().delta.changes[0]));
+        let offset = unique_wire_offset(&bytes, &marker);
+        let mut replacement = 2u64.to_le_bytes().to_vec();
+        for change in &action.delta.changes {
+            replacement.extend(encoded_change(change));
+        }
+        bytes.splice(offset..offset + marker.len(), replacement);
+        assert_eq!(
+            EventTransition::from_bytes(&bytes),
+            Err(TransitionError::DeltaMismatch)
+        );
+    }
+}
+
 #[test]
 fn next_batter_cannot_already_be_on_base() {
     let mut before = state();

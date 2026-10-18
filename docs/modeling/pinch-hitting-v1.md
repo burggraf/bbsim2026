@@ -414,3 +414,42 @@ cargo test --locked --offline --manifest-path engine/Cargo.toml \
 No new native tests, state fields, codec tags or automatic policy are implemented
 by this document. Full suites and gameplay/compatibility proofs remain required
 for implementation acceptance; previous results do not certify future changes.
+
+## Shared personnel projection — preparatory implementation, 2026-10-18
+
+Bounded preparation inside **active/incomplete P-02-pinch-hitting-v1**, not the
+full canonical-personnel checkpoint above. Before any vacancy/defense schema
+migration, the existing constructor and reducer now use one
+`rules::project_personnel` implementation. It preserves existing final membership
+and DH checks while binding outgoing IDs to the original before snapshot.
+
+The former sequential loops accepted a single A→B→C slot/pitcher/PR replacement
+with B returned to the unused bench: only A and C reached final-membership checks.
+New regressions cover 24 cases across both halves, DH/non-DH, both team sides and
+all three occupied bases. Reducer, direct constructor and forged-wire decoder
+must each reject the chain, even with an otherwise legal final roster, without
+mutating the caller. This closes that event-local re-entry hole; it does not yet
+implement the full order-independent assignment or pending-defense contract.
+
+Parent controls were frozen before native edits: 50 encoded legal personnel/PA
+records and 36 detailed/radio/accounting CLI cases at seeds 1 and 67, covering
+legacy lineup/casts, opt-in calibrated v2 and three DH/non-DH generic games.
+Acceptance and raw evidence are private/local `/tmp/bbsim-personnel-projection-v1/`.
+Two initial parent CLI harness attempts used a nonexistent ratings path, then a
+ratings table as a cast; raw failures are retained. The corrected parent-v3
+controls use the real empirical cast and calibrated-ratings table. These were
+harness errors, not source or simulator corrections.
+
+Fresh native verification: **905 Rust tests / four example tests** pass, with
+examples build, fmt and strict all-target Clippy. All **50 frozen wire records /
+36 CLI cases** remain byte-identical. An additional assert-based check covers
+48 duplicate/PR-slot collisions through reducer, constructor and decoder.
+**678 full Python tests** pass (58.297s; ResourceWarnings as errors) against the
+rebuilt binaries. Exact commands, protected-source checks and commit handoff are
+in PROGRESS and local evidence. These controls are bounded, not a rerun of all
+2,429 played games.
+Typed pitching vacancies, explicit defense, first-batter obligations, BBE33 and
+automatic PH remain unimplemented. No roster/data repair or probability/RNG/policy
+change belongs in this slice. The earlier 54-refusal statement is historical;
+the [regular-full-game correction](season-game-inputs-v1.md#approved-regular-full-game-policy--2026-10-18)
+now records 45 personnel/data refusals, not exceptional-result gating.

@@ -885,74 +885,7 @@ impl EventTransition {
         expected_teams[offense].next_batter = expected_slot;
         rules::validate_pa_credits(&event)?;
         let mut expected_bases = before.bases.clone();
-        for change in &event.delta.changes {
-            match change {
-                PersonnelChange::Pitcher {
-                    team,
-                    outgoing,
-                    incoming,
-                } => {
-                    let pitcher = &mut expected_teams[team.index()].pitcher;
-                    if pitcher != outgoing || incoming.is_empty() || outgoing == incoming {
-                        return Err(TransitionError::DeltaMismatch);
-                    }
-                    *pitcher = incoming.clone();
-                }
-                PersonnelChange::BattingSlot {
-                    team,
-                    slot,
-                    outgoing,
-                    incoming,
-                } => {
-                    if expected_teams[team.index()].dh_slot.is_some()
-                        && expected_teams[team.index()].pitcher == *incoming
-                        && expected_teams[team.index()].dh_slot != Some(*slot)
-                    {
-                        return Err(TransitionError::DeltaMismatch);
-                    }
-                    let batter = expected_teams[team.index()]
-                        .batting_order
-                        .get_mut(*slot as usize)
-                        .ok_or(TransitionError::DeltaMismatch)?;
-                    if batter != outgoing || incoming.is_empty() || outgoing == incoming {
-                        return Err(TransitionError::DeltaMismatch);
-                    }
-                    *batter = incoming.clone();
-                }
-                PersonnelChange::PinchRunner {
-                    base,
-                    outgoing,
-                    incoming,
-                } => {
-                    let index = match base {
-                        Base::First => 0,
-                        Base::Second => 1,
-                        Base::Third => 2,
-                        Base::Plate => return Err(TransitionError::DeltaMismatch),
-                    };
-                    if expected_bases[index].as_ref() != Some(outgoing)
-                        || incoming.player_id.is_empty()
-                        || incoming.player_id == outgoing.player_id
-                        || incoming.responsible_pitcher != outgoing.responsible_pitcher
-                    {
-                        return Err(TransitionError::DeltaMismatch);
-                    }
-                    let order = &mut expected_teams[offense].batting_order;
-                    let slot = order
-                        .iter()
-                        .position(|id| id == &outgoing.player_id)
-                        .ok_or(TransitionError::DeltaMismatch)?;
-                    if incoming.player_id == expected_teams[offense].pitcher
-                        && expected_teams[offense].dh_slot != Some(slot as u8)
-                    {
-                        return Err(TransitionError::DeltaMismatch);
-                    }
-                    order[slot] = incoming.player_id.clone();
-                    expected_bases[index] = Some(incoming.clone());
-                }
-            }
-        }
-        rules::finalize_personnel(&before.teams, &mut expected_teams, &event, offense)?;
+        rules::project_personnel(&before, &event, &mut expected_teams, &mut expected_bases)?;
         if after.teams != expected_teams {
             return Err(TransitionError::IllegalStateChange);
         }

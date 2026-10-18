@@ -83,59 +83,7 @@ fn apply_inner(
         }
         after.teams[offense].next_batter = (cursor + 1) % 9;
     }
-    for change in &event.delta.changes {
-        match change {
-            PersonnelChange::Pitcher {
-                team,
-                outgoing,
-                incoming,
-            } => {
-                let pitcher = &mut after.teams[team.index()].pitcher;
-                if pitcher != outgoing {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                *pitcher = incoming.clone();
-            }
-            PersonnelChange::BattingSlot {
-                team,
-                slot,
-                outgoing,
-                incoming,
-            } => {
-                let batter = after.teams[team.index()]
-                    .batting_order
-                    .get_mut(*slot as usize)
-                    .ok_or(TransitionError::DeltaMismatch)?;
-                if batter != outgoing {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                *batter = incoming.clone();
-            }
-            PersonnelChange::PinchRunner {
-                base,
-                outgoing,
-                incoming,
-            } => {
-                let index = match base {
-                    Base::First => 0,
-                    Base::Second => 1,
-                    Base::Third => 2,
-                    Base::Plate => return Err(TransitionError::DeltaMismatch),
-                };
-                if after.bases[index].as_ref() != Some(outgoing) {
-                    return Err(TransitionError::DeltaMismatch);
-                }
-                let order = &mut after.teams[offense].batting_order;
-                let slot = order
-                    .iter()
-                    .position(|id| id == &outgoing.player_id)
-                    .ok_or(TransitionError::DeltaMismatch)?;
-                order[slot] = incoming.player_id.clone();
-                after.bases[index] = Some(incoming.clone());
-            }
-        }
-    }
-    rules::finalize_personnel(&before.teams, &mut after.teams, &event, offense)?;
+    rules::project_personnel(before, &event, &mut after.teams, &mut after.bases)?;
     // Remove all origins before adding destinations: a forced runner may move
     // into a base just vacated by another runner on the same play.
     for movement in &event.delta.moves {

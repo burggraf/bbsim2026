@@ -1,7 +1,7 @@
 //! Bounded 2019 scoring, lineup and regulation-ending rules.
 use super::{
-    Base, CreditKind, Destination, Event, EventKind, GameState, Half, Runner, TeamState,
-    ThirdOutKind, TransitionError,
+    Base, CreditKind, Destination, Event, EventKind, GameState, Half, PersonnelChange, Runner,
+    TeamState, ThirdOutKind, TransitionError,
 };
 
 pub(crate) fn valid_team(team: &TeamState) -> bool {
@@ -228,8 +228,96 @@ pub(crate) fn fielding_eligible(team: &TeamState, id: &str) -> bool {
         })
 }
 
+/// Project personnel once, with every outgoing assignment bound to the before-state.
+pub(crate) fn project_personnel(
+    before: &GameState,
+    event: &Event,
+    teams: &mut [TeamState; 2],
+    bases: &mut [Option<Runner>; 3],
+) -> Result<(), TransitionError> {
+    let offense = before.half.offense();
+    for change in &event.delta.changes {
+        match change {
+            PersonnelChange::Pitcher {
+                team,
+                outgoing,
+                incoming,
+            } => {
+                let pitcher = &mut teams[team.index()].pitcher;
+                if outgoing != &before.teams[team.index()].pitcher
+                    || pitcher != outgoing
+                    || incoming.is_empty()
+                    || outgoing == incoming
+                {
+                    return Err(TransitionError::DeltaMismatch);
+                }
+                *pitcher = incoming.clone();
+            }
+            PersonnelChange::BattingSlot {
+                team,
+                slot,
+                outgoing,
+                incoming,
+            } => {
+                if teams[team.index()].dh_slot.is_some()
+                    && teams[team.index()].pitcher == *incoming
+                    && teams[team.index()].dh_slot != Some(*slot)
+                {
+                    return Err(TransitionError::DeltaMismatch);
+                }
+                let batter = teams[team.index()]
+                    .batting_order
+                    .get_mut(*slot as usize)
+                    .ok_or(TransitionError::DeltaMismatch)?;
+                if before.teams[team.index()].batting_order.get(*slot as usize) != Some(outgoing)
+                    || batter != outgoing
+                    || incoming.is_empty()
+                    || outgoing == incoming
+                {
+                    return Err(TransitionError::DeltaMismatch);
+                }
+                *batter = incoming.clone();
+            }
+            PersonnelChange::PinchRunner {
+                base,
+                outgoing,
+                incoming,
+            } => {
+                let index = match base {
+                    Base::First => 0,
+                    Base::Second => 1,
+                    Base::Third => 2,
+                    Base::Plate => return Err(TransitionError::DeltaMismatch),
+                };
+                if before.bases[index].as_ref() != Some(outgoing)
+                    || bases[index].as_ref() != Some(outgoing)
+                    || incoming.player_id.is_empty()
+                    || incoming.player_id == outgoing.player_id
+                    || incoming.responsible_pitcher != outgoing.responsible_pitcher
+                {
+                    return Err(TransitionError::DeltaMismatch);
+                }
+                let slot = before.teams[offense]
+                    .batting_order
+                    .iter()
+                    .position(|id| id == &outgoing.player_id)
+                    .ok_or(TransitionError::DeltaMismatch)?;
+                if teams[offense].batting_order[slot] != outgoing.player_id
+                    || incoming.player_id == teams[offense].pitcher
+                        && teams[offense].dh_slot != Some(slot as u8)
+                {
+                    return Err(TransitionError::DeltaMismatch);
+                }
+                teams[offense].batting_order[slot] = incoming.player_id.clone();
+                bases[index] = Some(incoming.clone());
+            }
+        }
+    }
+    finalize_personnel(&before.teams, teams, event, offense)
+}
+
 /// Derive one-way bench/removed transfers from active roles.
-pub(crate) fn finalize_personnel(
+fn finalize_personnel(
     before: &[TeamState; 2],
     after: &mut [TeamState; 2],
     event: &Event,
