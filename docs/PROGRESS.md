@@ -8,7 +8,8 @@ without refusals/native failures; batter/aggregate checks pass, pitcher bands fa
 at60.26–62.48%, with24 qualifying entries uncomparable per seed. Code `fb2cde0`,
 769Python/956Rust/4examples/full checks and12historical byte controls pass.
 [Results, failures, coverage and reproduction](modeling/managed-season-v1-results.md).
-No adoption, default change or fidelity/gate signoff; private evidence seal pending.
+No adoption, default change or fidelity/gate signoff; private evidence seal verified
+(53,459 files,92,461,436-byte archive; details in Resume).
 
 **Earlier verified local feature:** bounded end-to-end `P-02-pinch-hitting-v1` is done,
 not just its helper: opt-in `--bench` plays complete PH games with legal defense/
@@ -174,6 +175,7 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 **Current checkpoint:** `P-02-managed-season-v1` engineering/evaluation done, pitcher-usage
 NO-GO — [full results and failures](modeling/managed-season-v1-results.md). Finish the private
 evidence seal below; next ready task is read-only `P-02-pitcher-usage-diagnosis-v1`.
+Private evidence seal verified; next ready action is the read-only diagnosis.
 No usage-model adoption, default change or gate signoff. Verified prerequisite `P-02-season-pool-policy-v1` is committed as `4a3c76c`; the following records that component within
 `P-02-season-usage-management-v1`. Maintainer explicitly rejects daily roster/injury/
 minor-league reconstruction: existing season club pools plus approximately historical
@@ -326,15 +328,25 @@ No policy, thresholds, project tests, source or outcomes were changed after eval
 Historical receipts/outputs are authenticated against the prior sealed archive,
 not a new execution of its old binary. Never rerun these exclusive destinations.
 
-**Next action:** finish the documentation/evidence checkpoint, then read-only
-`P-02-pitcher-usage-diagnosis-v1`: trace retained rotation/extra-starter/mixed-role/
-bullpen-class decisions before proposing a separately preregistered successor.
-Prepared `/tmp/bbsim-managed-season-v1/archive-final-v1.py` seals code,raw evidence,
-reviews,native binaries and cached offline inputs after the final docs commit;
-run with raw stdout/stderr OUTSIDE that evidence root to avoid self-capture.
-Private destination `~/Library/Application Support/bbsim2026/work-checkpoints/managed-season-v1-verified-20261018-v1/`;
-archive is not yet claimed created. Preserve historical/default behavior;
-no roster acquisition,push,fidelity/release claim.
+**Durable checkpoint verified:** `proc_0721` exit0/42s, driver
+`/tmp/bbsim-managed-season-v1/archive-final-v1.py`; raw logs OUTSIDE archived root:
+`/tmp/bbsim-managed-season-archive-final-v1.stdout/.stderr`. Private directory
+`~/Library/Application Support/bbsim2026/work-checkpoints/managed-season-v1-verified-20261018-v1/`
+contains `source.bundle`, `evidence.tar.gz` and `receipt.json`:53,459 regular files,
+92,461,436 archive bytes, SHA256
+`6e670be940417d1221fb01be88bec8840435aabc48d177e2a40641acd37af747`.
+Every tar member hash verified, originals unchanged; parent rechecked archive/bundle
+hashes and all three failed-usage dispositions. Bundle HEAD is results checkpoint
+`7d578b09b5fd9363a31a384f9360b7fd3071069c`; this later ledger-only seal callback is
+not inside that bundle. All tested implementation bytes remain identical to `fb2cde0`.
+Raw native/Python evidence,reviews,binaries and cached offline CLI inputs are sealed;
+redundant derived pickle caches omitted explicitly in receipt. No automatic restore
+or public redistribution; previous historical archive is retained separately.
+
+**Next action:** read-only `P-02-pitcher-usage-diagnosis-v1`: trace retained rotation/
+extra-starter/mixed-role/bullpen-class decisions before proposing a separately
+preregistered successor. Do not rerun completed seasons, modify v1 policy/thresholds,
+acquire rosters,push,or claim fidelity/gate clearance.
 
 ### Earlier dated roster readiness — stopped/superseded by revised scope
 
