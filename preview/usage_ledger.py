@@ -11,7 +11,8 @@ FORMAT='observational-season-usage-ledger-v1'
 TARGET_FORMAT='2019-season-usage-targets-v1'
 LIMITS=('Historical-lineup reconstruction, not verified roster/stint eligibility. '
         'Dates are modeled game-start dates, including suspended games; observed appearances '
-        'are not transaction, injury or availability boundaries. Recent workload is not measured fatigue.')
+        'are not transaction, injury or availability boundaries. Recent workload is not measured fatigue. '
+        'Explicit refusals advance observation only and leave workload/pace history incomplete; not policy context.')
 CORE=('game_id','date','away_team_id','home_team_id')
 BANDS={'batter':('0','1-99','100-299','300+','unknown'),
        'pitcher':('0','1-59','60-179','180+','unknown')}
@@ -69,6 +70,7 @@ class Ledger:
     accept requires selected starting_batter_ids/starting_pitcher_ids keyed by team,
     role_actors keyed by native side, and parse_accounting's unchanged result. The
     receipt hash binds externally verified raw bytes; this class does not read files.
+    Explicit refusals permit later observational collection, never complete policy context.
     """
     def __init__(self,games):
         try:
@@ -78,7 +80,30 @@ class Ledger:
                 raise ValueError('Duplicate/nonchronological schedule')
         except (KeyError,TypeError,AttributeError) as error:raise ValueError('Invalid schedule') from error
         self._accepted={}
+        self._refusals={}
         self._versions=None
+
+    def _check_next(self,entry):
+        position=len(self._accepted)+len(self._refusals)
+        if position>=len(self._games) or _identity(entry)!=self._games[position]:
+            raise ValueError('Expected next chronological schedule entry')
+
+    def record_refusal(self,entry,reason):
+        """Observe an explicit missing game, never count its usage or supply policy context."""
+        try:
+            if not isinstance(reason,str) or not reason.strip():raise ValueError('Missing refusal reason')
+            payload=hashlib.sha256(_canonical([entry,reason])).hexdigest()
+            gid=entry['game_id']
+            if gid in self._accepted:raise ValueError('Cannot refuse an accepted game')
+            if gid in self._refusals:
+                if self._refusals[gid]['payload']!=payload:raise ValueError('Altered recorded refusal')
+                return False
+            self._check_next(entry)
+            season.game_seed(entry['seed'],gid)
+            refused=deepcopy(dict(entry=entry,reason=reason,payload=payload))
+        except (KeyError,TypeError,AttributeError,OverflowError) as error:raise ValueError('Invalid refusal payload') from error
+        self._refusals[gid]=refused
+        return True
 
     def accept(self,entry,result,receipt_sha256):
         """True for a new complete game, False for an identical replay; otherwise refuse atomically."""
@@ -90,8 +115,8 @@ class Ledger:
             if gid in self._accepted:
                 if self._accepted[gid]['payload']!=payload:raise ValueError('Altered accepted game/receipt')
                 return False
-            if len(self._accepted)>=len(self._games) or _identity(entry)!=self._games[len(self._accepted)]:
-                raise ValueError('Expected next chronological schedule entry')
+            if gid in self._refusals:raise ValueError('Cannot accept a recorded refusal')
+            self._check_next(entry)
             season.game_seed(entry['seed'],gid)
             if entry.get('status','pending') not in {'pending','complete'}:raise ValueError('Refused/failed game')
             _verify_result(entry,result)
@@ -116,13 +141,17 @@ class Ledger:
 
     def snapshot(self):
         counts=Counter(tid for g in self._games for tid in [g['away_team_id'],g['home_team_id']])
-        teams={tid:dict(scheduled_games=n,completed_games=0,pa=0,outs=0,bf=0,progress=0)
+        teams={tid:dict(scheduled_games=n,completed_games=0,observed_games=0,refused_games=0,
+                       history_complete=True,pa=0,outs=0,bf=0,progress=0)
                for tid,n in sorted(counts.items())}
+        for refused in self._refusals.values():
+            for key in CORE[2:]:
+                t=teams[refused['entry'][key]];t['observed_games']+=1;t['refused_games']+=1;t['history_complete']=False
         players={}
         for accepted in self._accepted.values():
             entry=accepted['entry'];result=accepted['result']
             for tid,stats in result['teams'].items():
-                t=teams[tid];t['completed_games']+=1
+                t=teams[tid];t['completed_games']+=1;t['observed_games']+=1
                 for key in ['pa','outs','bf']:t[key]+=stats[key]
                 t['progress']=t['completed_games']/t['scheduled_games']
             for p in result['players']:
@@ -140,8 +169,13 @@ class Ledger:
                         target['relief_outs']=target.get('relief_outs',0)+(0 if started else usage)
                 actor['workload'].append(dict(game_id=entry['game_id'],date=entry['date'],team_id=tid,
                     usage=usage,bf=p['stats'].get('bf'),started=started))
-        ids=list(self._accepted)
-        return dict(format=FORMAT,completed_game_ids=ids,next_game_id=self._games[len(ids)]['game_id'] if len(ids)<len(self._games) else None,
+        ids=list(self._accepted);position=len(ids)+len(self._refusals)
+        return dict(format=FORMAT,completed_game_ids=ids,
+            observed_game_ids=[g['game_id'] for g in self._games[:position]],
+            observed_schedule_complete=bool(self._games) and position==len(self._games),
+            history_complete=not self._refusals,
+            refused_games=[dict(_identity(r['entry']),reason=r['reason'],payload_sha256=r['payload']) for r in self._refusals.values()],
+            next_game_id=self._games[position]['game_id'] if position<len(self._games) else None,
             complete_schedule=bool(self._games) and len(ids)==len(self._games),versions=deepcopy(self._versions),teams=teams,players=players,
             receipt_sha256={gid:a['receipt_sha256'] for gid,a in self._accepted.items()},
             payload_sha256={gid:a['payload'] for gid,a in self._accepted.items()},limits=LIMITS)
@@ -217,9 +251,11 @@ class Ledger:
             a=_total(r['actual'] for r in grouped);s=_total(r['simulated'] for r in grouped)
             player_totals.append(dict(role=role,player_id=pid,actual=a,simulated=s,deviation=s-a if a is not None and s is not None else None))
         return dict(format='season-usage-comparison-v1',matched_game_ids=list(self._accepted),
+            history_complete=not self._refusals,refused_game_ids=list(self._refusals),
             full_target_schedule=matched=={g['game_id'] for g in targets['games']},
             aggregate=aggregate,headline=headline,bands=bands,player_team=rows,players=player_totals,
             coverage=dict(matched_games=len(matched),target_games=len(targets['games']),player_team_records=len(rows),
+                refused_games=len(self._refusals),observed_games=len(matched)+len(self._refusals),
                 actual_only=sum(r['actual_present'] and not r['simulated_present'] for r in rows),
                 sim_only=sum(r['simulated_present'] and not r['actual_present'] for r in rows),
                 unknown_actual=sum(r['actual'] is None for r in rows),compared=sum(r['deviation'] is not None for r in rows),

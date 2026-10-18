@@ -78,6 +78,70 @@ class UsageLedgerTests(unittest.TestCase):
         self.assertEqual([w['date'] for w in ledger.snapshot()['players']['pitcher:a']['workload']],
             ['2019-04-01','2019-04-01','2019-04-03'])
 
+    def test_observational_schedule_reports_history_completeness_explicitly(self):
+        snapshot=Ledger([game()]).snapshot()
+        self.assertIs(snapshot.get('history_complete'),True)
+        self.assertEqual(snapshot.get('observed_game_ids'),[])
+        self.assertIs(snapshot.get('observed_schedule_complete'),False)
+
+    def test_explicit_refusal_advances_observation_not_completed_clock_and_rebuilds(self):
+        games=[game(),game('LAN201904020','2019-04-02'),game('LAN201904030','2019-04-03')]
+        ledger=Ledger(games);ledger.accept(games[0],parsed(games[0]),SHA)
+        before=ledger.snapshot()
+        with self.assertRaises(ValueError):ledger.accept(games[2],parsed(games[2]),SHA)
+        self.assertEqual(ledger.snapshot(),before)
+        self.assertTrue(ledger.record_refusal(games[1],'Unsupported source personnel'))
+        refused=ledger.snapshot()
+        self.assertEqual(refused['completed_game_ids'],[games[0]['game_id']])
+        self.assertEqual(refused['observed_game_ids'],[g['game_id'] for g in games[:2]])
+        self.assertEqual(refused['next_game_id'],games[2]['game_id'])
+        self.assertEqual(refused['teams']['SFN']['pa'],before['teams']['SFN']['pa'])
+        self.assertEqual(refused['teams']['SFN']['completed_games'],1)
+        self.assertEqual(refused['teams']['SFN']['progress'],1/3)
+        self.assertEqual(refused['teams']['SFN']['observed_games'],2)
+        self.assertEqual(refused['teams']['SFN']['refused_games'],1)
+        self.assertFalse(refused['teams']['SFN']['history_complete'])
+        self.assertEqual(refused['players'],before['players'])
+        self.assertFalse(refused['history_complete'])
+        self.assertFalse(refused['complete_schedule'])
+        self.assertFalse(refused['observed_schedule_complete'])
+        self.assertFalse(ledger.record_refusal(games[1],'Unsupported source personnel'))
+        self.assertEqual(ledger.snapshot(),refused)
+        self.assertTrue(ledger.accept(games[2],parsed(games[2]),SHA))
+        final=ledger.snapshot()
+        self.assertTrue(final['observed_schedule_complete'])
+        self.assertFalse(final['complete_schedule']);self.assertFalse(final['history_complete'])
+        self.assertEqual(final['teams']['SFN']['completed_games'],2)
+        self.assertEqual(final['refused_games'][0]['reason'],'Unsupported source personnel')
+        rebuilt=Ledger(games)
+        rebuilt.accept(games[0],parsed(games[0]),SHA)
+        rebuilt.record_refusal(games[1],'Unsupported source personnel')
+        rebuilt.accept(games[2],parsed(games[2]),SHA)
+        self.assertEqual(rebuilt.snapshot(),final)
+        report=ledger.compare(targets(games))
+        self.assertEqual(report['matched_game_ids'],[games[0]['game_id'],games[2]['game_id']])
+        self.assertEqual(report['aggregate']['pa']['actual'],112)
+        self.assertEqual(report['coverage']['refused_games'],1)
+        self.assertFalse(report['history_complete'])
+        self.assertFalse(report['full_target_schedule'])
+
+    def test_refusal_identity_order_reason_conflicts_are_atomic(self):
+        games=[game(),game('LAN201904020','2019-04-02')];ledger=Ledger(games)
+        before=ledger.snapshot()
+        for e,reason in [(games[1],'later'),(dict(games[0],home_team_id='NYN'),'wrong'),
+                (games[0],''),(games[0],None),(games[0],'  ')]:
+            with self.subTest(e=e,reason=reason),self.assertRaises(ValueError):ledger.record_refusal(e,reason)
+            self.assertEqual(ledger.snapshot(),before)
+        ledger.record_refusal(games[0],'source refusal');once=ledger.snapshot()
+        for e,reason in [(games[0],'altered'),(dict(games[0],seed=8),'source refusal')]:
+            with self.assertRaises(ValueError):ledger.record_refusal(e,reason)
+            self.assertEqual(ledger.snapshot(),once)
+        with self.assertRaises(ValueError):ledger.accept(games[0],parsed(games[0]),SHA)
+        self.assertEqual(ledger.snapshot(),once)
+        ledger.accept(games[1],parsed(games[1]),SHA);final=ledger.snapshot()
+        with self.assertRaises(ValueError):ledger.record_refusal(games[1],'already accepted')
+        self.assertEqual(ledger.snapshot(),final)
+
     def test_trust_boundaries_versions_partial_and_total_drift_do_not_advance(self):
         e=game();r=parsed(e)
         bad=[]
