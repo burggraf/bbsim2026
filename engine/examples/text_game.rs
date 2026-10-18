@@ -1,4 +1,7 @@
 //! Offline development command for the connected text-game recovery model.
+#[allow(dead_code)]
+#[path = "support/season_pool.rs"]
+mod season_pool;
 // These shared legacy modules also contain the unchanged preview command paths.
 #[path = "support/calibrated_ratings.rs"]
 mod calibrated;
@@ -108,6 +111,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lineup = real::Lineup::read_tsv(&std::fs::read_to_string(&options["--lineup"])?)?;
     let cast =
         full_manager::Cast::read_complete_tsv(&std::fs::read_to_string(&options["--cast"])?)?;
+    if lineup.is_managed() != cast.is_managed() {
+        return Err("lineup/cast mode mismatch".into());
+    }
     match (lineup.is_generic(), cast.game_id()) {
         (false, None) => {}
         (true, Some(id)) if id == lineup.game_id() => {}
@@ -122,6 +128,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         })
         .transpose()?;
+    if bench
+        .as_ref()
+        .is_some_and(|bench| bench.is_managed() != cast.is_managed())
+    {
+        return Err("bench/cast mode mismatch".into());
+    }
     let teams = lineup.team_names().map(str::to_owned);
     let team_labels = lineup.team_labels().map(str::to_owned);
     let initial = lineup.initial();
@@ -208,7 +220,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ["SEA".into(), "OAK".into()]
         };
         let mut text = Vec::new();
-        if bench.is_some() {
+        if cast.is_managed() {
+            season_accounting::write_managed(
+                &mut text,
+                &stats,
+                lineup.game_id(),
+                seed,
+                &ids,
+                if calibrated.is_some() {
+                    calibrated::MODEL_VERSION
+                } else {
+                    ratings::MODEL_VERSION
+                },
+                bench.is_some(),
+            )?;
+        } else if bench.is_some() {
             season_accounting::write_with_personnel(
                 &mut text,
                 &stats,
@@ -240,9 +266,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             writeln!(
                 output,
                 "PH policy: {} | {} | {}",
-                full_simulation::pinch::POLICY_VERSION,
-                full_simulation::bench::AVAILABILITY,
+                if cast.is_managed() {
+                    season_pool::PINCH_HITTING
+                } else {
+                    full_simulation::pinch::POLICY_VERSION
+                },
+                if cast.is_managed() {
+                    season_pool::AVAILABILITY
+                } else {
+                    full_simulation::bench::AVAILABILITY
+                },
                 full_simulation::bench::DEFENSE_BASIS
+            )?;
+        } else if cast.is_managed() {
+            writeln!(
+                output,
+                "Season policy: {} | {} | pinch hitting disabled",
+                season_pool::POLICY,
+                season_pool::AVAILABILITY
             )?;
         } else if lineup.is_generic() {
             writeln!(output,"Controlled historical lineup/closed cast, not season fidelity; no pinch hitting or daily eligibility. Explicit zero-count roles use the neutral prior.")?;
@@ -263,7 +304,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writeln!(
             output,
             "Manager: {} | {}; PA workload proxy, not pitch counts; no extra performance cutoff.",
-            full_manager::POLICY_VERSION,
+            cast.policy_version(),
             cast.workload_mode()
         )?;
         for (i, step) in steps.iter().enumerate() {
@@ -287,20 +328,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Seed: {seed} | Model: {label} | RNG: {}",
         preview::RNG_VERSION
     )?;
-    writeln!(
-        output,
-        "{} at {}; recorded {} starting personnel, not the historical result.",
-        teams[0],
-        teams[1],
-        lineup.date()
-    )?;
+    if cast.is_managed() {
+        writeln!(
+            output,
+            "{} at {}; modeled {} season-pool starting personnel, not the historical result.",
+            teams[0],
+            teams[1],
+            lineup.date()
+        )?;
+    } else {
+        writeln!(
+            output,
+            "{} at {}; recorded {} starting personnel, not the historical result.",
+            teams[0],
+            teams[1],
+            lineup.date()
+        )?;
+    }
     if bench.is_some() {
         writeln!(
             output,
             "PH policy: {} | {} | {}",
-            full_simulation::pinch::POLICY_VERSION,
-            full_simulation::bench::AVAILABILITY,
+            if cast.is_managed() {
+                season_pool::PINCH_HITTING
+            } else {
+                full_simulation::pinch::POLICY_VERSION
+            },
+            if cast.is_managed() {
+                season_pool::AVAILABILITY
+            } else {
+                full_simulation::bench::AVAILABILITY
+            },
             full_simulation::bench::DEFENSE_BASIS
+        )?;
+    } else if cast.is_managed() {
+        writeln!(
+            output,
+            "Season policy: {} | {} | pinch hitting disabled",
+            season_pool::POLICY,
+            season_pool::AVAILABILITY
         )?;
     } else if lineup.is_generic() {
         writeln!(output,"Controlled historical lineup/closed cast, not season fidelity; no pinch hitting or daily eligibility. Explicit zero-count roles use the neutral prior.")?;
@@ -312,7 +378,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     writeln!(output,"Pooled reference counts: {counts:?}; interference alone retains pooled parent mass. Generated contact geometry/handling, runner/error/steal conditionals remain shared provisional priors; not observed mechanisms or validated individual speed/arm/fielding.")?;
     writeln!(output,"PA MODEL records the actual consumed vector, raw RNG word and selected parent (K, BB, HBP, 1B, 2B, 3B, HR, ROE, contact, interference). Tactical IBB overrides and runner-only events have no PA draw. Credited walkoff hit value may be shorter than the selected parent.")?;
-    writeln!(output,"Manager: {} | {}. Recorded nonstarters assumed available at start; not verified eligibility. Individual outing budgets with bounded scoreless/no-hit extensions; no additional early-performance hook, measured pitch counts or fatigue. No automatic seventh-inning hook; exhausted cast keeps last pitcher.", full_manager::POLICY_VERSION, cast.workload_mode())?;
+    if cast.is_managed() {
+        writeln!(output, "Manager: {} | {}. {}. Starter budget scaling and workload-role/pace preferences, not measured fatigue or historical leverage; bounded scoreless/no-hit extensions; no hard IP quota; exhausted cast keeps last pitcher.", cast.policy_version(), cast.workload_mode(), season_pool::AVAILABILITY)?;
+    } else {
+        writeln!(output,"Manager: {} | {}. Recorded nonstarters assumed available at start; not verified eligibility. Individual outing budgets with bounded scoreless/no-hit extensions; no additional early-performance hook, measured pitch counts or fatigue. No automatic seventh-inning hook; exhausted cast keeps last pitcher.", full_manager::POLICY_VERSION, cast.workload_mode())?;
+    }
     let missing_personnel = if bench.is_some() {
         "pinch running/tactical defensive replacements"
     } else {

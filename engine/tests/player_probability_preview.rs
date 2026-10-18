@@ -6,6 +6,9 @@ mod preview;
 mod ratings;
 #[path = "../examples/support/real_lineup.rs"]
 mod real;
+#[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
 use bbsim_engine::{accounting::derive_accounting, EventTransition};
 const COUNTS: [u64; 9] = [42823, 15142, 1984, 25947, 8531, 785, 6776, 1470, 82245];
 fn lineup() -> real::Lineup {

@@ -1,4 +1,5 @@
 //! Machine-readable canonical counts; unresolved coverage stays unknown.
+use crate::season_pool;
 use bbsim_engine::accounting::GameAccounting;
 use std::io::{self, Write};
 
@@ -37,13 +38,48 @@ pub fn write_with_personnel(
     teams: &[String; 2],
     ph: Option<(&str, &str, &str, &str)>,
 ) -> io::Result<()> {
+    write_inner(output, stats, game, seed, teams, ph, None)
+}
+
+#[allow(dead_code)] // Only season-pool CLI inputs select this explicit wire format.
+pub fn write_managed(
+    output: &mut dyn Write,
+    stats: &GameAccounting,
+    game: &str,
+    seed: u64,
+    teams: &[String; 2],
+    ratings: &str,
+    pinch_hitting: bool,
+) -> io::Result<()> {
+    write_inner(
+        output,
+        stats,
+        game,
+        seed,
+        teams,
+        None,
+        Some((ratings, pinch_hitting)),
+    )
+}
+
+fn write_inner(
+    output: &mut dyn Write,
+    stats: &GameAccounting,
+    game: &str,
+    seed: u64,
+    teams: &[String; 2],
+    ph: Option<(&str, &str, &str, &str)>,
+    managed: Option<(&str, bool)>,
+) -> io::Result<()> {
     if !stats.complete_game {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "accounting requires a complete game",
         ));
     }
-    let format = if ph.is_some() {
+    let format = if managed.is_some() {
+        "controlled-accounting-managed-v1"
+    } else if ph.is_some() {
         "controlled-accounting-ph-v1"
     } else {
         "controlled-accounting-v1"
@@ -55,15 +91,38 @@ pub fn write_with_personnel(
             "pinch_hitting\t{policy}\navailability_basis\t{availability}\ndefense_basis\t{defense}"
         )?;
     }
+    if let Some((_, ph)) = managed {
+        writeln!(
+            output,
+            "season_policy\t{}\navailability_basis\t{}\ndefense_basis\t{}\npinch_hitting\t{}",
+            season_pool::POLICY,
+            season_pool::AVAILABILITY,
+            season_pool::DEFENSE_BASIS,
+            if ph {
+                season_pool::PINCH_HITTING
+            } else {
+                "disabled"
+            }
+        )?;
+    }
     for (key, value) in [
         ("engine", env!("CARGO_PKG_VERSION")),
         ("mechanics", super::full_simulation::MODEL_VERSION),
         (
             "ratings",
-            ph.map(|(_, _, _, model)| model)
+            managed
+                .map(|(model, _)| model)
+                .or_else(|| ph.map(|(_, _, _, model)| model))
                 .unwrap_or(super::ratings::MODEL_VERSION),
         ),
-        ("manager", super::full_manager::POLICY_VERSION),
+        (
+            "manager",
+            if managed.is_some() {
+                season_pool::MANAGER
+            } else {
+                super::full_manager::POLICY_VERSION
+            },
+        ),
         ("rng", super::preview::RNG_VERSION),
         ("rules", "2019"),
     ] {

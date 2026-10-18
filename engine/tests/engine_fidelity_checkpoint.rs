@@ -7,6 +7,9 @@ mod preview;
 mod ratings;
 #[path = "../examples/support/real_lineup.rs"]
 mod real;
+#[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
 use bbsim_engine::{
     apply, Base, Credit, CreditKind, Destination, EventKind, GameState, Half, Runner, RunnerMove,
     TeamState,

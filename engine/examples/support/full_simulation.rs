@@ -686,12 +686,23 @@ pub fn simulate_with_personnel(
                 let reserve = cast
                     .ok_or("PH requires an explicit pitching cast")?
                     .next_available(&state, offense);
-                pinch::decide_states(&state, &bench.pools[offense], reserve, |candidate| {
+                let query = |candidate: &GameState| {
                     let p = probabilities(candidate)?
                         .ok_or("PH requires individual current-matchup ratings")?;
                     validate_pa(&p)?;
                     Ok(std::array::from_fn(|i| p[i] / (1.0 - p[9])))
-                })
+                };
+                if bench.is_managed() {
+                    pinch::decide_managed_states(
+                        &state,
+                        &bench.pools[offense],
+                        reserve,
+                        &bench.pace,
+                        query,
+                    )
+                } else {
+                    pinch::decide_states(&state, &bench.pools[offense], reserve, query)
+                }
             })
             .transpose()?
             .flatten()

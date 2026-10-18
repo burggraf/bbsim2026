@@ -347,3 +347,117 @@ fn improvement_bound_and_probability_validation_are_explicit() {
     }
     assert!(decide(&s, &pool(&s), None, |_, _| Err("rating unavailable".into())).is_err());
 }
+
+#[test]
+fn managed_ph_usage_is_bounded_by_gain_and_best_score_and_does_not_reenter() {
+    use std::collections::BTreeMap;
+    let mut s = state(true, Half::Top, 8);
+    let candidates = pool(&s);
+    let pace = BTreeMap::from([("aph".into(), 1), ("afresh".into(), -1)]);
+    let incoming =
+        |t: Option<EventTransition>| t.map(|t| t.after().teams[0].batting_order[8].clone());
+    // q(gain) changes expected bases by 4*gain.
+    for (ph, fresh, expected) in [
+        (0.05, 0.06, "aph"),
+        (0.05, 0.0625, "aph"), // inclusive 0.05 expected-bases window
+        (0.05, 0.0624, "aph"),
+        (0.05, 0.0626, "afresh"),
+        (0.05, 0.07, "afresh"),
+        (0.02, 0.03, "afresh"),
+        (0.025, 0.025, ""),
+    ] {
+        let t =
+            full_pinch::decide_managed_states(&s, &candidates, Some("arelief"), &pace, |state| {
+                Ok(q(match state.teams[0].batting_order[8].as_str() {
+                    "aph" => ph,
+                    "afresh" => fresh,
+                    _ => 0.0,
+                }))
+            })
+            .unwrap();
+        assert_eq!(
+            incoming(t),
+            if expected.is_empty() {
+                None
+            } else {
+                Some(expected.into())
+            }
+        );
+    }
+    let tied = BTreeMap::from([("aph".into(), 0), ("afresh".into(), 0)]);
+    let choose = |s: &GameState, pace: &BTreeMap<String, i8>, gains: [f64; 2]| {
+        full_pinch::decide_managed_states(s, &candidates, Some("arelief"), pace, |state| {
+            Ok(q(match state.teams[0].batting_order[8].as_str() {
+                "aph" => gains[0],
+                "afresh" => gains[1],
+                _ => 0.0,
+            }))
+        })
+        .unwrap()
+    };
+    assert_eq!(
+        incoming(choose(&s, &tied, [0.05, 0.06])),
+        Some("afresh".into())
+    );
+    assert_eq!(
+        incoming(choose(&s, &tied, [0.05, 0.05])),
+        Some("afresh".into())
+    ); // stable ID, not pool order
+    s.teams[0].bench.retain(|id| id != "aph");
+    s.teams[0].removed.push("aph".into());
+    assert_eq!(
+        incoming(choose(&s, &pace, [0.06, 0.05])),
+        Some("afresh".into())
+    );
+    // Standalone policy still chooses greatest expected bases, irrespective of usage hints.
+    let original = state(true, Half::Top, 8);
+    let old = full_pinch::decide_states(&original, &candidates, Some("arelief"), |state| {
+        Ok(q(match state.teams[0].batting_order[8].as_str() {
+            "aph" => 0.05,
+            "afresh" => 0.06,
+            _ => 0.0,
+        }))
+    })
+    .unwrap();
+    assert_eq!(incoming(old), Some("afresh".into()));
+}
+
+#[test]
+fn managed_ph_obligations_and_pace_validation_precede_rating_queries() {
+    use std::collections::BTreeMap;
+    let mut s = state(false, Half::Top, 8);
+    let candidates = pool(&s);
+    let pace = BTreeMap::from([("aph".into(), 1), ("afresh".into(), -1)]);
+    for obligation in [
+        PitcherObligation::StartingBatter,
+        PitcherObligation::ReliefBatter,
+    ] {
+        s.teams[0].pitcher = PitcherRole::Active {
+            player_id: "ap".into(),
+            obligation,
+        };
+        assert!(full_pinch::decide_managed_states(
+            &s,
+            &candidates,
+            Some("arelief"),
+            &pace,
+            |_| panic!("obligated managed ratings")
+        )
+        .unwrap()
+        .is_none());
+    }
+    let s = state(true, Half::Top, 8);
+    for bad in [
+        BTreeMap::new(),
+        BTreeMap::from([("aph".into(), 2), ("afresh".into(), 0)]),
+    ] {
+        assert!(full_pinch::decide_managed_states(
+            &s,
+            &candidates,
+            Some("arelief"),
+            &bad,
+            |_| panic!("invalid managed pace ratings")
+        )
+        .is_err());
+    }
+}

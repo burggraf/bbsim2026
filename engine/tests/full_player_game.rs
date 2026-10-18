@@ -29,6 +29,9 @@ mod ratings;
 #[path = "../examples/support/real_lineup.rs"]
 mod real;
 #[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
+#[allow(dead_code)]
 #[path = "../examples/support/transcript.rs"]
 mod transcript;
 #[allow(dead_code)]
@@ -844,4 +847,200 @@ fn bench_schema_and_membership_refuse_before_the_first_rating_callback() {
     .unwrap();
     assert_eq!(legacy.steps, untouched.steps);
     assert_eq!(legacy.draws, untouched.draws);
+}
+
+fn managed_bench_text() -> String {
+    bench_text().replace("assumed-game-bench-v1", "season-pool-bench-v1").replace("same-game participant proxies assumed available at start; not verified eligibility", "observed season club players assumed available; no daily injury/minor-league reconstruction") + "season_policy\tseason-pool-soft-usage-v1\nAway:aph:pace\t-1\nHome:hph:pace\t1\n"
+}
+#[test]
+fn season_pool_bench_schema_requires_canonical_per_actor_pace() {
+    use full_simulation::bench::Bench;
+    let text = managed_bench_text();
+    assert!(Bench::read_tsv(&text, "OAK201903200").is_ok());
+    for bad in [
+        text.replace("Away:aph:pace\t-1\n", ""),
+        text.replace("Away:aph:pace\t-1", "Away:aph:pace\t-2"),
+        text.replace("Home:hph:pace\t1", "Home:hph:pace\t01"),
+        text.replace("season_policy\tseason-pool-soft-usage-v1\n", ""),
+        text.clone() + "Away:aph:pace\t0\n",
+        text.clone() + "unknown\ttrue\n",
+        bench_text() + "Away:aph:pace\t0\n",
+    ] {
+        assert!(
+            Bench::read_tsv(&bad, "OAK201903200").is_err(),
+            "accepted {bad}"
+        );
+    }
+}
+
+fn pool_cast_text() -> String {
+    let old = cast_text();
+    let mut text = old
+        .lines()
+        .filter(|line| {
+            !line.starts_with("bullpen_report_sha256\t")
+                && !line.starts_with("workload_report_sha256\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    text=text.replace("closed-pitching-cast-v1","season-pool-pitching-cast-v1").replace("pa-mean-closed-cast-v1","empirical-pa-closed-cast-v2").replace("recorded nonstarters assumed available at start; not verified eligibility",season_pool::AVAILABILITY).replace("literal terminal-PA participants per pitcher-game appearance; not pitch counts, official BF or fatigue",season_pool::WORKLOAD_BASIS);
+    text+="game_id\tOAK201903200\ncast_sizes\t5,7\nworkload_recipe_sha256\t512f542cee70c5824c6fff92f1278b51aad2be6a5a066db18b306091a3fae48f\noutcome_events_sha256\tea3fd660ac87deb02c61cddf28977db59f85f9a88f77aaabc0c07ba0f1831d1a\nseason_policy\tseason-pool-soft-usage-v1\nstarter_scale:Away\t100\nstarter_scale:Home\t100\n";
+    for row in old.lines().filter_map(|l| l.strip_prefix("workload:")) {
+        let (key, _) = row.split_once('\t').unwrap();
+        text += &format!("usage:{key}\t0\n");
+    }
+    for id in full_manager::Cast::read_tsv(&old).unwrap().names().keys() {
+        text += &format!("relief_pace:{id}\t0\n");
+    }
+    text
+}
+
+#[test]
+fn managed_bench_cast_modes_refuse_before_ratings_and_preferences_do_not_shift_outcome_rng() {
+    let historical_cast = full_manager::Cast::read_tsv(&cast_text()).unwrap();
+    let managed_cast = full_manager::Cast::read_tsv(&pool_cast_text()).unwrap();
+    let historical_bench =
+        full_simulation::bench::Bench::read_tsv(&bench_text(), "OAK201903200").unwrap();
+    let managed_bench =
+        full_simulation::bench::Bench::read_tsv(&managed_bench_text(), "OAK201903200").unwrap();
+    assert!(managed_cast.is_managed() && managed_bench.is_managed());
+    assert!(!historical_cast.is_managed() && !historical_bench.is_managed());
+    let l = lineup();
+    let initial = l.initial();
+    let fielders = defense(&l);
+    let model = model();
+    for (cast, bench) in [
+        (&managed_cast, &historical_bench),
+        (&historical_cast, &managed_bench),
+    ] {
+        let error = full_simulation::simulate_with_personnel(
+            &initial,
+            &fielders,
+            &model,
+            Some(cast),
+            Some(bench),
+            1,
+            |_| panic!("mixed mode rating query"),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error, "bench/cast mode mismatch");
+    }
+    let base = preview::Baseline::from_counts(COUNTS).unwrap();
+    let p = model.player_probabilities(*base.probabilities()).unwrap();
+    for seed in [1, 17, 53] {
+        let old = full_simulation::simulate_with_personnel(
+            &initial,
+            &fielders,
+            &model,
+            Some(&historical_cast),
+            Some(&historical_bench),
+            seed,
+            |_| Ok(Some(p)),
+        )
+        .unwrap();
+        let run = || {
+            full_simulation::simulate_with_personnel(
+                &initial,
+                &fielders,
+                &model,
+                Some(&managed_cast),
+                Some(&managed_bench),
+                seed,
+                |_| Ok(Some(p)),
+            )
+            .unwrap()
+        };
+        let managed = run();
+        let repeat = run();
+        // Different cast selection order cannot consume an outcome word; no hitter qualifies.
+        assert_eq!(managed.draws, old.draws);
+        assert_eq!(managed.steps, repeat.steps);
+        assert!(managed
+            .steps
+            .iter()
+            .all(|step| !matches!(step, full_simulation::Step::PinchHit(_))));
+        for side in 0..2 {
+            let mut used = BTreeSet::new();
+            used.insert(initial.teams[side].pitcher.active_id().unwrap().to_owned());
+            for step in &managed.steps {
+                let t = step.transition();
+                let before = t.before().teams[side].pitcher.active_id();
+                let after = t.after().teams[side].pitcher.active_id();
+                if before != after {
+                    assert!(used.insert(after.unwrap().to_owned()), "pitcher reentry");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn managed_ph_vacancy_restoration_uses_same_ranker_and_holds_relief_first_batter() {
+    use bbsim_engine::{PitcherObligation, PitcherRole};
+    let cast = full_manager::Cast::read_tsv(&pool_cast_text()).unwrap();
+    let bench =
+        full_simulation::bench::Bench::read_tsv(&managed_bench_text(), "OAK201903200").unwrap();
+    let l = lineup();
+    let fielders = defense(&l);
+    let mut initial = l.initial();
+    for t in &mut initial.teams {
+        let slot = t.dh_slot.take().unwrap() as usize;
+        t.dh_must_bat = false;
+        t.batting_order[slot] = t.pitcher.active_id().unwrap().into();
+    }
+    let mut before = bench
+        .prepare(&cast.prepare(&initial).unwrap(), &fielders, &cast)
+        .unwrap();
+    before.inning = 7;
+    before.half = bbsim_engine::Half::Top;
+    for t in &mut before.teams {
+        t.pitcher = PitcherRole::Active {
+            player_id: t.pitcher.active_id().unwrap().into(),
+            obligation: PitcherObligation::Satisfied,
+        };
+    }
+    before.teams[0].next_batter = 3;
+    let expected = cast.next_available(&before, 0).unwrap().to_owned();
+    let ph = full_simulation::pinch::decide_managed_states(
+        &before,
+        &bench.pools[0],
+        Some(&expected),
+        &bench.pace,
+        |s| {
+            let mut p = [0.0625; 9];
+            p[8] = 0.5;
+            if s.teams[0].batting_order[3] == "aph" {
+                p[8] -= 0.1;
+                p[6] += 0.1;
+            }
+            Ok(p)
+        },
+    )
+    .unwrap()
+    .unwrap();
+    let mut vacant = ph.after().clone();
+    assert!(matches!(
+        vacant.teams[0].pitcher,
+        PitcherRole::Vacant { .. }
+    ));
+    // The vacancy persists through its offensive half; restoration occurs on defense.
+    vacant.half = bbsim_engine::Half::Bottom;
+    let restore = cast.restore_pitcher(&vacant).unwrap().unwrap();
+    assert_eq!(
+        restore.after().teams[0].pitcher.active_id(),
+        Some(expected.as_str())
+    );
+    assert!(matches!(
+        restore.after().teams[0].pitcher,
+        PitcherRole::Active {
+            obligation: PitcherObligation::ReliefBatter,
+            ..
+        }
+    ));
+    assert!(cast.next_change(restore.after(), &[]).unwrap().is_none());
+    assert!(restore.after().teams[0]
+        .removed
+        .contains(&"gonzm005".into()));
 }

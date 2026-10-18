@@ -1,5 +1,8 @@
 #[path = "../examples/support/season_accounting.rs"]
 mod season_accounting;
+#[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
 // Isolate serialization; Python CLI tests exercise the real model/version modules.
 mod full_simulation {
     pub const MODEL_VERSION: &str = "mechanics-test";
@@ -150,4 +153,87 @@ fn ph_metadata_identifies_the_selected_ratings_model() {
         assert!(text.lines().any(|line| line == format!("ratings\t{model}")));
         assert!(text.contains("pinch_hitting\tph-policy-test\n"));
     }
+}
+
+#[test]
+fn managed_wire_has_explicit_policy_without_changing_legacy_rows_or_unknowns() {
+    let mut stats = fixture(true);
+    stats.batters[0].insert(
+        "b-1".into(),
+        BatterLine {
+            plate_appearances: 3,
+            ..BatterLine::default()
+        },
+    );
+    stats.pitchers[1].insert(
+        "p-1".into(),
+        PitcherLine {
+            batters_faced: 3,
+            outs_recorded: 4,
+            earned_runs: None,
+            ..PitcherLine::default()
+        },
+    );
+    stats.classified_fielding[1].insert(
+        "f-1".into(),
+        FieldingCoverageLine {
+            observed_events: 2,
+            putouts: Some(4),
+            assists: None,
+            errors: None,
+            passed_balls: Some(0),
+        },
+    );
+    let teams = ["SFN".into(), "LAN".into()];
+    let mut old = Vec::new();
+    season_accounting::write(&mut old, &stats, "LAN201904010", 7, &teams).unwrap();
+    let old = String::from_utf8(old).unwrap();
+    for ph in [false, true] {
+        for ratings in [ratings::MODEL_VERSION, "experimental-ratings-test"] {
+            let mut output = Vec::new();
+            season_accounting::write_managed(
+                &mut output,
+                &stats,
+                "LAN201904010",
+                7,
+                &teams,
+                ratings,
+                ph,
+            )
+            .unwrap();
+            let text = String::from_utf8(output).unwrap();
+            assert!(text.starts_with(
+                "format\tcontrolled-accounting-managed-v1\ngame\tLAN201904010\nseed\t7\n"
+            ));
+            for metadata in ["manager\tseason-pool-workload-context-2019-v1","season_policy\tseason-pool-soft-usage-v1","availability_basis\tobserved season club players assumed available; no daily injury/minor-league reconstruction","defense_basis\tsupplied observed positions assumed usable; not verified defensive eligibility"] {assert!(text.lines().any(|line| line==metadata),"{text}");}
+            assert!(text.contains(&format!("ratings\t{ratings}\n")));
+            assert!(text.contains(if ph {
+                "pinch_hitting\tlate-close-expected-bases-ph-usage-v1\n"
+            } else {
+                "pinch_hitting\tdisabled\n"
+            }));
+            assert_eq!(
+                text.split("team\tAway").nth(1),
+                old.split("team\tAway").nth(1)
+            );
+            for prefix in ["engine\t", "mechanics\t", "rng\t", "rules\t"] {
+                assert_eq!(
+                    text.lines().find(|l| l.starts_with(prefix)),
+                    old.lines().find(|l| l.starts_with(prefix))
+                );
+            }
+        }
+    }
+    let mut output = Vec::new();
+    assert!(season_accounting::write_managed(
+        &mut output,
+        &fixture(false),
+        "LAN201904010",
+        7,
+        &teams,
+        ratings::MODEL_VERSION,
+        false
+    )
+    .is_err());
+    assert!(output.is_empty());
 }

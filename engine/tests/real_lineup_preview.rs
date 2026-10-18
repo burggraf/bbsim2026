@@ -7,6 +7,9 @@ mod joint;
 mod preview;
 #[path = "../examples/support/real_lineup.rs"]
 mod real;
+#[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
 use bbsim_engine::{
     accounting::derive_accounting, apply, Base, CreditKind, EventTransition, FieldingReview, Half,
     Runner,
@@ -540,5 +543,18 @@ fn two_thousand_repeated_games_keep_joint_physics_and_available_statistics() {
                 .sum::<u32>(),
             log.len() as u32
         );
+    }
+}
+
+#[test]
+fn season_pool_lineup_reuses_legal_generic_roles_with_explicit_availability() {
+    for dh in [false, true] {
+        let text = generic_fixture(dh).replace("closed-starting-lineup-v2", "season-pool-lineup-v1") + "season_policy\tseason-pool-soft-usage-v1\navailability_basis\tobserved season club players assumed available; no daily injury/minor-league reconstruction\n";
+        let managed = real::Lineup::read_tsv(&text).unwrap();
+        assert!(managed.is_managed() && managed.is_generic());
+        assert!(!real::Lineup::read_tsv(&generic_fixture(dh))
+            .unwrap()
+            .is_managed());
+        for bad in [text.replace("season_policy\tseason-pool-soft-usage-v1\n", ""), text.clone()+"season_policy\tseason-pool-soft-usage-v1\n",text.replace("season-pool-soft-usage-v1", "wrong"),text.replace("availability_basis\tobserved season club players assumed available; no daily injury/minor-league reconstruction\n", ""),text.clone()+"unknown\ttrue\n", generic_fixture(dh)+"season_policy\tseason-pool-soft-usage-v1\n"] { assert!(real::Lineup::read_tsv(&bad).is_err(),"accepted {bad}"); }
     }
 }

@@ -1,5 +1,8 @@
 #[path = "../examples/support/full_manager.rs"]
 mod full_manager;
+#[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
 
 use bbsim_engine::{
     apply, BalkCause, BalkDisposition, BalkFacts, BalkResolution, Base, Credit, CreditKind, Delta,
@@ -752,4 +755,224 @@ fn no_dh_pitcher_change_replaces_the_pitching_batting_slot() {
             PersonnelChange::BattingSlot { team: TeamSide::Home, slot: 8, outgoing, incoming }
                 if outgoing == "fierm001" && incoming == "dullr001"
         )));
+}
+
+fn managed_text() -> String {
+    let mut text = generic_cast()
+        .replace("closed-pitching-cast-v3", "season-pool-pitching-cast-v1")
+        .replace("recorded nonstarters assumed available at start; not verified eligibility", "observed season club players assumed available; no daily injury/minor-league reconstruction")
+        .replace("literal terminal-PA participants per pitcher-game appearance; not pitch counts, official BF or fatigue", "source empirical role outings; explicitly marked pooled role priors when unavailable");
+    text += "season_policy\tseason-pool-soft-usage-v1\nstarter_scale:Away\t80\nstarter_scale:Home\t100\n";
+    for id in ["ap", "hp", "jay-j001"] {
+        text += &format!("relief_pace:{id}\t0\n");
+    }
+    text
+}
+#[test]
+fn season_pool_cast_schema_is_explicit_and_strict() {
+    let text = managed_text();
+    assert!(Cast::read_complete_tsv(&text).is_ok());
+    // Unselected roles may stay genuinely unsupported, without fabricated outings.
+    assert!(Cast::read_complete_tsv(
+        &text
+            .replace("workload:relief:hp\t6,1", "workload:relief:hp\t0,0")
+            .replace("usage:relief:hp\t6", "usage:relief:hp\t-")
+    )
+    .is_ok());
+    assert!(
+        Cast::read_complete_tsv(&(text.clone() + "budget_prior:relief:jay-j001\ttrue\n")).is_ok()
+    );
+    for bad in [
+        text.replace("season_policy\tseason-pool-soft-usage-v1\n", ""),
+        text.replace("starter_scale:Away\t80\n", ""),
+        text.replace("starter_scale:Away\t80", "starter_scale:Away\t080"),
+        text.replace("starter_scale:Home\t100", "starter_scale:Home\t81"),
+        text.replace("relief_pace:hp\t0\n", ""),
+        text.replace("relief_pace:hp\t0", "relief_pace:hp\t+1"),
+        text.replace("relief_pace:hp\t0", "relief_pace:hp\t2"),
+        text.clone() + "relief_pace:unknown\t0\n",
+        text.clone() + "budget_prior:relief:jay-j001\tfalse\n",
+        text.clone() + "budget_prior:start:unknown\ttrue\n",
+        text.clone() + "starter_scale:Away\t80\n",
+        text.clone() + "unknown\ttrue\n",
+        text.replace("usage:start:hp\t27", "usage:start:hp\t26"),
+        text.replace("workload:start:hp\t27,1", "workload:start:hp\t0,0")
+            .replace("usage:start:hp\t27", "usage:start:hp\t-"),
+        generic_cast() + "starter_scale:Away\t80\n",
+        generic_cast() + "budget_prior:relief:jay-j001\ttrue\n",
+        generic_cast() + "relief_pace:jay-j001\t0\n",
+        text.clone() + "budget_prior:other:jay-j001\ttrue\n",
+        text.clone() + "budget_prior:relief:jay-j001\ttrue\nbudget_prior:relief:jay-j001\ttrue\n",
+        text.replace(season_pool::AVAILABILITY, AVAILABILITY_FOR_TEST),
+        text.replace(season_pool::WORKLOAD_BASIS, "literal terminal-PA participants per pitcher-game appearance; not pitch counts, official BF or fatigue"),
+    ] {
+        assert!(Cast::read_complete_tsv(&bad).is_err(), "accepted {bad}");
+    }
+}
+
+fn managed_fixture_text() -> String {
+    let mut text = empirical_text()
+        .lines()
+        .filter(|line| {
+            !line.starts_with("bullpen_report_sha256\t")
+                && !line.starts_with("workload_report_sha256\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    text = text.replace("closed-pitching-cast-v2", "season-pool-pitching-cast-v1").replace(AVAILABILITY_FOR_TEST, season_pool::AVAILABILITY).replace("literal terminal-PA participants per pitcher-game appearance; not pitch counts, official BF or fatigue",season_pool::WORKLOAD_BASIS);
+    text += "game_id\tOAK201903200\ncast_sizes\t3,3\nworkload_recipe_sha256\t512f542cee70c5824c6fff92f1278b51aad2be6a5a066db18b306091a3fae48f\noutcome_events_sha256\tea3fd660ac87deb02c61cddf28977db59f85f9a88f77aaabc0c07ba0f1831d1a\nseason_policy\tseason-pool-soft-usage-v1\nstarter_scale:Away\t100\nstarter_scale:Home\t80\n";
+    for id in [
+        "gonzm005", "strih001", "gearc001", "fierm001", "dullr001", "wendj001",
+    ] {
+        text += &format!("relief_pace:{id}\t0\n");
+    }
+    text
+}
+const AVAILABILITY_FOR_TEST: &str =
+    "recorded nonstarters assumed available at start; not verified eligibility";
+
+#[test]
+fn managed_relief_selection_prioritizes_role_class_then_pace_then_stable_id() {
+    let text = managed_fixture_text()
+        .replace(
+            "workload:relief:gearc001\t6,1",
+            "workload:relief:gearc001\t11,2",
+        )
+        .replace("usage:relief:gearc001\t6", "usage:relief:gearc001\t5,6")
+        .replace("relief_pace:gearc001\t0", "relief_pace:gearc001\t1")
+        .replace("relief_pace:strih001\t0", "relief_pace:strih001\t-1");
+    let cast = Cast::read_complete_tsv(&text).unwrap();
+    assert!(cast.is_managed());
+    assert_eq!(
+        cast.policy_version(),
+        "season-pool-workload-context-2019-v1"
+    );
+    for (inning, score, expected) in [
+        (5, [0, 0], "strih001"),
+        (6, [0, 0], "gearc001"),
+        (8, [0, 3], "gearc001"),
+        (8, [4, 0], "strih001"),
+        (8, [0, 4], "strih001"),
+    ] {
+        let mut initial = state(inning, Half::Bottom, true);
+        initial.score = score;
+        let mut before = cast.prepare(&initial).unwrap();
+        assert_eq!(cast.next_available(&before, 0), Some(expected));
+        before.teams[0].bench.retain(|id| id != expected);
+        before.teams[0].removed.push(expected.into());
+        let other = if expected == "strih001" {
+            "gearc001"
+        } else {
+            "strih001"
+        };
+        assert_eq!(cast.next_available(&before, 0), Some(other));
+    }
+    // Same class: pace wins; same pace: lexical ID wins even against supplied rank.
+    let tied = managed_fixture_text();
+    let cast = Cast::read_tsv(&tied).unwrap();
+    let before = cast.prepare(&state(4, Half::Bottom, true)).unwrap();
+    assert_eq!(cast.next_available(&before, 0), Some("gearc001"));
+    let paced = Cast::read_tsv(&tied.replace("relief_pace:strih001\t0", "relief_pace:strih001\t1"))
+        .unwrap();
+    assert_eq!(paced.next_available(&before, 0), Some("strih001"));
+    assert_eq!(self::cast().next_available(&before, 0), Some("strih001")); // legacy rank
+                                                                           // Normal hook uses precisely the same choice.
+    let (before, log) = six_innings(
+        &Cast::read_tsv(
+            &tied
+                .replace(
+                    "workload:start:fierm001\t27,1",
+                    "workload:start:fierm001\t18,1",
+                )
+                .replace("usage:start:fierm001\t27", "usage:start:fierm001\t18"),
+        )
+        .unwrap(),
+        false,
+    );
+    let low = Cast::read_tsv(
+        &tied
+            .replace(
+                "workload:start:fierm001\t27,1",
+                "workload:start:fierm001\t18,1",
+            )
+            .replace("usage:start:fierm001\t27", "usage:start:fierm001\t18"),
+    )
+    .unwrap();
+    let change = low.next_change(&before, &log).unwrap().unwrap();
+    assert_eq!(
+        change.after().teams[1].pitcher.active_id(),
+        low.next_available(&before, 1)
+    );
+}
+
+#[test]
+fn managed_starter_scale_floors_at_one_before_existing_bounded_extensions_and_obligations() {
+    use bbsim_engine::{PitcherObligation, PitcherRole};
+    let text = managed_fixture_text();
+    let scaled = Cast::read_tsv(&text).unwrap();
+    let full =
+        Cast::read_tsv(&text.replace("starter_scale:Home\t80", "starter_scale:Home\t100")).unwrap();
+    let (mut before, mut log) = six_innings(&scaled, false);
+    for _ in 0..6 {
+        advance(&mut log, &mut before, out_pa);
+    }
+    // floor(27*0.8)=21; unknown hit coverage cannot grant no-hit extension.
+    assert!(scaled.next_change(&before, &log).unwrap().is_some());
+    assert!(full.next_change(&before, &log).unwrap().is_none());
+    for obligation in [
+        PitcherObligation::StartingBatter,
+        PitcherObligation::ReliefBatter,
+    ] {
+        let mut held = before.clone();
+        held.teams[1].pitcher = PitcherRole::Active {
+            player_id: "fierm001".into(),
+            obligation,
+        };
+        assert!(scaled.next_change(&held, &log).unwrap().is_none());
+    }
+    let tiny = Cast::read_tsv(
+        &text
+            .replace(
+                "workload:start:fierm001\t27,1",
+                "workload:start:fierm001\t1,1",
+            )
+            .replace("usage:start:fierm001\t27", "usage:start:fierm001\t1"),
+    )
+    .unwrap();
+    let mut before = tiny.prepare(&state(1, Half::Top, true)).unwrap();
+    let mut log = Vec::new();
+    assert!(tiny.next_change(&before, &log).unwrap().is_none());
+    advance(&mut log, &mut before, out_pa);
+    assert!(tiny.next_change(&before, &log).unwrap().is_some());
+    for (known, lead, target) in [(false, 4, 24), (true, 0, 41)] {
+        let mut initial = state(1, Half::Top, true);
+        initial.score[1] = lead;
+        // Only a complete zero-score origin qualifies for the no-hit extension.
+        let mut before = scaled.prepare(&initial).unwrap();
+        let mut log = Vec::new();
+        loop {
+            let n = log
+                .iter()
+                .filter(|t: &&EventTransition| {
+                    t.event().participants.pitcher.as_deref() == Some("fierm001")
+                })
+                .count();
+            if before.half == Half::Top && n >= target {
+                break;
+            }
+            advance(
+                &mut log,
+                &mut before,
+                if known { strikeout } else { out_pa },
+            );
+            if before.half == Half::Top && n >= 21 && n < target - 1 {
+                assert!(scaled.next_change(&before, &log).unwrap().is_none());
+            }
+        }
+        assert!(
+            scaled.next_change(&before, &log).unwrap().is_some(),
+            "known={known} lead={lead}"
+        );
+    }
 }

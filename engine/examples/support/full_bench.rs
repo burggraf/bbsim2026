@@ -6,11 +6,13 @@ use super::{
 use bbsim_engine::{DefenseState, GameState, Half, PitcherObligation, PitcherRole};
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::season_pool;
 pub const AVAILABILITY: &str =
     "same-game participant proxies assumed available at start; not verified eligibility";
-pub const DEFENSE_BASIS: &str =
-    "supplied observed positions assumed usable; not verified defensive eligibility";
+pub use season_pool::DEFENSE_BASIS;
 pub struct Bench {
+    managed: bool,
+    pub pace: BTreeMap<String, i8>,
     pub pools: [Vec<Candidate>; 2],
     pub names: BTreeMap<String, String>,
     pub counts: BTreeMap<String, [u64; 9]>,
@@ -41,9 +43,13 @@ impl Bench {
                 return Err("duplicate/invalid bench field".into());
             }
         }
+        let managed = fields.get("format") == Some(&"season-pool-bench-v1");
+        if managed && fields.remove("season_policy") != Some(season_pool::POLICY) {
+            return Err("unsupported bench season_policy".into());
+        }
         for (key, value) in [
-            ("format", "assumed-game-bench-v1"), ("game_id",game_id),
-            ("policy",pinch::POLICY_VERSION), ("availability_basis",AVAILABILITY),
+            ("format", if managed { "season-pool-bench-v1" } else { "assumed-game-bench-v1" }), ("game_id",game_id),
+            ("policy",pinch::POLICY_VERSION), ("availability_basis", if managed { season_pool::AVAILABILITY } else { AVAILABILITY }),
             ("defense_basis",DEFENSE_BASIS),
             ("snapshot_sha256","d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528"),
             ("supplement_sha256","554632467416eef202b7a55cadad2d09e5355ce98c83868b26b5267f98852b82"),
@@ -68,20 +74,31 @@ impl Bench {
                 || !id
                     .bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-                || !["name", "positions", "counts"].contains(field)
+                || !(["name", "positions", "counts"].contains(field)
+                    || (managed && *field == "pace"))
             {
                 return Err("invalid bench identity/field".into());
             }
             records.entry((side, id)).or_default().insert(field, value);
         }
         let mut bench = Self {
+            managed,
+            pace: BTreeMap::new(),
             pools: [vec![], vec![]],
             names: BTreeMap::new(),
             counts: BTreeMap::new(),
         };
         for ((side, id), fields) in records {
-            if fields.len() != 3 || bench.names.contains_key(id) || bench.pools[side].len() >= 50 {
+            if fields.len() != if managed { 4 } else { 3 }
+                || bench.names.contains_key(id)
+                || bench.pools[side].len() >= 50
+            {
                 return Err("incomplete, cross-side or oversized bench".into());
+            }
+            if managed {
+                bench
+                    .pace
+                    .insert(id.to_owned(), season_pool::pace(fields["pace"])?);
             }
             let positions = if fields["positions"] == "?" {
                 vec![]
@@ -128,6 +145,11 @@ impl Bench {
         }
         Ok(bench)
     }
+    #[allow(dead_code)]
+    pub fn is_managed(&self) -> bool {
+        self.managed
+    }
+
     /// Called after Cast::prepare, exactly once at a complete game origin.
     pub fn prepare(
         &self,
@@ -135,6 +157,9 @@ impl Bench {
         fielders: &[[String; 9]; 2],
         cast: &Cast,
     ) -> Result<GameState, String> {
+        if self.managed != cast.is_managed() {
+            return Err("bench/cast mode mismatch".into());
+        }
         if state.inning != 1
             || state.half != Half::Top
             || state.outs != 0

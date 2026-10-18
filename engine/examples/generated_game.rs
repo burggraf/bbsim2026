@@ -12,6 +12,9 @@ mod preview;
 mod ratings;
 #[path = "support/real_lineup.rs"]
 mod real;
+#[allow(dead_code)]
+#[path = "support/season_pool.rs"]
+mod season_pool;
 use std::io::{self, Write};
 fn option_error(error: String) -> ! {
     eprintln!(

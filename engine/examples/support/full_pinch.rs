@@ -3,7 +3,7 @@ use bbsim_engine::{
     apply, DefenseState, Delta, Event, EventKind, EventTransition, FieldingReview, GameState,
     Participants, PersonnelChange, TeamSide, TransitionError,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const POLICY_VERSION: &str = "late-close-expected-bases-ph-v1";
 
@@ -49,10 +49,39 @@ pub fn decide_states(
     before: &GameState,
     pool: &[Candidate],
     reserve_pitcher: Option<&str>,
+    probabilities: impl FnMut(&GameState) -> Result<[f64; 9], String>,
+) -> Result<Option<EventTransition>, String> {
+    decide_states_inner(before, pool, reserve_pitcher, None, probabilities)
+}
+
+#[allow(dead_code)] // Only the managed season-pool path uses soft usage preferences.
+pub fn decide_managed_states(
+    before: &GameState,
+    pool: &[Candidate],
+    reserve_pitcher: Option<&str>,
+    pace: &BTreeMap<String, i8>,
+    probabilities: impl FnMut(&GameState) -> Result<[f64; 9], String>,
+) -> Result<Option<EventTransition>, String> {
+    decide_states_inner(before, pool, reserve_pitcher, Some(pace), probabilities)
+}
+
+fn decide_states_inner(
+    before: &GameState,
+    pool: &[Candidate],
+    reserve_pitcher: Option<&str>,
+    pace: Option<&BTreeMap<String, i8>>,
     mut probabilities: impl FnMut(&GameState) -> Result<[f64; 9], String>,
 ) -> Result<Option<EventTransition>, String> {
     if before.over {
         return Ok(None);
+    }
+    if let Some(pace) = pace {
+        if pool
+            .iter()
+            .any(|c| !pace.get(&c.id).is_some_and(|p| (-1..=1).contains(p)))
+        {
+            return Err("missing or invalid PH usage pace".into());
+        }
     }
     before
         .validate_play_ready()
@@ -167,13 +196,31 @@ pub fn decide_states(
     let current = score(probabilities(before)?)?;
     let mut best = None;
     let mut best_score = current;
-    for (_, transition) in legal {
+    let mut qualifying = Vec::new();
+    for (id, transition) in legal {
         let candidate_score = score(probabilities(transition.after())?)?;
         // Stable-ID order resolves equal scores without an outcome or manager RNG draw.
-        if candidate_score - current > 0.10 && candidate_score > best_score {
-            best_score = candidate_score;
-            best = Some(transition);
+        if candidate_score - current > 0.10 {
+            if pace.is_some() {
+                best_score = best_score.max(candidate_score);
+                qualifying.push((id, candidate_score, transition));
+            } else if candidate_score > best_score {
+                best_score = candidate_score;
+                best = Some(transition);
+            }
         }
+    }
+    if let Some(pace) = pace {
+        best = qualifying
+            .into_iter()
+            .filter(|(_, score, _)| *score >= best_score - 0.05)
+            .max_by(|(a, a_score, _), (b, b_score, _)| {
+                pace[*a]
+                    .cmp(&pace[*b])
+                    .then_with(|| a_score.total_cmp(b_score))
+                    .then_with(|| b.cmp(a))
+            })
+            .map(|(_, _, transition)| transition);
     }
     Ok(best)
 }

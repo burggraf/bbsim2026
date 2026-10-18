@@ -12,6 +12,9 @@ mod full_transcript;
 #[allow(dead_code)]
 #[path = "../examples/support/preview.rs"]
 mod preview;
+#[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
 #[path = "../examples/support/transcript.rs"]
 mod transcript;
 use bbsim_engine::*;

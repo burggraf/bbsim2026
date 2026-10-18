@@ -5,6 +5,8 @@ use bbsim_engine::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::season_pool;
+
 const ATTRIBUTION: &str = "The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at \"www.retrosheet.org\".";
 const AVAILABILITY: &str =
     "recorded nonstarters assumed available at start; not verified eligibility";
@@ -63,6 +65,9 @@ pub struct Cast {
     workloads: BTreeMap<(String, bool), Workload>,
     empirical: bool,
     game_id: Option<String>,
+    managed: bool,
+    starter_scale: [u64; 2],
+    relief_pace: BTreeMap<String, i8>,
 }
 
 impl Cast {
@@ -106,15 +111,38 @@ impl Cast {
             }
         }
 
-        let (empirical, generic) = match (
+        let (empirical, generic, managed) = match (
             fields.remove("format").as_deref(),
             fields.remove("policy").as_deref(),
         ) {
-            (Some("closed-pitching-cast-v1"), Some("pa-mean-closed-cast-v1")) => (false, false),
-            (Some("closed-pitching-cast-v2"), Some("empirical-pa-closed-cast-v2")) => (true, false),
-            (Some("closed-pitching-cast-v3"), Some("empirical-pa-closed-cast-v2")) => (true, true),
+            (Some("closed-pitching-cast-v1"), Some("pa-mean-closed-cast-v1")) => {
+                (false, false, false)
+            }
+            (Some("closed-pitching-cast-v2"), Some("empirical-pa-closed-cast-v2")) => {
+                (true, false, false)
+            }
+            (Some("closed-pitching-cast-v3"), Some("empirical-pa-closed-cast-v2")) => {
+                (true, true, false)
+            }
+            (Some("season-pool-pitching-cast-v1"), Some("empirical-pa-closed-cast-v2")) => {
+                (true, true, true)
+            }
             _ => return Err("unsupported pitching cast format/policy".into()),
         };
+        let mut starter_scale = [100; 2];
+        if managed {
+            if fields.remove("season_policy").as_deref() != Some(season_pool::POLICY) {
+                return Err("unsupported cast season_policy".into());
+            }
+            for (side, label) in ["Away", "Home"].iter().enumerate() {
+                starter_scale[side] =
+                    match fields.remove(&format!("starter_scale:{label}")).as_deref() {
+                        Some("80") => 80,
+                        Some("100") => 100,
+                        _ => return Err("invalid or missing starter scale".into()),
+                    };
+            }
+        }
         let mut game_id = None;
         let mut sizes = None;
         if generic {
@@ -159,7 +187,14 @@ impl Cast {
         };
         for (key, expected) in [
             ("attribution", ATTRIBUTION),
-            ("availability_basis", AVAILABILITY),
+            (
+                "availability_basis",
+                if managed {
+                    season_pool::AVAILABILITY
+                } else {
+                    AVAILABILITY
+                },
+            ),
             (
                 "bullpen_report_sha256",
                 "758186cceb67815573e7e109763f7be7d5e57b9ec9583bc8a3cca299d39edc88",
@@ -190,7 +225,14 @@ impl Cast {
                 "supplement_sha256",
                 "554632467416eef202b7a55cadad2d09e5355ce98c83868b26b5267f98852b82",
             ),
-            ("workload_basis", WORKLOAD_BASIS),
+            (
+                "workload_basis",
+                if managed {
+                    season_pool::WORKLOAD_BASIS
+                } else {
+                    WORKLOAD_BASIS
+                },
+            ),
             (
                 "workload_report_sha256",
                 "125768bd82ce54ead277d92301fbb7434e823a8fc4432777087c15b8e46ad2f9",
@@ -211,9 +253,19 @@ impl Cast {
         let mut pitcher_profiles = BTreeSet::new();
         let mut workloads = BTreeMap::new();
         let mut usage = BTreeMap::new();
+        let mut relief_pace = BTreeMap::new();
+        let mut budget_priors = BTreeSet::new();
         for (key, value) in fields {
             let parts = key.split(':').collect::<Vec<_>>();
             match parts.as_slice() {
+                ["relief_pace", id] if managed && valid_actor(id) => {
+                    relief_pace.insert((*id).to_owned(), season_pool::pace(&value)?);
+                }
+                ["budget_prior", role @ ("start" | "relief"), id]
+                    if managed && valid_actor(id) && value == "true" =>
+                {
+                    budget_priors.insert(((*id).to_owned(), *role == "start"));
+                }
                 ["cast", side, rank_text, id] => {
                     let side = side_index(side)?;
                     let rank = rank_text
@@ -330,6 +382,12 @@ impl Cast {
         {
             return Err("pitcher profiles do not match recorded cast".into());
         }
+        if managed
+            && (relief_pace.keys().cloned().collect::<BTreeSet<_>>() != cast_ids
+                || !budget_priors.is_subset(&expected_workloads))
+        {
+            return Err("season-pool profiles do not match cast".into());
+        }
         if empirical {
             if usage.keys().cloned().collect::<BTreeSet<_>>() != expected_workloads {
                 return Err("usage profiles do not match recorded cast".into());
@@ -360,7 +418,24 @@ impl Cast {
             workloads,
             empirical,
             game_id,
+            managed,
+            starter_scale,
+            relief_pace,
         })
+    }
+
+    #[allow(dead_code)]
+    pub fn is_managed(&self) -> bool {
+        self.managed
+    }
+
+    #[allow(dead_code)]
+    pub fn policy_version(&self) -> &'static str {
+        if self.managed {
+            season_pool::MANAGER
+        } else {
+            POLICY_VERSION
+        }
     }
 
     #[allow(dead_code)] // Only game-input callers need the source game ID.
@@ -436,14 +511,22 @@ impl Cast {
 
     #[allow(dead_code)] // Optional PH entry points also compile in isolated pitching-manager tests.
     pub fn next_available<'a>(&'a self, before: &GameState, side: usize) -> Option<&'a str> {
-        self.teams[side]
-            .iter()
-            .skip(1)
-            .find(|p| {
-                before.teams[side].bench.contains(&p.id)
-                    && !before.teams[side].removed.contains(&p.id)
-            })
-            .map(|p| p.id.as_str())
+        let available = self.teams[side].iter().skip(1).filter(|p| {
+            before.teams[side].bench.contains(&p.id) && !before.teams[side].removed.contains(&p.id)
+        });
+        if self.managed {
+            // Workload-role classes, not measured fatigue or historical leverage.
+            let long_needed = before.inning <= 5 || before.score[0].abs_diff(before.score[1]) >= 4;
+            available
+                .min_by_key(|p| {
+                    let w = &self.workloads[&(p.id.clone(), false)];
+                    let long = u128::from(w.pa_sum) >= 6 * u128::from(w.outings);
+                    (long != long_needed, -self.relief_pace[&p.id], &p.id)
+                })
+                .map(|p| p.id.as_str())
+        } else {
+            available.into_iter().next().map(|p| p.id.as_str())
+        }
     }
 
     /// A PH vacancy is resolved before defensive readiness or any entry/play RNG word.
@@ -460,7 +543,9 @@ impl Cast {
     }
 
     pub fn workload_mode(&self) -> &'static str {
-        if self.empirical {
+        if self.managed {
+            "source empirical role budgets with explicitly marked pooled priors"
+        } else if self.empirical {
             "empirical training outing budgets"
         } else {
             "individual role means (v1 fallback; no empirical spread)"
@@ -525,6 +610,9 @@ impl Cast {
             role == 0,
         )];
         let mut target = workload.budget(usage_word);
+        if self.managed && role == 0 {
+            target = (target * self.starter_scale[side] / 100).max(1);
+        }
         let runs: u64 = log
             .iter()
             .filter(|t| t.event().participants.pitcher.as_deref() == team.pitcher.active_id())
@@ -566,12 +654,10 @@ impl Cast {
                 return Ok(None);
             }
         }
-        let Some(incoming) = pitchers.iter().skip(1).find(|pitcher| {
-            team.bench.contains(&pitcher.id) && !team.removed.contains(&pitcher.id)
-        }) else {
+        let Some(incoming) = self.next_available(before, side) else {
             return Ok(None);
         };
-        self.substitution(before, side, &incoming.id).map(Some)
+        self.substitution(before, side, incoming).map(Some)
     }
 
     fn substitution(

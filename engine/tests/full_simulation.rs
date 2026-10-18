@@ -10,6 +10,9 @@ mod full_simulation;
 #[allow(dead_code)]
 #[path = "../examples/support/preview.rs"]
 mod preview;
+#[allow(dead_code)]
+#[path = "../examples/support/season_pool.rs"]
+mod season_pool;
 use bbsim_engine::{accounting, CreditKind, EventTransition, GameState, Half, TeamState};
 
 fn initial() -> GameState {

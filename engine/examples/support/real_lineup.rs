@@ -1,6 +1,7 @@
 //! Closed starting-roster experiment, supplied identities and positional actors.
 //! A recorded starting lineup does not prove bench eligibility or player abilities.
 use super::{joint, preview};
+use crate::season_pool;
 use bbsim_engine::{Event, EventTransition, GameState, Half, TeamState};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -20,6 +21,7 @@ struct Player {
 pub struct Lineup {
     players: [Vec<Player>; 2],
     generic: bool,
+    managed: bool,
     use_dh: bool,
     game_id: String,
     date: String,
@@ -50,7 +52,18 @@ impl Lineup {
                 return Err("duplicate/invalid lineup row".into());
             }
         }
-        let generic = fields.get("format") == Some(&"closed-starting-lineup-v2");
+        let managed = fields.get("format") == Some(&"season-pool-lineup-v1");
+        let generic = managed || fields.get("format") == Some(&"closed-starting-lineup-v2");
+        if managed {
+            for (key, value) in [
+                ("season_policy", season_pool::POLICY),
+                ("availability_basis", season_pool::AVAILABILITY),
+            ] {
+                if fields.remove(key) != Some(value) {
+                    return Err(format!("unsupported lineup {key}"));
+                }
+            }
+        }
         let take = |fields: &mut BTreeMap<&str, &str>, key: &str| -> Result<String, String> {
             fields
                 .remove(key)
@@ -180,6 +193,7 @@ impl Lineup {
         Ok(Self {
             players,
             generic,
+            managed,
             use_dh,
             game_id,
             date,
@@ -188,6 +202,11 @@ impl Lineup {
             team_labels,
         })
     }
+    #[allow(dead_code)]
+    pub fn is_managed(&self) -> bool {
+        self.managed
+    }
+
     #[allow(dead_code)] // Shared preview modules do not all consume game metadata.
     pub fn game_id(&self) -> &str {
         &self.game_id
@@ -317,11 +336,21 @@ impl Lineup {
         self.write_preamble_with_rates(output, false)
     }
     pub fn write_preamble_with_rates(&self, output: &mut dyn Write, rated: bool) -> io::Result<()> {
-        writeln!(
-            output,
-            "LINEUP FORMAT: closed-starting-lineup-v{}",
-            if self.generic { 2 } else { 1 }
-        )?;
+        if self.managed {
+            writeln!(output, "LINEUP FORMAT: season-pool-lineup-v1")?;
+            writeln!(
+                output,
+                "Season policy: {} | {}",
+                season_pool::POLICY,
+                season_pool::AVAILABILITY
+            )?;
+        } else {
+            writeln!(
+                output,
+                "LINEUP FORMAT: closed-starting-lineup-v{}",
+                if self.generic { 2 } else { 1 }
+            )?;
+        }
         writeln!(
             output,
             "Matchup: {} | {} | {}",
