@@ -87,6 +87,12 @@ hard season quotas, rating refit, invented positions or new source transfer.
   matched cohorts and full errors/coverage against the existing frozen tolerances.
   A failed metric stays failed; component success does not certify a full season.
 
+## Completed evaluation
+
+[Results and retained evidence](managed-season-v1-results.md): verified implementation,
+three 2,429-game CLI completions, but **NO-GO for individual-pitcher usage** in all
+three frozen seeds. Passing aggregate/batter checks do not waive that failure.
+
 ## Ownership
 
 Two independent contracts: native input/runtime bridge (isolated worker based on
