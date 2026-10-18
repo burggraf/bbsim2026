@@ -25,6 +25,8 @@ mod ratings;
 #[allow(dead_code)]
 #[path = "support/real_lineup.rs"]
 mod real;
+#[path = "support/season_accounting.rs"]
+mod season_accounting;
 #[path = "support/transcript.rs"]
 mod transcript;
 #[allow(dead_code)]
@@ -34,7 +36,7 @@ use std::{
     collections::BTreeMap,
     io::{self, Write},
 };
-const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--calibrated-ratings TREE.tsv] [--format detailed|radio]";
+const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--calibrated-ratings TREE.tsv] [--format detailed|radio|accounting]";
 fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
     if args == ["--help"] {
         return Ok(None);
@@ -73,8 +75,8 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
     let format = fields
         .entry("--format".into())
         .or_insert_with(|| "detailed".into());
-    if !matches!(format.as_str(), "detailed" | "radio") {
-        return Err("format must be detailed or radio".into());
+    if !matches!(format.as_str(), "detailed" | "radio" | "accounting") {
+        return Err("format must be detailed or radio or accounting".into());
     }
     Ok(Some(fields))
 }
@@ -170,6 +172,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(Some(model.player_probabilities(probabilities)?))
             },
         )?;
+    if options["--format"] == "accounting" {
+        let log: Vec<_> = steps.iter().map(|s| s.transition().clone()).collect();
+        let stats = bbsim_engine::accounting::derive_accounting(&log)
+            .map_err(|e| format!("machine accounting: {e:?}"))?;
+        let ids = if lineup.is_generic() {
+            team_labels.clone()
+        } else {
+            ["SEA".into(), "OAK".into()]
+        };
+        let mut text = Vec::new();
+        season_accounting::write(&mut text, &stats, lineup.game_id(), seed, &ids)?;
+        io::stdout().lock().write_all(&text)?;
+        return Ok(());
+    }
     let draws: BTreeMap<_, _> = draws.into_iter().collect();
     let mut output = io::stdout().lock();
     if options["--format"] == "radio" {
@@ -274,7 +290,7 @@ mod tests {
             "cast.tsv",
         ]);
         assert_eq!(parse(&good).unwrap().unwrap()["--format"], "detailed");
-        for format in ["radio", "detailed"] {
+        for format in ["radio", "detailed", "accounting"] {
             let explicit = [good.clone(), args(&["--format", format])].concat();
             let parsed = parse(&explicit).unwrap().unwrap();
             assert_eq!(parsed["--format"], format);

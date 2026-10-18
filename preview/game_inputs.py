@@ -54,6 +54,14 @@ def read_sources(paths):
     return dict(data=data,report=report,rows=rows,readiness=readiness)
 
 
+def prepare_season(source):
+    """Reuse one unchanged full-cohort workload audit across game exports."""
+    data=source['data']
+    selected=sorted({a['player_id'] for a in data['appearance'] if a['fielding_position']==1})
+    measured=workload.inventory(data['game'],data['person'],data['appearance'],source['rows'],selected)
+    return dict(source,_workloads={p['player_id']:p for p in measured['players']})
+
+
 def build_game(source,game_id):
     """Caller must use read_sources; no partial-season observations authorize cold profiles."""
     data=source['data'];games=data['game'];people=data['person'];appearances=data['appearance']
@@ -81,8 +89,12 @@ def build_game(source,game_id):
                 report['roles'][role]['profiles'].append(profiles[pid])
             p=profiles[pid]
             if p['included_pa']==0:cold.append(dict(role=role,player_id=pid,events=p['events'],included_pa=0))
-    support=bullpen.inventory(games,people,appearances,report,target=game_id)
-    measured=workload.inventory(games,people,appearances,source['rows'],sorted(selected))
+    support=bullpen.inventory([target],people,target_rows,report,target=game_id)
+    if '_workloads' in source:
+        measured=dict(format='2019-pitcher-workload-v1',basis=workload.BASIS,
+            players=[copy.deepcopy(source['_workloads'][pid]) for pid in sorted(selected)])
+    else:
+        measured=workload.inventory(games,people,appearances,source['rows'],sorted(selected))
     profiles={p['player_id']:p for p in report['roles']['pitcher']['profiles']}
     for p in measured['players']:
         if p['ability_profile'] is None:
