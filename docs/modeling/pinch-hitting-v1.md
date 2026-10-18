@@ -141,3 +141,96 @@ accounting/default/schema change, independent model review or gate signoff occur
 Rust suites are not rerun for this Python-only audit; unchanged pins preserve the
 boundary, not a new Rust acceptance claim. The runner's 54 explicit refusals and
 previous PA/credit discrepancy remain unresolved.
+
+## Cached terminal-batter comparison — preregistration, 2026-10-18
+
+Before implementation or measurement, extend this audit only through explicit
+`--participants` / `inventory_participants(source)` / `export(..., participants=True)`.
+Default v1 inventory and CLI semantics remain unchanged. V2 retains all v1 findings
+and adds literal per-game/side fielding-only, terminal-batting-only, intersection
+and union stable-ID sets. These are participation sets, **not candidate/eligible
+bench rosters**. Opening availability stays null. No native/manager changes.
+
+The authenticated cached event CSV has no batting-side column. Attribute a terminal
+batter only to the opposite of the event pitcher's **unique recorded position-1
+side in that same game**. Unknown/missing/cross-side pitching evidence leaves the
+terminal event unassigned, with game/event/batter/pitcher IDs and all reasons;
+never guess from team names, event order, inning or batter identity. Retain source
+fielding/terminal-side conflicts as explicit quarantine reasons. Unknown-side
+position-1 rows poison otherwise unique pitching evidence. Unknown game IDs remain
+unassigned. Non-PA rows are counted separately and do not establish terminal batting
+participation. IBB and interference establish participation even though excluded
+from modeled batting counts; retain their distinct exclusion categories. No actual
+PA outcome or entry timing is supplied to a manager.
+
+Terminal actor records retain sorted event keys and inclusion/exclusion counts,
+identity and validated existing full-cohort batting profile/cold-zero status.
+Missing fielding evidence means unknown position/range/defensive eligibility, not
+an invented PH position or clearance. Preserve all prior fielding quarantine and
+exceptional-game records. Same display names never merge IDs; team splits remain.
+
+Acceptance: test first terminal-only/fielding-only/both sets, IBB/interference,
+non-PA exclusion, unknown/ambiguous pitcher side, cross-source side conflict, missing
+people, cold profiles, deterministic shuffle, source immutability and opt-in export
+safeguards. On all cached games, independently derive literal sets from raw CSV
+and appearance rows; reconcile every side and aggregate set cardinalities and
+exclusion counts. Run CLI twice into new exclusive external destinations with
+byte-identical reports; recheck five source hashes and all non-owned tracked files.
+Compare unchanged v1 inventory with its accepted report excluding provenance. Run
+full Python discovery with ResourceWarnings as errors and `git diff --check`.
+Preserve raw failures/logs under a new private evidence root. No coverage target,
+new transfer, rating fit, eligibility claim, native proof or gate promotion.
+
+After this bounded comparison, the next task is the explicit canonical pitching
+vacancy/defensive-assignment and wire-compatibility preregistration above, not
+automatic-policy implementation.
+
+### Cached comparison results — 2026-10-18
+
+Verified the bounded source follow-up, not pinch-hitting management. Two complete
+CLI runs with `--participants` took 12.420620s / 12.394297s and produced identical
+98,262,582-byte reports. Evidence: `/tmp/bbsim-pinch-participants-v1/proof-results.json`,
+`prove.py`, `first.*`, `repeat.*`, `proof.*` and `batting-only-findings.json`.
+All 2,429 games / 4,858 sides / 30 teams remain present. The existing v1 report
+content is unchanged (provenance necessarily identifies the updated audit recipe).
+
+| Actor-side-game participation set | Total | DH | Non-DH |
+| --- | ---: | ---: | ---: |
+| Fielding only |19,649|11,201|8,448|
+| Fielding and terminal batting |47,624|23,105|24,519|
+| Terminal batting only |4,027|647|3,380|
+| Union |71,300|34,953|36,347|
+
+This confirms that fielding-only proxies omitted observed batting participants:
+4,027 actor-side-game entries across 556 stable player IDs. All have known people
+and positive full-cohort batting opportunities; all lack same-side fielding evidence,
+and five retain unsupported-starting-map reasons. None is thereby cleared for
+defense or certified available at game start. Zero cross-side terminal actor entries
+were observed; synthetic tests quarantine that condition. PR-only and never-used
+participants remain unproven. These totals include starters and pitchers; they are
+not an expanded count of eligible bench players or simulated appearances.
+
+All 186,517 terminal rows receive a unique opposite-pitcher side; none is unassigned
+in this authenticated extract. They include 185,703 modeled-count observations,
+753 IBB exclusions and 61 interference exclusions. The separate 5,508 non-PA rows
+do not establish terminal-batter participation. Independent raw-row calculations
+reconciled every side's four sets, actor/event/category/profile/reason records,
+team and DH aggregates, and unassigned records. Five source hashes, 363 protected
+tracked paths and 89 Python source/test pins remained unchanged during proof.
+
+Fresh checks: **15 focused tests passed** (0.041s), **677 full Python tests passed**
+(57.977s), ResourceWarnings as errors; raw `focused-final.*` / `python.*` logs.
+Interface/semantic, vector-format and terminal-only cross-side REDs are retained.
+Publication redirect checks cover both modes; the shared exclusive/drift guards
+remain in place. `git diff --check` and local documentation links pass. An initial
+supplemental link checker mistook historical inline Python for a Markdown link;
+its failure/root cause is retained at `link-checker-initial-failure.txt`; source,
+assertions and raw test outputs were not changed for it.
+
+Reproduce with the preceding CLI command plus `--participants` and a **new**
+external output path; the default remains v1. The proof script is exclusive too,
+so choose a new evidence root rather than rerun over its accepted artifacts.
+Evidence is still private/local `/tmp`, not remotely durable or licensed for
+redistribution. No native suites were rerun or native/policy behavior changed.
+Next: preregister canonical pitcher-vacancy/defensive-assignment legality and wire
+compatibility before implementing substitutions or automatic decisions.

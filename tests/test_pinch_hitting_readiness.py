@@ -14,7 +14,7 @@ from test_lineup_readiness import fixture
 
 def source(dh=True):
     games,people,appearances=fixture(dh=dh)
-    return dict(data=dict(game=games,person=people,appearance=appearances),
+    return dict(rows=[],data=dict(game=games,person=people,appearance=appearances),
         report=dict(roles=dict(batter=dict(profiles=[]))),
         readiness=dict(games=[dict(game_id='G1',results=[dict(forfeit=False,
             shortened=False,suspended=False,tied=False,duration_outs=54)])]))
@@ -29,6 +29,73 @@ def add(s,pid='bench',side='Away',position=11,start=40,end=50,person=True):
 
 def actors(report,side='Away'):
     return {p['player_id']:p for p in next(t for t in report['games'][0]['sides'] if t['side']==side)['actors']}
+
+
+def terminal(s,pid='batonly',pitcher='hp',result='Single',key='1',gid='G1'):
+    s.setdefault('rows',[]).append(dict(game_id=gid,event_key=key,event_id=key,
+        batter_id=pid,pitcher_id=pitcher,result=result))
+
+
+class ParticipantTests(unittest.TestCase):
+    def test_literal_union_retains_excluded_batters_and_unknown_defense(self):
+        s=source();add(s,'fieldonly');add(s,'both')
+        terminal(s,'both');terminal(s,'batonly',result='IntentionalWalk',key='2')
+        terminal(s,'batonly',result='Interference',key='3');terminal(s,'notterminal',result='',key='4')
+        before=copy.deepcopy(s);r=audit.inventory_participants(s);side=r['games'][0]['sides'][0]
+        self.assertEqual(set(side['participant_comparison']['batting_only_ids']),{'batonly'})
+        self.assertIn('fieldonly',side['participant_comparison']['fielding_only_ids'])
+        self.assertEqual(side['participant_comparison']['both_ids'],['both'])
+        bat={p['player_id']:p for p in side['terminal_batters']}['batonly']
+        self.assertEqual(bat['events'],[2,3]);self.assertEqual(bat['categories'],{'excluded_ibb':1,'excluded_interference':1})
+        self.assertIn('missing_fielding_evidence',bat['reasons'])
+        self.assertIn('person_lookup',bat['reasons']);self.assertEqual(bat['batting']['status'],'cold_zero')
+        self.assertIsNone(bat['defensive_eligibility']);self.assertIsNone(side['opening_bench_available'])
+        self.assertEqual(r['participant_counts']['non_pa_rows'],1);self.assertEqual(s,before)
+        for rows in s['data'].values():random.Random(42).shuffle(rows)
+        random.Random(42).shuffle(s['rows']);self.assertEqual(audit.inventory_participants(s),r)
+
+    def test_terminal_only_profile_uses_same_literal_count_vector_as_v1(self):
+        s=source();terminal(s)
+        counts=dict.fromkeys(ratings.KEYS,0);counts['single']=3
+        s['report']['roles']['batter']['profiles']=[dict(player_id='batonly',included_pa=3,counts=counts)]
+        bat=audit.inventory_participants(s)['games'][0]['sides'][0]['terminal_batters'][0]
+        self.assertEqual(bat['batting'],dict(status='profile',included_pa=3,counts=[counts[k] for k in ratings.KEYS]))
+
+    def test_unknown_and_cross_side_pitcher_evidence_never_guesses_batting_side(self):
+        s=source();terminal(s,pitcher='absent');terminal(s,pitcher='hp',key='2')
+        add(s,'hp',side='Away',position=1);terminal(s,pitcher='ap',key='3')
+        add(s,'ap',side=None,position=1);terminal(s,gid='missing',key='4')
+        r=audit.inventory_participants(s)
+        self.assertEqual(r['participant_counts']['assigned_terminal_rows'],0)
+        self.assertEqual(len(r['unassigned_terminal_events']),4)
+        self.assertEqual(r['unassigned_terminal_events'][0]['reasons'],['missing_pitcher_side'])
+        self.assertIn('cross_side_pitcher',r['unassigned_terminal_events'][1]['reasons'])
+        self.assertIn('unknown_pitcher_side',r['unassigned_terminal_events'][2]['reasons'])
+        self.assertIn('unknown_game',r['unassigned_terminal_events'][3]['reasons'])
+
+    def test_conflicting_fielding_side_is_quarantined_without_hiding_participation(self):
+        s=source();add(s,'conflict',side='Home');terminal(s,'conflict')
+        r=audit.inventory_participants(s);away=r['games'][0]['sides'][0]
+        self.assertEqual(away['participant_comparison']['batting_only_ids'],['conflict'])
+        self.assertIn('cross_side_identity',away['terminal_batters'][0]['reasons'])
+        self.assertEqual(r['participant_counts']['terminal_rows'],1)
+
+    def test_terminal_only_cross_side_identity_is_quarantined_on_both_sides(self):
+        s=source();terminal(s,'bothbat');terminal(s,'bothbat',pitcher='ap',key='2')
+        r=audit.inventory_participants(s)
+        for side in r['games'][0]['sides']:
+            self.assertIn('cross_side_identity',side['terminal_batters'][0]['reasons'])
+
+    def test_opt_in_export_keeps_v1_default_and_uses_existing_publication_guards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);paths=[root/str(i) for i in range(5)]
+            for p in paths:p.write_text('source')
+            s=source();terminal(s)
+            with patch.object(game,'read_sources',return_value=s):
+                self.assertEqual(audit.export(paths,root/'v1.json')['format'],audit.FORMAT)
+                r=audit.export(paths,root/'v2.json',participants=True)
+                self.assertEqual(r['format'],'2019-pinch-hitting-participants-v2')
+                with self.assertRaisesRegex(ValueError,'overwrite'):audit.export(paths,root/'v2.json',participants=True)
 
 
 class ReadinessTests(unittest.TestCase):
@@ -107,8 +174,8 @@ class ReadinessTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Duplicate'):audit.inventory(s)
 
     def test_destination_redirect_is_rechecked_before_any_publication(self):
-        for into_project in [True,False]:
-            with self.subTest(into_project=into_project),tempfile.TemporaryDirectory() as directory:
+        for into_project,participants in [(True,False),(False,False),(True,True),(False,True)]:
+            with self.subTest(into_project=into_project,participants=participants),tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);project=root/'project';(project/'preview').mkdir(parents=True)
                 recipe=project/'preview'/'game_inputs.py';recipe.write_text('private recipe stand-in')
                 target=project if into_project else root/'elsewhere'
@@ -122,7 +189,7 @@ class ReadinessTests(unittest.TestCase):
                     return source()
                 with patch.object(game,'__file__',str(recipe)),patch.object(game,'read_sources',side_effect=redirect):
                     with self.assertRaisesRegex(ValueError,'outside repository' if into_project else 'destination changed'):
-                        audit.export(paths,destination/'report.json')
+                        audit.export(paths,destination/'report.json',participants=participants)
                 self.assertFalse((target/'report.json').exists())
                 self.assertEqual(sorted(p.name for p in project.iterdir()),['preview'])
 

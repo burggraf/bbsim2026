@@ -142,6 +142,56 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 
 ## Resume here
 
+### 2026-10-18 — P-02-pinch-hitting-v1 cached batting comparison verified; feature incomplete
+
+Base `063d599`, clean main at start, ahead 2; prior local receipt commit/tree verified.
+Four owned paths: `audits/pinch_hitting_readiness.py`, its existing test module,
+[preregistration/results](modeling/pinch-hitting-v1.md) and this ledger. Explicit
+`--participants` / `inventory_participants` / `export(..., participants=True)` adds
+v2 participation comparison; v1 content/default retained. No transfer, dependency,
+engine, manager, probability/RNG, accounting or UI change. No actual remote query
+or push. Task remains **active**, not automatic-pinch-hitting completion.
+
+Acceptance frozen before code/measurement at
+`/tmp/bbsim-pinch-participants-v1/preregistration.md` / `freeze.json`.
+`proof-results.json` verifies all 2,429 games / 4,858 sides / 30 teams twice:
+19,649 fielding-only, 47,624 shared and **4,027 terminal-batting-only** actor-side-game
+entries (556 stable player IDs), union 71,300. Missing fielding coverage is confirmed,
+not repaired by invented positions/eligibility. Batting-only entries split 647 DH /
+3,380 non-DH, all have people and positive batting opportunities; five retain
+unsupported maps. All 186,517 terminal rows attributed via unique same-game recorded
+pitcher side, zero unassigned; 753 IBB /61 interference exclusions remain participants.
+5,508 non-PA rows excluded from terminal participation, not discarded from inputs.
+No observed cross-side terminal identities; synthetic tests quarantine them.
+Opening availability and defensive eligibility remain null. PR-only/unused players
+are still unproven. These sets include starters/pitchers, not eligible bench counts.
+
+Two reports byte-identical (98,262,582 bytes), 12.420620s /12.394297s. Direct raw-source
+sets, event keys, categories, reasons, profiles and all team/DH aggregates reconcile;
+v1 content matches accepted report excluding provenance. Five source hashes,
+363 protected tracked files and 89 Python code/test pins unchanged. Raw failures,
+proof code and logs retained outside Git, private/local `/tmp`, not durable/releasable.
+A supplemental Markdown-link checker initially matched historical inline Python;
+checker-only failure/root cause retained, no test/source assertion weakened.
+
+Fresh exact commands: `PYTHONPATH=tests python3 -B -Werror::ResourceWarning -m unittest test_pinch_hitting_readiness -v`
+(**15 passed**, `focused-final.*`); `python3 -B -Werror::ResourceWarning -m unittest discover -s tests -v`
+(**677 passed**, 57.977s, `python.*`);
+`python3 -B /tmp/bbsim-pinch-participants-v1/prove.py` (**exit 0**, exclusive artifacts;
+use a new evidence root for reproduction); `git diff --check` and local links pass.
+No fresh Rust/native certification; native code unchanged. Publication redirects
+covered for v1/v2; existing authentication, drift and exclusive-writer guards retained.
+
+**Next concrete action:** preregister the explicit canonical pinch-hitter,
+non-DH pitching vacancy and subsequent defensive assignments, their resolution
+before defense, no re-entry and BBE wire compatibility; inspect actual native
+callers before changes. No fictitious pitching appearances, removed active pitchers,
+eventless order changes or DH-only scope narrowing. Automatic policy is still
+unimplemented, defensive-replacement policy remains later, the runner's 54 refusals
+and source PA/credit discrepancy remain open; no fidelity or gate signoff. Local
+checkpoint receipt belongs at `/tmp/bbsim-pinch-participants-v1/local-commit.json`;
+verify actual Git status/HEAD before resuming, never assume pushed.
+
 ### 2026-10-18 — P-02-pinch-hitting-v1 source prerequisite verified; feature incomplete
 
 Base/parent `10353a1adc855c2ac82c92f1fcc4b0265c3964b5`, clean at start, main ahead 1;

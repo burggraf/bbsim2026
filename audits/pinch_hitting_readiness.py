@@ -78,11 +78,84 @@ def inventory(source):
         multi_team_player_ids=sorted(pid for pid,tids in members.items() if len(tids)>1),unassigned_appearances=unassigned)
 
 
-def export(paths,output):
+def inventory_participants(source):
+    """Add literal participation sets; unresolved defensive/roster evidence stays unknown."""
+    report=inventory(source)
+    report['format']='2019-pinch-hitting-participants-v2'
+    report['limits']+='; terminal-batter union is not complete PH/PR coverage or an eligible bench'
+    pitchers=defaultdict(set);fielding=defaultdict(set);people=defaultdict(list)
+    for a in source['data']['appearance']:
+        fielding[a['game_id'],a['player_id']].add(a['side'])
+        if a['fielding_position']==1:pitchers[a['game_id'],a['player_id']].add(a['side'])
+    for p in source['data']['person']:people[p['player_id']].append(p)
+    profiles={p['player_id']:p for p in source['report']['roles']['batter']['profiles']}
+    sides={(g['game_id'],s['side']):s for g in report['games'] for s in g['sides']}
+    games={g['game_id']:g for g in report['games']}
+    assigned=defaultdict(lambda:defaultdict(list));unassigned=[]
+    counts=Counter(dict(terminal_rows=0,assigned_terminal_rows=0,unassigned_terminal_rows=0,non_pa_rows=0,
+        fielding_only_ids=0,batting_only_ids=0,both_ids=0,union_ids=0))
+    categories=Counter()
+    for row in source['rows']:
+        if not row['result']:
+            counts['non_pa_rows']+=1
+            continue
+        category=game.player.GROUPS.get(row['result'])
+        if category is None:raise ValueError('Unknown PA classification')
+        category=category if category.startswith('excluded_') else 'included'
+        counts['terminal_rows']+=1;categories[category]+=1
+        gid=row['game_id'];known=pitchers[gid,row['pitcher_id']];issues=[]
+        if gid not in games:issues.append('unknown_game')
+        if not known:issues.append('missing_pitcher_side')
+        if known-{'Away','Home'}:issues.append('unknown_pitcher_side')
+        if {'Away','Home'}<=known:issues.append('cross_side_pitcher')
+        event=dict(game_id=gid,event_key=int(row['event_key']),event_id=int(row['event_id']),
+            batter_id=row['batter_id'],pitcher_id=row['pitcher_id'],category=category)
+        if issues:
+            unassigned.append(dict(event,reasons=sorted(issues)));counts['unassigned_terminal_rows']+=1
+        else:
+            side='Home' if known=={'Away'} else 'Away'
+            assigned[gid,side][row['batter_id']].append(event);counts['assigned_terminal_rows']+=1
+    batting_sides=defaultdict(set)
+    for (gid,side),batters in assigned.items():
+        for pid in batters:batting_sides[gid,pid].add(side)
+    team_counts={};mode_counts={}
+    for (gid,side),target in sides.items():
+        actors={a['player_id']:a for a in target['actors']};batters=assigned[gid,side];f=set(actors);b=set(batters)
+        comparison=dict(fielding_only_ids=sorted(f-b),batting_only_ids=sorted(b-f),both_ids=sorted(f&b),union_ids=sorted(f|b))
+        target['participant_comparison']=comparison;target['terminal_batters']=[]
+        for pid,events in sorted(batters.items()):
+            issues=set(actors[pid]['reasons']) if pid in actors else {'missing_fielding_evidence'}
+            observed=fielding[gid,pid]
+            if pid in target['starting_ids']:issues.add('starting_player')
+            if pitchers[gid,pid]:issues.add('recorded_pitcher')
+            if observed-{'Away','Home'}:issues.add('unknown_side')
+            if (observed|batting_sides[gid,pid])&({'Away','Home'}-{side}):issues.add('cross_side_identity')
+            bio=people[pid]
+            if len(bio)!=1 or any(not game.lineup.nonempty(bio[0][k]) for k in ['first_name','last_name']):issues.add('person_lookup')
+            if not games[gid]['starting_maps_supported']:issues.add('unsupported_starting_maps')
+            profile=profiles.get(pid)
+            batting=dict(status='cold_zero',included_pa=0,counts=[0]*9) if profile is None else dict(
+                status='profile_zero' if profile['included_pa']==0 else 'profile',included_pa=profile['included_pa'],
+                counts=[profile['counts'][k] for k in game.ratings.KEYS])
+            target['terminal_batters'].append(dict(player_id=pid,events=sorted(e['event_key'] for e in events),
+                categories=dict(sorted(Counter(e['category'] for e in events).items())),reasons=sorted(issues),
+                batting=batting,defensive_eligibility=None))
+        mode='dh' if games[gid]['use_dh'] is True else 'no_dh' if games[gid]['use_dh'] is False else 'unknown'
+        for aggregate in [counts,team_counts.setdefault(target['team_id'],Counter()),mode_counts.setdefault(mode,Counter())]:
+            for key,ids in comparison.items():aggregate[key]+=len(ids)
+    report.update(participant_counts=dict(sorted(counts.items())),terminal_categories=dict(sorted(categories.items())),
+        participant_teams={k:dict(sorted(v.items())) for k,v in sorted(team_counts.items())},
+        participant_dh_modes={k:dict(sorted(v.items())) for k,v in sorted(mode_counts.items())},
+        unassigned_terminal_events=sorted(unassigned,key=lambda e:(e['game_id'],e['event_key'])))
+    return report
+
+
+def export(paths,output,*,participants=False):
     output=game._destination(output);paths=list(map(Path,paths))
     recipes=[Path(m.__file__) for m in [game.lineup,game.player,game.workload,game.bullpen,game.real,game.ratings,game.cast,game]]+[Path(__file__)]
     inputs=paths+recipes;pins=tuple(game.real.digest(p) for p in inputs)
-    report=inventory(game.read_sources(paths))
+    source=game.read_sources(paths)
+    report=inventory_participants(source) if participants else inventory(source)
     report['provenance']=dict(input_sha256={str(p):h for p,h in zip(inputs,pins)},
         snapshot_sha256=game.real.SNAPSHOT_SHA,supplement_sha256=game.real.SUPPLEMENT_SHA,attribution=game.real.ATTRIBUTION)
     if game._destination(output)!=output:raise ValueError('Bench audit destination changed')
@@ -93,8 +166,9 @@ def export(paths,output):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ['lineups','native','opportunities','events','readiness','output']:parser.add_argument(name,type=Path)
+    parser.add_argument('--participants',action='store_true',help='Compare cached terminal batters with fielding participants; not eligibility')
     args=parser.parse_args()
-    result=export([args.lineups,args.native,args.opportunities,args.events,args.readiness],args.output)
+    result=export([args.lineups,args.native,args.opportunities,args.events,args.readiness],args.output,participants=args.participants)
     print(json.dumps(result['counts'],sort_keys=True))
 
 
