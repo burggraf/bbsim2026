@@ -2,11 +2,13 @@
 
 **Last updated:** 2026-10-18 UTC
 
-**Latest completed preregistration:** `P-02-pitcher-usage-policy-v2-contract` — [separate v2 contract](modeling/pitcher-usage-policy-v2.md). All-supported-starter start debt; bounded continuous relief debt plus0.25 class preference; unchanged rest/legal/outcome rules; explicit entry traces; original usage bands plus coverage/role/start checks. No v2 policy implementation or games yet; v1 remains NO-GO.
+**Latest completed preregistration:** `P-02-pitcher-usage-policy-v2-contract` — [separate v2 contract](modeling/pitcher-usage-policy-v2.md). All-supported-starter start debt; bounded continuous relief debt plus0.25 class preference; unchanged rest/legal/outcome rules; explicit entry traces; original usage bands plus coverage/role/start checks. Pure helpers are now verified below; no v2 native integration or games. V1 remains NO-GO.
 
 **Latest completed analysis:** `P-02-pitcher-usage-diagnosis-v1` — [read-only attribution](modeling/pitcher-usage-diagnosis-v1.md). All14,574 starter decisions reconstructed; fixed top-five rotations take4,749–4,753 starts versus3,680 historically. Missing qualifying entries never enter a cast in24/22/20 cases; another0/2/4 are offered relief but never pitch. Negative-pace relief appearances and class priority are verified, but exact entry-state attribution is unavailable. V1 remains NO-GO; no simulator/policy/source changes.
 
-**Latest completed implementation checkpoint:** `P-02-managed-season-v1` implementation/evaluation
+**Latest completed implementation checkpoint:** isolated v2 pitching helpers and approved Rust 1.99 compatibility cleanups. Fresh 796 Python/956 Rust/5 example tests, build/fmt/strict Clippy, 16 game-byte controls and 15 CLI argument controls pass. Rust cleanup commit `4d8f24e`; [pure-component handoff](#resume-here). No v2 native/producer/runner integration or usage evaluation.
+
+**Latest completed managed-season checkpoint:** `P-02-managed-season-v1` implementation/evaluation
 complete; **individual-pitcher usage NO-GO**. All three seeds complete2,429/2,429games
 without refusals/native failures; batter/aggregate checks pass, pitcher bands fail
 at60.26–62.48%, with24 qualifying entries uncomparable per seed. Code `fb2cde0`,
@@ -56,7 +58,7 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | P-02-managed-season-v1 | done — verified implementation/evaluation; pitcher-usage NO-GO | [Results](modeling/managed-season-v1-results.md), [contract](modeling/managed-season-v1.md). Three seeds each2,429complete/zero refusals/native failures; batter100%/aggregate limits pass, pitcher60.26–62.48% fails80%,24qualifying uncomparable per seed. Code `fb2cde0`;769Python/956Rust/4examples/full checks,12legacy byte controls,review/source guards pass. No validated usage/fidelity/default/gate claim. |
 | P-02-pitcher-usage-diagnosis-v1 | done — bounded read-only attribution | [Report/reproduction/limits](modeling/pitcher-usage-diagnosis-v1.md). Three frozen seasons/14,574 starter decisions/7,287 native outputs reconciled;43,765 pinned paths unchanged. Separate literal TSV checker passes. Top-five restriction and extra ordering explain opportunity exclusion; relief class/pace exposure verified without claiming unrecorded entry-state causes. V1 NO-GO preserved; no simulation/policy/outcome/source change. |
 | P-02-pitcher-usage-policy-v2-contract | done — bounded preregistration, not implementation | [Contract](modeling/pitcher-usage-policy-v2.md): exact starter/relief rankings, unchanged empirical budgets/rest/legal/outcome boundaries, opt-in v2 schemas/entry evidence and fixed seeds1/2/3. Original bands retained; additional coverage/role/start gates. Source-only preflight binds455batter/565pitcher/240starter-role/331relief-role/250start-count entries and395unchanged protected paths. No v2 simulation/fit/code or gate signoff. |
-| P-02-pitcher-usage-policy-v2 | ready — pure policy component only | Implement the preregistered rational starter/relief helpers and regression/property tests, preserving v1 behavior; authenticate/freeze prerequisites before code. No default or native season switch in this slice. |
+| P-02-pitcher-usage-policy-v2 | ready — pure component verified; strict wire slice next | Exact-rational isolated helpers and 27 focused/property tests verified; fresh 796 Python/956 Rust/5 examples/build/fmt/strict Clippy, 16 game-byte and 15 argument controls pass. Approved Rust compatibility cleanup `4d8f24e`. V2 integration gates 2–5 remain unpassed; no native/default switch/evaluation. |
 | P-02-managed-season-v2 | planned — after pure policy component | Versioned producer/native/trace integration, mechanism/compatibility/full-suite gates, then fixed three-season evaluation under the v2 contract. No completed implementation or new seasons yet. |
 | P-02-season-pool-policy-v1 | done — bounded pure component | [Contract/results](modeling/season-pool-policy-v1.md):19 focused/741Python/946Rust/4examples, build/fmt/strictClippy/source guards pass;30club pools independently reconcile historical PA/outs; mixed-role P1 fixed and reviewer-confirmed. Pure selection helpers only, not managed-season integration. |
 | P-02-season-usage-management-v1 | active — v1 NO-GO retained; v2 pure component next | [Plan](modeling/season-usage-management-v1.md), [first-slice results](modeling/season-usage-ledger-v1-results.md). Authenticated PA/outs targets, exactly-once ledger, explicit gaps, receipt-backed replay/comparison and PH parser support implemented. Three fixed seeds each2384complete/45refused; descriptive bands pass, individual errors retained. Maintainer explicitly supersedes verified dated rosters: use existing season club pools and soft PA/IP targets; no injury/minor-league dates. Fresh722Python/946Rust/4examples, build/fmt/strictClippy, source guards and compatibility pass. Both bounded probes are stopped; further acquisition is unnecessary for the revised pool scope, as detailed in first Resume. No S-01/S-02/G1–G5 waiver. |
@@ -176,6 +178,169 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | D-10 | confirmed completion contract | 2026-10-11 maintainer chose **B — Complete agreed box fields for a bounded event vocabulary** in interview `021d9e0d-b0b7-4164-a7c8-8bd88774c071`, then selected **“Approve the proposed matrix”** in interview `e75959e7-704f-40cc-943b-1a3a10e34285`, without edits. The [approved matrix](engine/g1-accounting-scope.md) governs required fields, event families, exclusions and observable checks. Fully specified simulated logs must yield complete agreed boxes; incomplete historical facts stay unknown. No completion/G1 approval, every-rare-rule/full-season-validation requirement or waiver inferred. The earlier technical CS boundary B is separate. | Implement one small test-first E-03 slice at a time; collect the required coverage/golden/property/historical evidence before E-03 completion and a separate G1 go/no-go. |
 
 ## Resume here
+
+### Pitcher usage policy v2 — verified pure component; strict wire slice next
+
+**Current task:** `P-02-pitcher-usage-policy-v2`, from preregistration `763a5fd`.
+The contract is committed and privately sealed before implementation. Core scope
+is a new pure policy module/test file and this ledger, not producer/runner or v2
+native integration. Maintainer separately approved two minimal Rust 1.99 source
+compatibility exceptions: the `pitch.rs` match guard and `text_game.rs` CLI pair
+iterator; no model/rule/default change or lint suppression.
+Reuse v1's authenticated pool/ledger context and global rest; add exact start-debt,
+scarce-club-first joint starter allocation, 80/100 budget decisions and continuous
+relief score/class ordering. Caller-provided relief workload profiles must remain
+observed/marked-prior support; this helper does not invent eligibility or budgets.
+No default switch, source acquisition/refit, season execution or gate change.
+
+**Observable acceptance:** test-first all-supported starter opportunities, club-
+specific usage/global rest, deterministic ties/permutations, mixed roles, scarce
+shared identities, off days/doubleheaders, first/final clocks, exact overuse and
+class boundaries, continuous/saturated relief scores, unknown versus zero, strict
+integer/count validation and caller immutability. Preserve all v1/runtime/source/
+contract bytes except the two explicitly approved Rust compatibility rewrites;
+run focused/property checks and full applicable project checks,
+retaining raw RED/GREEN failures and commands outside Git.
+
+**Verified pure implementation:** `preview/pitcher_policy_v2.py` and
+`tests/test_pitcher_policy_v2.py`; existing policy/runtime/default files remain
+frozen apart from the two approved Rust-only compatibility exceptions below.
+External evidence root:
+`/tmp/bbsim-pitcher-usage-policy-v2/`. `freeze.py` passed from `763a5fd`, binding
+396 tracked prerequisites and 11 source/model/DB/native paths plus the sealed
+preregistration. Initial interface RED: 23 expected missing-component failures;
+initial GREEN: 23 tests. Added boundary RED: six failures from empty-profile
+validation bypass, then GREEN: 26 tests. Added occupied-iterator RED: selected
+`b` instead of unoccupied `a`; fixed by snapshotting occupied identities once.
+All raw stdout/stderr remain at that external root; no threshold changes.
+
+**Fresh Python checks passed:** `proc_02b7` exited 0/98s,
+`python3 -B -W error /tmp/bbsim-pitcher-usage-policy-v2/verify.py`, retaining
+`verify.stdout/.stderr` and exclusive `verification-v1/` raw streams/report.
+Focused 27 tests (3,360 relief/56 starter reference cases), full Python Werror
+**796 tests**, diff and before/after 396-tracked/11-external source guards passed.
+The full Python suite includes existing generic native CLI regressions, not v2-
+native execution or season evaluation. Code SHA256
+`0fcfedf6c6e601c69188aa5e9498f1e0b6d63c880b8064c278e70826eedc9511`;
+test SHA256 `2f02181b5a33b3c2a0a2d37e41ed92ae19e9a4f6a1d49bbc154ccc6a4ff5c21f`.
+
+**Maintainer Rust-update check completed with a lint failure:** requested after
+Python checks started. Observed `rustc 1.99.1 (58cf8f9c3 2026-10-13)`, Cargo
+1.99.1, `stable-aarch64-apple-darwin`. `proc_ed97` exited **1/502s** for
+`python3 -B -W error /tmp/bbsim-rust-1.99.1-compat-v1/verify.py`; raw
+`verify.stdout/.stderr`, exclusive `checks-v1/` and `checks-v1/report.json`
+retain every result. Compiler/Cargo versions/binary hashes stayed fixed; builds
+used an isolated `CARGO_TARGET_DIR` under that evidence directory.
+
+- Offline locked examples build/fmt **passed**; full Rust **956 tests/66 summaries**
+  and examples **4 tests/5 summaries** passed, zero failed/ignored.
+- **All 16 byte controls passed:** 12 historical accounting/radio/detailed controls
+  against the frozen binary plus four retained managed-v1 prefix accounting outputs.
+- Strict all-target Clippy **failed (101)**: `clippy::collapsible_match` at
+  `engine/src/pitch.rs:511`, nested `if` inside `RecoveryReview::AfterAdvance`.
+  Rust 1.99 now recommends a match guard; the strict `-D warnings` promotes it
+  to an error. Raw diagnostic: `checks-v1/clippy.stderr`. No lint suppression,
+  source edit, threshold change or test weakening was performed.
+- All 396 tracked prerequisites/11 external paths remained unchanged. Frozen native
+  SHA256 `f226b27b6562aafa9df5910a4c56ce0b58a8e2080d7b06d752279e63cabe04d8`;
+  isolated newly compiled native SHA256
+  `92c146022a551669268f34bc0094fa48f09cdd15d86b3f7a134d69ac15121a9f`.
+  Original `engine/target` binaries and preview servers remain untouched.
+
+This establishes tested build/game-output compatibility, **not** a clean strict
+lint gate or universal behavior equivalence. V2 integration gates 2–5 remain
+unpassed. The earlier Python report records Rust as not yet rerun at its earlier
+checkpoint; it is preserved rather than rewritten retrospectively.
+
+**Maintainer approval and active follow-up:** maintainer answered **yes** to the
+minimal match-guard cleanup and fresh verification. The only source exception is
+`engine/src/pitch.rs`: move the unchanged home-advance predicate into its existing
+`RecoveryReview::AfterAdvance` match guard; false still falls through `_ => {}`.
+No lint suppression, rule/credit change or new policy behavior. Existing positive/
+negative recovery/automatic-K matrices cover this validation path. The compiler's
+Clippy diagnostic is the retained RED; all behavior checks will be rerun, not
+inferred from that earlier pass.
+
+`/tmp/bbsim-rust-1.99.1-compat-v2/freeze.py` passed **before editing** and records
+approval, original source/failed-diagnostic hashes and the already-tested pure
+Python code/test hashes. Approved `pitch.rs` SHA256:
+`8035dcd20a9a7f0b54c857311813297d78d0c59eea1552b974b4d7e177795f0e`.
+`proc_fa74` now runs
+`python3 -B -W error /tmp/bbsim-rust-1.99.1-compat-v2/verify.py` with exclusive
+`checks-v1/` and a fresh isolated target directory: offline examples build, fmt,
+strict all-target Clippy, full Python Werror, Rust and example tests, diff, the
+same 16 historical/managed-v1 byte controls, and before/after guards for the other
+395 tracked prerequisites, 11 external paths and both pure Python files. Original
+failed-upgrade logs/build artifacts remain untouched at the v1 evidence root.
+
+**Follow-up result:** `proc_fa74` exited **1/556s**. Offline build, full Python
+**796 tests**, Rust **956 tests/66 summaries**, examples **4 tests/5 summaries**,
+diff and all **16 byte controls** passed; zero failed/ignored tests. Raw results
+are in `/tmp/bbsim-rust-1.99.1-compat-v2/checks-v1/report.json` and the per-check
+streams. Two fast gates failed: fmt required the guard closure's standard layout;
+strict Clippy, now able to check the CLI after the library cleanup, found the new
+`chunks_exact_to_as_chunks` lint at `engine/examples/text_game.rs:48`.
+
+The approved guard's layout was corrected without changing its predicate; fresh
+`cargo fmt --manifest-path engine/Cargo.toml --check` **passed**, retaining
+`fmt-followup.stdout/.stderr`. Formatted `pitch.rs` SHA256 is now
+`40ba5589735413ad73fcc961816ab9ab8ab7e7f5d0faf25e9002613cc34a2b88`.
+The earlier v2 report/hashes describe the pre-format source and remain untouched;
+that report is not a clean final verification of the formatted source.
+
+**Second compatibility change approved/applied:** maintainer answered **yes** to
+`text_game.rs`'s `as_chunks::<2>()` pair iterator/remainder cleanup, preserving
+validation/error precedence and messages. Added one parser regression test for
+unknown/empty/duplicate pair errors preceding a trailing missing value. No new
+CLI option, filesystem behavior, dependency, rule or model change.
+
+Before editing, `/tmp/bbsim-rust-1.99.1-compat-v3/freeze.py` bound the explicit
+two-file exception, failed diagnostics and both already-verified pure Python
+files. Fast-v1 stopped on formatting the new assertion (2s; raw failure retained);
+layout corrected, and **fast-v2 passed (9s)**: fmt, strict all-target Clippy and
+all **3 text-game parser tests**. Command:
+`python3 -B -W error /tmp/bbsim-rust-1.99.1-compat-v3/fast-v2.py`; raw
+`fast-v2.stdout/.stderr`, `fast-v2/` report/streams. Current `text_game.rs` SHA256:
+`493db773a42fae3055b80f245ca0789352b251d7770eed0ef09ba9c1a3f4e38b`.
+
+**Fresh full verification passed:** `proc_309a` exited **0/540s**,
+`python3 -B -W error /tmp/bbsim-rust-1.99.1-compat-v3/verify.py`, exclusive
+`checks-v1/`, shared only with its successful fast stage's isolated `target/`.
+It required those fast gates/source hashes, then passed offline build/fmt/strict
+all-target Clippy/full Python **796 tests**, Rust **956 tests/66 summaries**,
+examples **5 tests/5 summaries** (one new parser regression), and diff. Zero
+failed/ignored tests. All **16 game-output byte controls** and **15 frozen/new
+CLI argument controls** matched (exit/stdout/stderr, including error
+precedence, unknown/empty/duplicate/missing values and invalid seeds/formats).
+Guards bind the other 394 tracked prerequisites, both pure Python files, 11
+external paths and the toolchain before/after. Original target binaries and
+preview processes stay untouched; v1/v2 failed evidence directories are preserved.
+
+`checkpoint.py` independently rechecked the raw counts/completion markers,
+source/data hashes, five-file aggregate scope and all 345 local documentation
+links; `checkpoint-first.stdout/.stderr` retain that pass. Rust compatibility
+changes were committed separately as `4d8f24e` after verification. The pure helper,
+27-test suite and ledger comprise this implementation checkpoint; no producer,
+runner, native v2 selector/schema/trace or default switch is included.
+
+**Verified private evidence seal:**
+`~/Library/Application Support/bbsim2026/work-checkpoints/pitcher-usage-policy-v2-pure-verified-20261018-v1/`.
+`proc_f6c9` exited **0/1s**; `seal.py` verified all **390 archive members**, raw
+failures/passes and exact source bytes. `evidence.tar.gz` is **870,500 bytes**,
+SHA256 `4cfa17b95d702e95548919d64a2af5ee0f85688c1c418b4f9c99030c68d14426`;
+verified `source.bundle` is based on `4d8f24e`, accompanied by the pending pure-
+implementation patch and `receipt.json`. Archive excludes Cargo caches and full
+source datasets. Only this receipt note is added to the archived pre-seal ledger;
+no code or tests changed after successful verification. Private local durability
+is not a remote backup or public-data redistribution approval.
+
+**Next concrete action:** begin contract gate 2 with failing strict v2 wire/entry-
+trace interface tests; keep v1 fixtures and default path exact. Only proceed to
+native shared selector/producer/runner integration and season evaluation through
+the remaining preregistered gates. **P-02 v2 is not complete:** gates 2–5 remain
+unpassed, managed-v1 pitcher usage stays NO-GO, and no S-03/G1–G5/adoption or
+predictive-accuracy approval follows from this pure-component checkpoint.
+No push, UI run or v2 season evaluation was performed.
 
 ### Pitcher usage policy v2 contract — completed preregistration only
 
