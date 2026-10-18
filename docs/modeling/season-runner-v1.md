@@ -1,5 +1,16 @@
 # P-02-season-runner-v1 — controlled headless historical-lineup batch
 
+## Current played-game policy — maintainer approval, 2026-10-18
+
+Abnormal **played** games are now simulated once as ordinary full games from their
+recorded starting lineups. This explicitly supersedes item 3 of the original
+acceptance below; those earlier refusals and measured counts remain historical
+evidence. [Policy and test-first acceptance](season-game-inputs-v1.md#approved-regular-full-game-policy--2026-10-18).
+The manifest adds `simulation_policy: regular-full-game-v1`; normal 2019 endings,
+identity seeds, source flags/schedule reconciliation, roster refusals, accounting
+and receipt-last publication are unchanged. No suspension replay or historical
+shortening logic is needed. An unplayed schedule slot still gets no invented game.
+
 ## Acceptance fixed before code and new season measurements
 
 Base `e4d1bd9`; prerequisite [generic inputs](season-game-inputs-v1.md) is verified.

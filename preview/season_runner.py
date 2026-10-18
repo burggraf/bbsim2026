@@ -163,7 +163,7 @@ def run(source,inputs,pins,binary,baseline,contact,master_seed,output):
             row.update(status='simulation_failed',reason=str(error))
         for name in ['stdout.tsv','stderr.txt']:pin(folder/name)
     summary=accumulate(results)
-    report=dict(format='controlled-season-v1',master_seed=master_seed,seed_algorithm='sha256:bbsim-season-v1:first8-big-endian',
+    report=dict(format='controlled-season-v1',simulation_policy='regular-full-game-v1',master_seed=master_seed,seed_algorithm='sha256:bbsim-season-v1:first8-big-endian',
         games=rows,counts=dict(sorted(Counter(r['status'] for r in rows).items())),schedule=source['readiness']['rows'],
         complete_season=bool(rows) and all(r['status']=='complete' for r in rows),
         versions=results[0]['versions'] if results else None,

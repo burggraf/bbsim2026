@@ -114,7 +114,7 @@ class PublicationTests(unittest.TestCase):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'source';source.write_text('original');pins=(real.digest(source),)
-            bundle=dict(game_id='LAN201904010',lineup='one\n',cast='two\n')
+            bundle=dict(game_id='LAN201904010',lineup='one\n',cast='two\n',simulation_policy='regular-full-game-v1')
             with patch('preview.real_lineup.os.fsync',side_effect=lambda _:source.write_text('changed')):
                 with self.assertRaisesRegex(ValueError,'changed'):game._publish(bundle,[source],pins,root/'bad')
             self.assertFalse((root/'bad/receipt.json').exists())
@@ -122,6 +122,7 @@ class PublicationTests(unittest.TestCase):
             self.assertTrue((root/'good/receipt.json').exists())
             self.assertEqual((root/'good/lineup.tsv').read_text(),'one\n')
             self.assertEqual(receipt['game_id'],'LAN201904010')
+            self.assertEqual(receipt['simulation_policy'],'regular-full-game-v1')
             with self.assertRaisesRegex(ValueError,'overwrite'):game._publish(bundle,[source],pins,root/'good')
 
     def test_drift_after_first_file_never_publishes_an_acceptance_receipt(self):
@@ -140,16 +141,10 @@ class PublicationTests(unittest.TestCase):
             self.assertFalse((root/'bad/cast.tsv').exists())
             self.assertFalse((root/'bad/receipt.json').exists())
 
-    def test_exception_flags_are_refused_not_dropped_or_normalized(self):
+    def test_unknown_game_still_refuses(self):
         from preview import game_inputs as game
-        for flag in ['shortened','suspended','forfeit','tied']:
-            result=dict(shortened=False,suspended=False,forfeit=False,tied=False,duration_outs=54)
-            result[flag]=True
-            source=dict(data=dict(game=[dict(game_id='LAN201904010')],person=[],appearance=[]),
-                readiness=dict(games=[dict(game_id='LAN201904010',results=[result])]))
-            with self.subTest(flag=flag),self.assertRaisesRegex(ValueError,'Exceptional'):
-                game.build_game(source,'LAN201904010')
-            with self.assertRaisesRegex(ValueError,'Unknown'):game.build_game(source,'OTHER')
+        with self.assertRaisesRegex(ValueError,'Unknown'):
+            game.build_game(dict(data=dict(game=[],person=[],appearance=[])),'OTHER')
 
     def test_unaccepted_source_refuses_without_output(self):
         from preview import game_inputs as game

@@ -125,6 +125,51 @@ oracle/raw seed21 failure retained in `/tmp/bbsim-season-game-inputs-v1/`;
 registered games/seeds in `cohort-v2/`; all integer credit assertions remain exact.
 No engine or probability/policy change was made for this repair.
 
+## Approved regular-full-game policy — 2026-10-18
+
+The maintainer explicitly chooses ordinary full simulations for abnormal played
+schedule games, including shortened and suspended games. This supersedes the
+historical-result refusal below for simulation inputs, not source auditing or
+exact historical replay. Start once from the recorded starting lineup; use normal
+2019 nine-inning/extra-inning/walk-off endings. Never stop at historical duration,
+resume at the suspension point, force a historical tie/forfeit/result, or manufacture
+an unplayed schedule slot. Retain original source flags unchanged in the audit.
+
+Acceptance before code: valid supported lineup/cast inputs are identical under
+shortened/suspended/tied/forfeit flags, historical durations and absent/ambiguous
+result records; no source mutation. Unknown game IDs, unsupported personnel and
+source/publication guards still refuse. Export receipts and season manifests label
+`simulation_policy: regular-full-game-v1`; no engine/RNG/rating/default CLI byte
+changes. Run regression tests and the full Python suite; rebuild all cached game
+inputs to distinguish result-policy refusals from genuine personnel refusals, and
+run newly admitted inputs through native completion/accounting checks. Preserve
+prior proofs as historical evidence; do not overwrite their counts.
+
+### Verified policy correction
+
+All 2,429 played IDs rerun at master seed 1: **2,384 complete / 45 input_refused /
+zero native failures**, intentional CLI exit 2, `complete_season=false`.
+Nine abnormal games newly completed and repeated byte-identically; each defense
+recorded at least eight innings, and replacing their historical result metadata
+with ordinary-result metadata produced identical input bundles. All 2,375 formerly
+completed games retained identical lineup/cast/stdout/stderr bytes (9,500 artifact
+pairs); all 2,430 schedule rows and five source hashes stayed unchanged.
+
+Remaining refusals are **40 pitching identity/eligibility conflicts, four unsupported
+starting lineups and one cast with unknown appearance/workload evidence**. The five
+newly exposed data refusals are DET201905190, CHA201905270, NYN201906130,
+BOS201908070 (lineups), and ATL201906110 (cast). These are no longer refusals merely
+because the historical games were abnormal; this policy does not invent personnel.
+Independent accumulation from raw native rows reconciles every team/player split,
+unknown propagation and league PA/BF/runs/wins/losses across all 30 teams.
+
+Fresh **27 focused tests / 678 full Python tests** pass with ResourceWarnings as
+errors. Test-first failures, complete raw logs, source/binary pins, proof and
+verification are retained in private/local `/tmp/bbsim-regular-game-policy-v1/`.
+No Rust source, native binary, outcome RNG, manager or probability arithmetic
+changed; Rust suites were not rerun for this Python-only policy correction.
+This is not complete-season/fidelity/official-stat acceptance or gate signoff.
+
 ## Verified bounded results
 
 Completed on base `d7b6cde` without changing probability arithmetic, manager policy,

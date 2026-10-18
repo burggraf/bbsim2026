@@ -160,6 +160,32 @@ class PreparationTests(unittest.TestCase):
         self.assertEqual(prepared,ordinary)
         self.assertEqual(inventory.call_count,1)
 
+    def test_historical_results_do_not_change_full_game_inputs(self):
+        for dh in [False,True]:
+            report,witness,bullpen,workloads=fixtures.GenericCastTests().parts(dh)
+            for role in report['roles'].values():
+                for profile in role['profiles']:profile.setdefault('events',profile['included_pa'])
+            profiles={p['player_id']:p for p in report['roles']['pitcher']['profiles']}
+            for p in workloads['players']:p['ability_profile']=copy.deepcopy(profiles[p['player_id']])
+            source=dict(data=dict(game=[dict(game_id=witness['game_id'])],person=[],appearance=[
+                dict(game_id=witness['game_id'],fielding_position=1,player_id=p['player_id'])
+                for p in workloads['players']]),report=report,rows=[])
+            normal=dict(forfeit=False,shortened=False,suspended=False,tied=False,duration_outs=54)
+            cases=[[normal]]+[[dict(normal,**{flag:True})] for flag in ['shortened','suspended','forfeit','tied']]
+            cases += [[dict(normal,duration_outs=n)] for n in [22,45,66,None]]+[[],None,[normal,normal]]
+            with patch('preview.game_inputs.lineup.inventory',return_value=dict(witnesses=dict(primary=witness))),\
+                 patch('preview.game_inputs.bullpen.inventory',return_value=bullpen),\
+                 patch('preview.game_inputs.workload.inventory',return_value=workloads):
+                for results in cases:
+                    source['readiness']=dict(games=[dict(game_id=witness['game_id'],results=results)])
+                    before=copy.deepcopy(source)
+                    with self.subTest(dh=dh,results=results):
+                        actual=season.game.build_game(source,witness['game_id'])
+                        self.assertEqual(actual['lineup'],season.game.real.encode_witness(witness,generic=True))
+                        self.assertEqual(actual['cast'],season.game.cast.encode(report,witness,bullpen,workloads,empirical=True,generic=True))
+                        self.assertEqual(actual.get('simulation_policy'),'regular-full-game-v1')
+                        self.assertEqual(source,before)
+
 
 class BatchTests(unittest.TestCase):
     def test_destination_guards_precede_source_reads(self):
@@ -176,6 +202,7 @@ class BatchTests(unittest.TestCase):
             result=season.run(source,[],[],Path('/missing'),Path('/missing'),Path('/missing'),1,Path(directory)/'batch')
             self.assertEqual([r['status'] for r in result['games']],['input_refused']*2)
             self.assertFalse(result['complete_season'])
+            self.assertEqual(result.get('simulation_policy'),'regular-full-game-v1')
             self.assertEqual(result['schedule'],source['readiness']['rows'])
             self.assertTrue((Path(directory)/'batch/receipt.json').exists())
 

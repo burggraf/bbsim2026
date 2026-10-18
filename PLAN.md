@@ -13,6 +13,8 @@ Decisions confirmed during planning:
 - Full-season replays use the **actual schedule and date-appropriate team membership**, with modeled availability and autonomous managers. Historical appearance/transaction information may be incomplete, so availability estimates must be labeled rather than presented as known injuries or active rosters.
 - **DuckDB is the initial local-cache choice** because baseball.com's current public data is a DuckLake/Parquet catalog accessible with DuckDB. A packaging/filtered-download spike must prove this works in the Tauri targets and leaves a self-contained offline season file. If not, use SQLite for the local cache behind the same repository interface; do not bind simulation rules to either database.
 
+**Played-game normalization (maintainer, 2026-10-18):** simulate abnormal historical games, including shortened and suspended games, once from their recorded starting lineups as ordinary full games under the pilot-year ending rules. Do not reproduce historical truncation, suspension/resumption, ties or forfeited results. Preserve those source flags for auditing; do not invent games for unplayed schedule slots. This policy does not relax lineup legality or certify exact historical replay.
+
 Scope boundaries: MLB regular-season games only for the pilot; no pitch-by-pitch simulation, 3D animation, multiplayer, or claim of historically exact game results. An exhibition between two chosen teams is not a replay of a specific historical game. Human managerial overrides can follow the first automatic-manager version.
 
 ## Source and data contract

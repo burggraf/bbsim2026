@@ -67,10 +67,6 @@ def build_game(source,game_id):
     data=source['data'];games=data['game'];people=data['person'];appearances=data['appearance']
     target=next((g for g in games if g['game_id']==game_id),None)
     if target is None:raise ValueError('Unknown source game ID')
-    result=next(g for g in source['readiness']['games'] if g['game_id']==game_id)['results']
-    if (len(result)!=1 or any(result[0][k] is not False for k in ['forfeit','shortened','suspended','tied'])
-            or type(result[0]['duration_outs']) is not int or result[0]['duration_outs']<=0):
-        raise ValueError('Exceptional/unknown game result requires a separate replay policy')
     target_rows=[a for a in appearances if a['game_id']==game_id]
     witness=lineup.inventory([target],people,target_rows)['witnesses']['primary']
     if witness is None:raise ValueError('Unsupported historical starting lineup')
@@ -104,7 +100,7 @@ def build_game(source,game_id):
     measured['provenance']=dict(snapshot_sha256=real.SNAPSHOT_SHA,supplement_sha256=real.SUPPLEMENT_SHA,
         opportunity_report_sha256=ratings.REPORT_SHA,lineup_report_sha256=real.REPORT_SHA,
         attribution=real.ATTRIBUTION,workload_recipe_sha256=cast.WORKLOAD_RECIPE_SHA,outcome_events_sha256=cast.EVENTS_SHA)
-    return dict(game_id=game_id,use_dh=witness['use_dh'],cold_profiles=cold,
+    return dict(game_id=game_id,use_dh=witness['use_dh'],cold_profiles=cold,simulation_policy='regular-full-game-v1',
         cast_sizes={t['side']:len(t['observed_pitchers']) for t in support['teams']},
         lineup=real.encode_witness(witness,generic=True),
         cast=cast.encode(report,witness,support,measured,empirical=True,generic=True))
