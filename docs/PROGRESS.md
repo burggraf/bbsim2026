@@ -6,7 +6,7 @@
 
 **Latest completed analysis:** `P-02-pitcher-usage-diagnosis-v1` — [read-only attribution](modeling/pitcher-usage-diagnosis-v1.md). All14,574 starter decisions reconstructed; fixed top-five rotations take4,749–4,753 starts versus3,680 historically. Missing qualifying entries never enter a cast in24/22/20 cases; another0/2/4 are offered relief but never pitch. Negative-pace relief appearances and class priority are verified, but exact entry-state attribution is unavailable. V1 remains NO-GO; no simulator/policy/source changes.
 
-**Latest completed implementation checkpoint:** isolated v2 pitching helpers and approved Rust 1.99 compatibility cleanups. Fresh 796 Python/956 Rust/5 example tests, build/fmt/strict Clippy, 16 game-byte controls and 15 CLI argument controls pass. Rust cleanup commit `4d8f24e`; [pure-component handoff](#resume-here). No v2 native/producer/runner integration or usage evaluation.
+**Latest verified implementation preparation:** native v2 workload-value parsers and exact relief ranks; fresh 796 Python/966 Rust/5 example tests, build/fmt/strict Clippy and 16 game-byte controls pass. Ten focused tests include 1,680 independent ratio cases; eight deliberately defective external copies fail those tests. [Current handoff](#resume-here). Live native selection, full personnel/entry traces and producer/runner integration remain incomplete; no v2 season or accuracy claim. Earlier Python helper/Rust 1.99 compatibility evidence remains below.
 
 **Latest completed managed-season checkpoint:** `P-02-managed-season-v1` implementation/evaluation
 complete; **individual-pitcher usage NO-GO**. All three seeds complete2,429/2,429games
@@ -58,7 +58,7 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | P-02-managed-season-v1 | done — verified implementation/evaluation; pitcher-usage NO-GO | [Results](modeling/managed-season-v1-results.md), [contract](modeling/managed-season-v1.md). Three seeds each2,429complete/zero refusals/native failures; batter100%/aggregate limits pass, pitcher60.26–62.48% fails80%,24qualifying uncomparable per seed. Code `fb2cde0`;769Python/956Rust/4examples/full checks,12legacy byte controls,review/source guards pass. No validated usage/fidelity/default/gate claim. |
 | P-02-pitcher-usage-diagnosis-v1 | done — bounded read-only attribution | [Report/reproduction/limits](modeling/pitcher-usage-diagnosis-v1.md). Three frozen seasons/14,574 starter decisions/7,287 native outputs reconciled;43,765 pinned paths unchanged. Separate literal TSV checker passes. Top-five restriction and extra ordering explain opportunity exclusion; relief class/pace exposure verified without claiming unrecorded entry-state causes. V1 NO-GO preserved; no simulation/policy/outcome/source change. |
 | P-02-pitcher-usage-policy-v2-contract | done — bounded preregistration, not implementation | [Contract](modeling/pitcher-usage-policy-v2.md): exact starter/relief rankings, unchanged empirical budgets/rest/legal/outcome boundaries, opt-in v2 schemas/entry evidence and fixed seeds1/2/3. Original bands retained; additional coverage/role/start gates. Source-only preflight binds455batter/565pitcher/240starter-role/331relief-role/250start-count entries and395unchanged protected paths. No v2 simulation/fit/code or gate signoff. |
-| P-02-pitcher-usage-policy-v2 | ready — pure component verified; strict wire slice next | Exact-rational isolated helpers and 27 focused/property tests verified; fresh 796 Python/956 Rust/5 examples/build/fmt/strict Clippy, 16 game-byte and 15 argument controls pass. Approved Rust compatibility cleanup `4d8f24e`. V2 integration gates 2–5 remain unpassed; no native/default switch/evaluation. |
+| P-02-pitcher-usage-policy-v2 | active — native primitives verified; full wire/trace integration next | Python helpers plus native strict workload values/exact relief ranks verified. Fresh 796 Python/966 Rust/5 examples/build/fmt/strict Clippy and 16 game-byte controls pass; ten native tests/1,680 ratio cases and eight rejected external mutants. Full personnel/entry traces/shared live selector/producer/runner and gates 2–5 remain incomplete; no default switch/evaluation. |
 | P-02-managed-season-v2 | planned — after pure policy component | Versioned producer/native/trace integration, mechanism/compatibility/full-suite gates, then fixed three-season evaluation under the v2 contract. No completed implementation or new seasons yet. |
 | P-02-season-pool-policy-v1 | done — bounded pure component | [Contract/results](modeling/season-pool-policy-v1.md):19 focused/741Python/946Rust/4examples, build/fmt/strictClippy/source guards pass;30club pools independently reconcile historical PA/outs; mixed-role P1 fixed and reviewer-confirmed. Pure selection helpers only, not managed-season integration. |
 | P-02-season-usage-management-v1 | active — v1 NO-GO retained; v2 pure component next | [Plan](modeling/season-usage-management-v1.md), [first-slice results](modeling/season-usage-ledger-v1-results.md). Authenticated PA/outs targets, exactly-once ledger, explicit gaps, receipt-backed replay/comparison and PH parser support implemented. Three fixed seeds each2384complete/45refused; descriptive bands pass, individual errors retained. Maintainer explicitly supersedes verified dated rosters: use existing season club pools and soft PA/IP targets; no injury/minor-league dates. Fresh722Python/946Rust/4examples, build/fmt/strictClippy, source guards and compatibility pass. Both bounded probes are stopped; further acquisition is unnecessary for the revised pool scope, as detailed in first Resume. No S-01/S-02/G1–G5 waiver. |
@@ -178,6 +178,78 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | D-10 | confirmed completion contract | 2026-10-11 maintainer chose **B — Complete agreed box fields for a bounded event vocabulary** in interview `021d9e0d-b0b7-4164-a7c8-8bd88774c071`, then selected **“Approve the proposed matrix”** in interview `e75959e7-704f-40cc-943b-1a3a10e34285`, without edits. The [approved matrix](engine/g1-accounting-scope.md) governs required fields, event families, exclusions and observable checks. Fully specified simulated logs must yield complete agreed boxes; incomplete historical facts stay unknown. No completion/G1 approval, every-rare-rule/full-season-validation requirement or waiver inferred. The earlier technical CS boundary B is separate. | Implement one small test-first E-03 slice at a time; collect the required coverage/golden/property/historical evidence before E-03 completion and a separate G1 go/no-go. |
 
 ## Resume here
+
+### Pitcher usage v2 — native workload-wire/ranking preparation verified
+
+**Current task:** `P-02-pitcher-usage-policy-v2`, continued on maintainer request
+from clean `4662bab`. This bounded slice adds native clock/relief-usage value
+parsers and exact relief-ranking primitives, with a frozen
+[workload-value wire appendix](modeling/pitcher-usage-v2-native-wire.md) and
+Rust boundary/property tests. Existing game callers, schemas/defaults, Python
+policy and source inputs stay unchanged. Full personnel/entry-trace interfaces,
+shared live selector, producer/runner/rebuild and gates 2–5 remain incomplete.
+
+**Acceptance before implementation:** canonical u32 counts; `0 <= c < N <=162`;
+unknown versus known-zero targets; exact continuous/clipped debt and 0.25 class
+bonus; unclipped-debt ties; inning 5/6 and gap 3/4/class boundaries; checked maximum
+counts; no implicit eligibility/budget invention. Retain failing interface tests,
+then run fresh full applicable checks and the 16 retained game-byte controls.
+No season runs, default changes, dependencies or outcome/engine-rule edits.
+
+**Freeze:** `/tmp/bbsim-pitcher-usage-v2-native-primitives-v1/freeze.json`
+authenticates 398 other tracked prerequisites and 11 external source/model/DB/
+original-native paths before edits. Planned files: new
+`engine/examples/support/pitcher_policy_v2.rs`,
+`engine/tests/pitcher_policy_v2.rs`,
+`docs/modeling/pitcher-usage-v2-native-wire.md`, and this ledger only.
+**Focused preparation checks passed:** missing-module interface RED and three
+missing-target-flag interface RED diagnostics are retained at that root. After
+implementation, direct `rustc --edition=2021 --test engine/tests/pitcher_policy_v2.rs`
+and the resulting test binary passed all **10 tests**, including **1,680**
+independent piecewise-ratio cases, canonical wire rejection, unknown/zero,
+class/situation boundaries, saturated/ratio ties and maximum-count cross-products.
+Raw `interface-red.*`, `unknown-red.*`, `compile-v1/v2.*`, `focused-v1/v2.*`
+are retained. These are compiler interface REDs, not observed live-game failures.
+
+**Fresh full verification prepared:** run
+`python3 -B -W error /tmp/bbsim-pitcher-usage-v2-native-primitives-v1/verify.py`.
+The exclusive `checks-v1/` recipe runs fmt/strict all-target Clippy first, then
+focused/build/full Python Werror/full Rust/examples/diff and 16 historical/v1
+byte controls, with before/after source/input guards and an isolated target.
+Do not rerun that exclusive destination in place. **`proc_7475` exited 0/564s**;
+raw driver streams are `verify.stdout/.stderr`. Fresh results: **796 Python
+Werror tests, 966 Rust tests/67 summaries, five example tests/five summaries,
+ten focused native tests**, offline locked examples build, fmt, strict all-target
+Clippy and diff all pass; zero failed/ignored tests. All **16 byte controls**
+(12 historical DH/non-DH × bench/no-bench × accounting/radio/detailed, plus four
+retained managed-v1 first-game contexts) match. The report authenticates 398
+other tracked paths and 11 external inputs before/after; original target binaries
+and both preview processes were untouched. Independent raw-summary recount on
+completion confirms these counts and all eight check exits. This verifies the
+standalone native primitives, **not** a working v2 manager or improved usage.
+`checkpoint.py` independently authenticates the raw report/control hashes, counts,
+eight rejected mutants and **775 local documentation links**. Initial checker
+failure (`checkpoint-first.stderr`) was a historical inline-code example wrongly
+parsed as a Markdown link; reusing the existing code-fence/inline-code exclusion
+fixes the checker, not repository prose. `checkpoint-second.*` retains the pass.
+No tested code changed afterward. This is a local verified preparation checkpoint;
+raw evidence remains under the external root and has not been remotely backed up.
+
+**Additional sensitivity check passed:**
+`python3 -B -W error /tmp/bbsim-pitcher-usage-v2-native-primitives-v1/mutations.py`
+compiled eight deliberately defective copies outside Git; all eight failed the
+unchanged native tests (exit 101). Defects cover look-ahead, debt floor, class/
+inning/gap boundaries, saturated-debt ties, unknown-as-zero and noncanonical
+counts. Raw compile/test streams and `mutations-v1/report.json` are retained;
+working source is not mutated. This is test-sensitivity evidence, not gameplay
+or full-suite acceptance.
+
+**Next concrete action:** finish the full v2 personnel and entry-trace interface
+RED tests before wiring live selection. Reuse these tested native ranks; one
+selector must later serve hooks, PH probes and restoration. The workload-value
+appendix does not certify a complete cast reader or entry sidecar. Gate 2 remains
+active/incomplete, gates 3–5 unpassed, v1 usage NO-GO retained. No v2 seasons,
+default change, push, UI work or new maintainer decision is needed here.
 
 ### Pitcher usage policy v2 — verified pure component; strict wire slice next
 
