@@ -58,8 +58,20 @@ def actor_bindings(bundle):
         fields={};records={}
         lines=bundle['bench'].splitlines()
         if not lines or lines[0]!='key\tvalue':raise ValueError('Invalid bench header')
+        managed='format\tseason-pool-bench-v1\n' in bundle['bench']
         metadata={'format','game_id','policy','availability_basis','defense_basis',
             'snapshot_sha256','supplement_sha256','opportunity_report_sha256','attribution'}
+        actor_fields={'name','positions','counts'}
+        expected=dict(format='assumed-game-bench-v1',policy=bench.POLICY,
+            availability_basis=bench.AVAILABILITY,defense_basis=bench.DEFENSE_BASIS)
+        if managed:
+            from preview import season_manager as manager
+            metadata.add('season_policy');actor_fields.add('pace')
+            expected.update(format='season-pool-bench-v1',season_policy=manager.POLICY,availability_basis=manager.AVAILABILITY)
+            for key,fmt in [('lineup','season-pool-lineup-v1'),('cast','season-pool-pitching-cast-v1')]:
+                f=dict(line.split('\t') for line in bundle[key].splitlines()[1:])
+                if any(f.get(k)!=v for k,v in dict(format=fmt,season_policy=manager.POLICY,
+                        availability_basis=manager.AVAILABILITY).items()):raise ValueError('Mixed managed personnel modes')
         for line in lines[1:]:
             cells=line.split('\t')
             if len(cells)!=2 or not all(cells) or cells[0] in fields:raise ValueError('Invalid/duplicate bench field')
@@ -67,16 +79,16 @@ def actor_bindings(bundle):
             if key in metadata:continue
             parts=key.split(':')
             if (len(parts)!=3 or parts[0] not in result or not re.fullmatch(r'[a-z0-9-]{1,64}',parts[1])
-                    or parts[2] not in {'name','positions','counts'}):raise ValueError('Unknown bench actor role')
+                    or parts[2] not in actor_fields):raise ValueError('Unknown bench actor role')
             records.setdefault((parts[0],parts[1]),{})[parts[2]]=value
         lineup_game=next((line.split('\t',1)[1] for line in bundle['lineup'].splitlines() if line.startswith('game_id\t')),None)
         if fields.get('game_id')!=lineup_game or lineup_game is None:raise ValueError('Mismatched bench game')
-        for key,value in [('format','assumed-game-bench-v1'),('policy',bench.POLICY),
-                ('availability_basis',bench.AVAILABILITY),('defense_basis',bench.DEFENSE_BASIS)]:
+        for key,value in expected.items():
             if fields.get(key)!=value:raise ValueError('Mismatched bench metadata')
         occupied={pid for roles in result.values() for ids in roles.values() for pid in ids}
         for (side,pid),record in records.items():
-            if set(record)!={'name','positions','counts'} or pid in occupied:raise ValueError('Conflicting/incomplete bench actor')
+            if set(record)!=actor_fields or pid in occupied:raise ValueError('Conflicting/incomplete bench actor')
+            if managed and record['pace'] not in {'-1','0','1'}:raise ValueError('Invalid bench usage preference')
             occupied.add(pid)
             result[side]['batter'].append(pid);result[side]['fielder'].append(pid)
         for roles in result.values():
@@ -104,6 +116,13 @@ def parse_accounting(text,entry):
     ph_metadata=dict(pinch_hitting=bench.POLICY,availability_basis=bench.AVAILABILITY,defense_basis=bench.DEFENSE_BASIS)
     expected_keys={'format','game','seed'}|VERSIONS
     if expected_format=='controlled-accounting-ph-v1':expected_keys|=ph_metadata.keys()
+    elif expected_format=='controlled-accounting-managed-v1':
+        from preview import season_manager as manager
+        ph=entry.get('pinch_hitting','late-close-expected-bases-ph-usage-v1')
+        if ph not in {'disabled','late-close-expected-bases-ph-usage-v1'}:raise ValueError('Unknown managed PH policy')
+        ph_metadata.update(pinch_hitting=ph,availability_basis=manager.AVAILABILITY,
+            season_policy=manager.POLICY,manager='season-pool-workload-context-2019-v1')
+        expected_keys|=ph_metadata.keys()
     elif expected_format!='controlled-accounting-v1':raise ValueError('Unknown accounting schema')
     ids=dict(Away=entry['away_team_id'],Home=entry['home_team_id'])
     bindings=entry['role_actors']
