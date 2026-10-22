@@ -210,6 +210,15 @@ source changes rather than treating the aggregate flag as a clean pass.
 `git diff --check` passed before the source commit. A bounded outgoing-path/history
 scan found no credential-pattern matches or files over 2 MB; not a security audit.
 
+**Migration inventory (2026-10-22):** `3097149` pushed the root handoff; HEAD and
+actual remote main matched. Ignored repository content is only rebuildable Rust
+`engine/target/` (~4 GB) and Python bytecode caches. Separately transfer the private
+`~/Library/Application Support/bbsim2026/` directory (~23 MB audit-cache/~16 GB
+checkpoints, including the growing verification build). The offline F-03 snapshot
+survives in its hash-addressed audit cache. Root HANDOFF records its exact location
+and the optional 5.7 MB protected reference binary/hash. This inventory does not
+authenticate all archive contents or restore missing temporary evidence.
+
 **Missing proof:** `/tmp/bbsim-pitcher-v2-integration/`,
 `/tmp/bbsim-pitcher-v2-evaluation-20261019/`, `/tmp/bbsim-season-usage-targets-v1/`
 and `/tmp/bbsim-1976-audit-v1/` were absent on this restart. Prior results/hashes

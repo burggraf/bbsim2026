@@ -128,6 +128,39 @@ Archive identities recorded by the prior audit (not currently present):
 | `1976eve.zip` | `cbe3b30e00ab18e0598be6b14426b9128e9183d41ea3b120810fb08046d788b2` |
 | `1976SKED.zip` | `cc1188f0f12e05b026028241aad3d8963eb372d25f12629882be96d5fcd47a0b` |
 
+## Moving to another machine
+
+GitHub contains the source/tests/docs through `3097149` (root handoff), following
+source checkpoint `3c9a59b`. Subsequent documentation commits may supersede these.
+Inside the repository, ignored files are only `engine/target/` (about 4 GB) and
+Python `__pycache__`/`*.pyc`; these are rebuildable, not missing source inputs.
+The empty `tmp1/` directory has nothing to transfer.
+
+**Separately copy `~/Library/Application Support/bbsim2026/` privately.** It is
+outside the repository, so a Git clone will not include it. At migration check it
+contained about 23 MB of `audit-cache/` and 16 GB of `work-checkpoints/` (including
+the running publication target; size can grow). Preserve receipts/manifests and
+archives; do not upload them to the public repository. Archive contents have not
+all been authenticated in this session, so this is a conservative transfer list,
+not a promise of complete recovery of the missing `/tmp` roots.
+
+The surviving offline F-03 snapshot is at
+`audit-cache/sha256/d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528/2019-spike.duckdb`
+under that directory (22,818,816 bytes). It supports regeneration of some derived
+inputs with the repository's audit recipes; generated preview baseline/contact/
+lineup/rating files are not bundled in Git. Use `docs/modeling/run-generated-preview.md`
+and the relevant mode's input documentation, replacing obsolete `/tmp` paths.
+
+For exact historical compatibility evidence, also privately preserve
+`engine/target/debug/examples/text_game` (5,741,096 bytes, SHA-256
+`f226b27b6562aafa9df5910a4c56ce0b58a8e2080d7b06d752279e63cabe04d8`), plus any
+corresponding reference artifacts in private checkpoints. It is an old protected
+reference, not the new v2 build. Ordinary development can rebuild; a rebuilt binary
+is not byte-identical historical proof and this executable may not run on another
+OS/architecture. Install Rust, Python and the DuckDB CLI on the destination; no
+project secrets or credentials are required by the current core/unit-test path.
+Let publication checks finish before copying their directory for a stable result.
+
 ## Next concrete action
 
 **First:** collect the publication check's final results, investigate any actual
