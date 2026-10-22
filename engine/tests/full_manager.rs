@@ -1,6 +1,12 @@
 #[path = "../examples/support/full_manager.rs"]
 mod full_manager;
 #[allow(dead_code)]
+#[path = "../examples/support/pitcher_entry_v2.rs"]
+mod pitcher_entry_v2;
+#[allow(dead_code)]
+#[path = "../examples/support/pitcher_policy_v2.rs"]
+mod pitcher_policy_v2;
+#[allow(dead_code)]
 #[path = "../examples/support/season_pool.rs"]
 mod season_pool;
 
@@ -831,6 +837,130 @@ fn managed_fixture_text() -> String {
 }
 const AVAILABILITY_FOR_TEST: &str =
     "recorded nonstarters assumed available at start; not verified eligibility";
+
+fn v2_manager_cast_text() -> String {
+    let text = managed_text()
+        .replace(
+            "season-pool-pitching-cast-v1",
+            "season-pool-pitching-cast-v2",
+        )
+        .replace("season-pool-soft-usage-v1", "season-pool-pitcher-usage-v2");
+    text.lines()
+        .map(|line| match line.strip_prefix("relief_pace:") {
+            Some(rest) => format!("relief_usage:{}\t0,?", rest.split_once('\t').unwrap().0),
+            None => line.to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\nclub_clock:Away\t0,161\nclub_clock:Home\t0,162\n"
+}
+
+#[test]
+fn v2_cast_uses_the_shared_selector_and_exact_pinned_workload_sample() {
+    let cast = Cast::read_tsv(&v2_manager_cast_text()).unwrap();
+    let initial = GameState {
+        teams: [team("a", "ap", true), team("h", "hp", true)],
+        ..state(1, Half::Bottom, true)
+    };
+    let before = cast.prepare(&initial).unwrap();
+    let profiles = cast.v2_candidates(0).unwrap();
+    assert_eq!(profiles.len(), 2);
+    assert_eq!(profiles[0].id, "ap");
+    assert!(profiles[0].starter);
+    assert_eq!(profiles[0].usage.used(), 0);
+    assert_eq!(profiles[0].usage.target(), None);
+    assert_eq!((profiles[0].pa_sum, profiles[0].outings), (6, 1));
+    assert_eq!(profiles[1].id, "jay-j001");
+    assert!(!profiles[1].starter);
+
+    let selection = cast.select_v2(&before, 0).unwrap();
+    assert_eq!(selection.chosen(), Some("jay-j001"));
+    let budget = cast.v2_budget(&before, 0, &[], u64::MAX).unwrap();
+    assert_eq!(budget.word, u64::MAX);
+    assert_eq!(budget.sample_index, 0);
+    assert_eq!(budget.base, 27);
+    assert_eq!(budget.scale, 80);
+    assert_eq!(budget.final_budget, 21);
+}
+
+#[test]
+fn v2_hooks_restore_vacant_pitchers_and_validate_trace_history() {
+    use bbsim_engine::PitcherRole;
+
+    let cast = Cast::read_tsv(&v2_manager_cast_text()).unwrap();
+    let initial = GameState {
+        teams: [team("a", "ap", true), team("h", "hp", true)],
+        ..state(1, Half::Top, true)
+    };
+    let mut before = cast.prepare(&initial).unwrap();
+    let mut log = Vec::new();
+    for _ in 0..84 {
+        advance(&mut log, &mut before, out_pa);
+    }
+    let hook = cast
+        .next_change_v2(&before, &log, u64::MAX)
+        .unwrap()
+        .unwrap();
+    assert_eq!(hook.budget.final_budget, 27);
+    assert_eq!(hook.selection.chosen(), None);
+    assert!(hook.transition.is_none());
+
+    let trace_log = vec![apply(&cast.prepare(&initial).unwrap(), out_pa(&initial)).unwrap()];
+    let trace = pitcher_entry_v2::header("LAN201904010", 17, 1, 0).unwrap();
+    assert!(cast
+        .validate_v2_trace(&trace, "LAN201904010", 17, &trace_log)
+        .unwrap()
+        .is_empty());
+
+    let non_dh = GameState {
+        teams: [team("a", "ap", false), team("h", "hp", false)],
+        ..state(1, Half::Bottom, false)
+    };
+    let mut vacancy = cast.prepare(&non_dh).unwrap();
+    vacancy.teams[0].pitcher = PitcherRole::Vacant { batting_slot: 8 };
+    vacancy.teams[0].batting_order[8] = "aph".into();
+    vacancy.teams[0].removed.push("ap".into());
+    vacancy.teams[0].defense =
+        bbsim_engine::DefenseState::Assigned(Box::new(std::array::from_fn(|position| {
+            (position > 0).then(|| format!("a{}", position - 1))
+        })));
+    let (selection, restoration) = cast.restore_pitcher_v2(&vacancy).unwrap().unwrap();
+    assert_eq!(selection.chosen(), Some("jay-j001"));
+    assert_eq!(
+        restoration.after().teams[0].pitcher.active_id(),
+        Some("jay-j001")
+    );
+}
+
+#[test]
+fn v2_clock_and_cast_name_helpers_enforce_cross_file_bindings() {
+    let cast = Cast::read_tsv(&v2_manager_cast_text()).unwrap();
+    cast.validate_v2_clocks(["CHA", "OAK"]).unwrap();
+    let ana_cast = Cast::read_tsv(
+        &v2_manager_cast_text().replace("club_clock:Away\t0,161", "club_clock:Away\t0,162"),
+    )
+    .unwrap();
+    ana_cast.validate_v2_clocks(["ANA", "OAK"]).unwrap();
+    assert_eq!(
+        season_pool::scheduled_games("LAA").unwrap_err(),
+        "unsupported 2019 club clock"
+    );
+    assert_eq!(
+        cast.validate_v2_clocks(["SEA", "OAK"]).unwrap_err(),
+        "v2 club clock does not match lineup schedule"
+    );
+
+    let mut names = BTreeMap::from([("ap".to_owned(), "Starter A".to_owned())]);
+    cast.merge_names(&mut names).unwrap();
+    assert_eq!(names["ap"], "Starter A");
+    assert_eq!(names.len(), 3);
+
+    let mut mismatched = BTreeMap::from([("ap".to_owned(), "Different name".to_owned())]);
+    assert_eq!(
+        cast.merge_names(&mut mismatched).unwrap_err(),
+        "lineup/cast display-name mismatch"
+    );
+}
 
 #[test]
 fn managed_relief_selection_prioritizes_role_class_then_pace_then_stable_id() {

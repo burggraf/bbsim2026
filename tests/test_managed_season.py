@@ -13,8 +13,13 @@ from test_usage_ledger import targets
 
 
 def accounting(entry,bundle=None):
-    text=old.accounting().replace('format\tcontrolled-accounting-v1','format\tcontrolled-accounting-managed-v1')
-    text=text.replace('LAN201904010',entry['game_id']).replace('seed\t7','seed\t'+str(entry['seed'])).replace('manager\ttest','manager\tseason-pool-workload-context-2019-v1')
+    from preview import pitcher_policy_v2
+    v2=entry.get('accounting_format')=='controlled-accounting-managed-v2'
+    version='season-pool-workload-context-2019-v2' if v2 else 'season-pool-workload-context-2019-v1'
+    policy=pitcher_policy_v2.POLICY if v2 else manager.POLICY
+    format_name='controlled-accounting-managed-v2' if v2 else 'controlled-accounting-managed-v1'
+    text=old.accounting().replace('format\tcontrolled-accounting-v1','format\t'+format_name)
+    text=text.replace('LAN201904010',entry['game_id']).replace('seed\t7','seed\t'+str(entry['seed'])).replace('manager\ttest','manager\t'+version)
     if bundle:
         lineup=fields(bundle['lineup'])
         for side,pid in [('Away','a'),('Home','h')]:
@@ -22,7 +27,7 @@ def accounting(entry,bundle=None):
             pitcher=next(k.split(':')[3] for k in lineup if k.startswith(side+':') and k.split(':')[2]=='1')
             for role,actor in [('batter',batter),('pitcher',pitcher),('fielder',pitcher)]:
                 text=text.replace(role+'\t'+side+'\t'+pid+'\t',role+'\t'+side+'\t'+actor+'\t')
-    return text+('season_policy\t'+manager.POLICY+'\navailability_basis\t'+manager.AVAILABILITY+
+    return text+('season_policy\t'+policy+'\navailability_basis\t'+manager.AVAILABILITY+
         '\ndefense_basis\t'+bench.DEFENSE_BASIS+'\npinch_hitting\tlate-close-expected-bases-ph-usage-v1\n')
 
 
@@ -39,6 +44,16 @@ class ManagedAccountingTests(unittest.TestCase):
             with self.subTest(bad=bad),self.assertRaises(ValueError):season.parse_accounting(bad,e)
         with self.assertRaises(ValueError):season.parse_accounting(text,old.entry())
 
+    def test_v2_managed_accounting_requires_its_own_policy_and_manager_metadata(self):
+        from preview import pitcher_policy_v2
+        e=old.entry();e['accounting_format']='controlled-accounting-managed-v2'
+        text=accounting(e);p=season.parse_accounting(text,e)
+        self.assertEqual(p['accounting']['season_policy'],pitcher_policy_v2.POLICY)
+        self.assertEqual(p['versions']['manager'],pitcher_policy_v2.MANAGER)
+        for bad in [text.replace(pitcher_policy_v2.POLICY,manager.POLICY),
+                    text.replace(pitcher_policy_v2.MANAGER,'season-pool-workload-context-2019-v1')]:
+            with self.assertRaises(ValueError):season.parse_accounting(bad,e)
+
     def test_managed_actor_binding_is_rederived_from_wires(self):
         s,p,l,g=fixture();b=managed_inputs.build_game(s,p,l,g['game_id'],{})
         self.assertEqual(season.actor_bindings(b),b['role_actors'])
@@ -48,6 +63,19 @@ class ManagedAccountingTests(unittest.TestCase):
 
 class ManagedSeasonTests(unittest.TestCase):
     def setUp(self):self.m=importlib.import_module('preview.managed_season')
+
+    def test_cli_selects_registered_v2_alias_and_keeps_v1_default(self):
+        import sys
+        from preview import pitcher_policy_v2
+        paths=['lineups','native','opportunities','events','readiness','targets','baseline','contact','binary','output']
+        with patch.object(sys,'argv',['managed_season',*paths,'--pitcher-policy','v2']),\
+                patch.object(self.m,'export',return_value={'counts':{},'complete_season':True}) as export:
+            self.assertEqual(self.m.main(),0)
+        self.assertEqual(export.call_args.args[-1],pitcher_policy_v2.POLICY)
+        with patch.object(sys,'argv',['managed_season',*paths]),\
+                patch.object(self.m,'export',return_value={'counts':{},'complete_season':True}) as export:
+            self.assertEqual(self.m.main(),0)
+        self.assertEqual(export.call_args.args[-1],manager.POLICY)
 
     def inputs(self):
         s,p,l,g=fixture();s['readiness']=dict(rows=[dict(status='ambiguous',candidate_game_ids=[g['game_id']]),dict(status='not_made_up',game_id=None)])
@@ -59,6 +87,24 @@ class ManagedSeasonTests(unittest.TestCase):
         e=dict(old.entry(),game_id=folder.name,seed=int(argv[argv.index('--seed')+1]))
         stdout.write(accounting(e,bundle).encode())
         return type('Result',(),dict(returncode=0))()
+
+    def fake_native_v2(self,argv,stdout,stderr,**kwargs):
+        if '--validate-manager-trace' in argv:
+            return type('Result',(),dict(returncode=0,stdout=b'',stderr=b''))()
+        folder=Path(kwargs['cwd'])
+        bundle={key:(folder/(key+'.tsv')).read_text() for key in ['lineup','cast','bench']}
+        (folder/'manager-trace.tsv').write_text('validated by mocked native\n')
+        (folder/'event-log.tsv').write_text('validated by mocked native\n')
+        e=dict(old.entry(),game_id=folder.name,seed=int(argv[argv.index('--seed')+1]),
+            accounting_format='controlled-accounting-managed-v2')
+        stdout.write(accounting(e,bundle).encode())
+        return type('Result',(),dict(returncode=0,stdout=b'',stderr=b''))()
+
+    def v2_pins(self,root):
+        paths=[]
+        for name in ['native','baseline','contact']:
+            path=Path(root)/name;path.write_text(name);paths.append(path)
+        return paths,[season.game.real.digest(path) for path in paths]
 
     def run_batch(self,s,p,t,out):
         return self.m.run(s,p,t,[],[],Path('/fake/native'),Path('/fake/baseline'),Path('/fake/contact'),1,out)
@@ -78,6 +124,78 @@ class ManagedSeasonTests(unittest.TestCase):
             for file in first.rglob('*'):
                 if file.is_file():self.assertEqual(file.read_bytes(),(second/file.relative_to(first)).read_bytes(),str(file))
             with self.assertRaisesRegex(ValueError,'overwrite'):self.run_batch(s,p,t,first)
+
+    def test_v2_managed_run_persists_trace_and_event_evidence_then_revalidates_it(self):
+        from preview import pitcher_policy_v2
+        import json
+        s,p,t,g=self.inputs()
+        for team in p['teams'].values():team['scheduled_games']=162
+        with tempfile.TemporaryDirectory() as root:
+            inputs,pins=self.v2_pins(root);out=Path(root)/'batch'
+            base_ledger=self.m.usage_ledger.Ledger
+            class FixtureLedger(base_ledger):
+                def snapshot(self):
+                    result=super().snapshot()
+                    for team in result['teams'].values():
+                        team['scheduled_games']=162
+                        team['progress']=team['completed_games']/162
+                    return result
+            with patch.object(self.m.usage_ledger,'Ledger',FixtureLedger),\
+                    patch('subprocess.run',side_effect=self.fake_native_v2) as native:
+                report=self.m.run(s,p,t,inputs,pins,inputs[0],inputs[1],inputs[2],1,out,pitcher_policy_v2.POLICY)
+                rebuilt=self.m.rebuild(out,s,p,t)[0]
+            self.assertTrue(report['complete_season'])
+            self.assertEqual(report['format'],'managed-season-v2')
+            folder=out/'games'/g['game_id']
+            receipt=json.loads((folder/'receipt.json').read_text())
+            self.assertEqual(receipt['format'],'managed-game-receipt-v2')
+            self.assertEqual(set(receipt['output_sha256']),{'lineup.tsv','cast.tsv','bench.tsv','stdout.tsv','stderr.txt','manager-trace.tsv','event-log.tsv'})
+            self.assertIn('--manager-trace',receipt['command'])
+            self.assertIn('--event-log',receipt['command'])
+            self.assertEqual((folder/'manager-trace.tsv').read_text(),'validated by mocked native\n')
+            self.assertEqual((folder/'event-log.tsv').read_text(),'validated by mocked native\n')
+            self.assertEqual(native.call_count,4)
+            self.assertIn('--validate-manager-trace',native.call_args.args[0])
+            self.assertEqual(rebuilt,json.loads((out/'ledger.json').read_text()))
+
+    def test_v2_trace_validation_failure_stops_before_ledger_acceptance_and_next_game(self):
+        from preview import pitcher_policy_v2
+        import json
+        s,p,t,g=self.inputs();g2=copy.deepcopy(g);g2.update(game_id='LAN201904020',date='2019-04-02')
+        s['data']['game'].append(g2)
+        for team in p['teams'].values():team['scheduled_games']=162
+        with tempfile.TemporaryDirectory() as root:
+            inputs,pins=self.v2_pins(root);out=Path(root)/'batch'
+            base_ledger=self.m.usage_ledger.Ledger
+            class FixtureLedger(base_ledger):
+                def snapshot(self):
+                    result=super().snapshot()
+                    for team in result['teams'].values():
+                        team['scheduled_games']=162
+                        team['progress']=team['completed_games']/162
+                    return result
+            calls=[]
+            def native(argv,stdout,stderr,**kwargs):
+                calls.append(argv)
+                if '--validate-manager-trace' in argv:
+                    return type('Result',(),dict(returncode=5,stdout=b'',stderr=b'invalid trace'))()
+                return self.fake_native_v2(argv,stdout,stderr,**kwargs)
+            with patch.object(self.m.usage_ledger,'Ledger',FixtureLedger),patch('subprocess.run',side_effect=native):
+                report=self.m.run(s,p,t,inputs,pins,inputs[0],inputs[1],inputs[2],1,out,pitcher_policy_v2.POLICY)
+            self.assertEqual(report['counts'],{'pending':1,'simulation_failed':1})
+            self.assertEqual([row['status'] for row in report['games']],['simulation_failed','pending'])
+            self.assertEqual(report['games'][0]['reason'],'Native manager trace validation failed (5): invalid trace')
+            self.assertEqual(len(calls),2)
+            self.assertNotIn('--validate-manager-trace',calls[0])
+            self.assertIn('--validate-manager-trace',calls[1])
+            failed=out/'games'/g['game_id'];self.assertFalse((failed/'receipt.json').exists())
+            self.assertTrue((failed/'manager-trace.tsv').exists());self.assertTrue((failed/'event-log.tsv').exists())
+            self.assertFalse((out/'games'/g2['game_id']).exists())
+            ledger=json.loads((out/'ledger.json').read_text())
+            self.assertFalse(ledger['history_complete']);self.assertEqual(ledger['completed_game_ids'],[])
+            self.assertEqual(ledger['teams']['SFN']['completed_games'],0)
+            receipt=json.loads((out/'receipt.json').read_text())
+            self.assertEqual(receipt['counts'],report['counts']);self.assertFalse(receipt['complete_season'])
 
     def test_next_game_uses_only_accepted_usage_not_historical_recorded_pa(self):
         s,p,t,g=self.inputs();g2=copy.deepcopy(g);g2.update(game_id='LAN201904060',date='2019-04-06')

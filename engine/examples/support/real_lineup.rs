@@ -22,6 +22,7 @@ pub struct Lineup {
     players: [Vec<Player>; 2],
     generic: bool,
     managed: bool,
+    policy_version: Option<&'static str>,
     use_dh: bool,
     game_id: String,
     date: String,
@@ -52,11 +53,22 @@ impl Lineup {
                 return Err("duplicate/invalid lineup row".into());
             }
         }
-        let managed = fields.get("format") == Some(&"season-pool-lineup-v1");
+        let v2 = fields.get("format") == Some(&"season-pool-lineup-v2");
+        let managed = v2 || fields.get("format") == Some(&"season-pool-lineup-v1");
         let generic = managed || fields.get("format") == Some(&"closed-starting-lineup-v2");
+        let policy_version = if v2 {
+            Some(season_pool::PITCHER_USAGE_POLICY_V2)
+        } else if managed {
+            Some(season_pool::POLICY)
+        } else {
+            None
+        };
         if managed {
             for (key, value) in [
-                ("season_policy", season_pool::POLICY),
+                (
+                    "season_policy",
+                    policy_version.expect("managed mode has a policy"),
+                ),
                 ("availability_basis", season_pool::AVAILABILITY),
             ] {
                 if fields.remove(key) != Some(value) {
@@ -194,6 +206,7 @@ impl Lineup {
             players,
             generic,
             managed,
+            policy_version,
             use_dh,
             game_id,
             date,
@@ -205,6 +218,10 @@ impl Lineup {
     #[allow(dead_code)]
     pub fn is_managed(&self) -> bool {
         self.managed
+    }
+    #[allow(dead_code)]
+    pub fn policy_version(&self) -> Option<&'static str> {
+        self.policy_version
     }
 
     #[allow(dead_code)] // Shared preview modules do not all consume game metadata.

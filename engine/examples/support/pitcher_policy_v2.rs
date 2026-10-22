@@ -32,6 +32,13 @@ fn count(text: &str) -> Result<u32, String> {
 }
 
 impl Clock {
+    pub fn completed(&self) -> u32 {
+        self.completed
+    }
+    pub fn scheduled(&self) -> u32 {
+        self.scheduled
+    }
+
     pub fn read(value: &str) -> Result<Self, String> {
         let (c, n) = value.split_once(',').ok_or("invalid v2 club clock")?;
         let (completed, scheduled) = (count(c)?, count(n)?);
@@ -46,6 +53,13 @@ impl Clock {
 }
 
 impl ReliefUsage {
+    pub fn used(&self) -> u32 {
+        self.used
+    }
+    pub fn target(&self) -> Option<u32> {
+        self.target
+    }
+
     pub fn read(value: &str) -> Result<Self, String> {
         let (u, t) = value.split_once(',').ok_or("invalid v2 relief usage")?;
         Ok(Self {
@@ -81,6 +95,21 @@ impl Rank {
     }
 }
 
+/// Debt is defined even for an excluded starter with no supported relief outing.
+pub fn relief_debt(clock: Clock, usage: ReliefUsage) -> (i128, i128) {
+    match usage.target() {
+        None => (0, 1),
+        Some(target) => {
+            let expected = i128::from(target) * i128::from(clock.completed() + 1);
+            let n = i128::from(clock.scheduled());
+            (
+                5 * (expected - i128::from(usage.used()) * n),
+                (30 * n).max(expected),
+            )
+        }
+    }
+}
+
 pub fn relief_rank(
     clock: Clock,
     usage: ReliefUsage,
@@ -92,17 +121,7 @@ pub fn relief_rank(
     if outings == 0 || inning == 0 || score_gap.unsigned_abs() > u64::from(u32::MAX) {
         return Err("invalid v2 relief workload/situation".into());
     }
-    let debt = match usage.target {
-        None => (0, 1),
-        Some(target) => {
-            let expected = i128::from(target) * i128::from(clock.completed + 1);
-            let n = i128::from(clock.scheduled);
-            (
-                5 * (expected - i128::from(usage.used) * n),
-                (30 * n).max(expected),
-            )
-        }
-    };
+    let debt = relief_debt(clock, usage);
     let clipped = (debt.0.clamp(-debt.1, debt.1), debt.1);
     let long = u64::from(pa_sum) >= 6 * u64::from(outings);
     let wants_long = inning <= 5 || score_gap.unsigned_abs() >= 4;
@@ -117,6 +136,6 @@ pub fn relief_rank(
         score,
         long,
         matches,
-        target_known: usage.target.is_some(),
+        target_known: usage.target().is_some(),
     })
 }

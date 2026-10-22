@@ -267,3 +267,32 @@ Blast radius to inspect before implementation: `preview/season_manager.py`,
 all example/test callers of those support modules. Reuse canonical ledger/stats and
 personnel rules. No engine outcome-model/refit, source importer or database schema
 migration is needed. The smallest next task is the pure policy slice, not all gates at once.
+
+## Dated mechanism-gate reconciliation clarification — 2026-10-19
+
+After the first full mechanism-gate attempt (`proc_04ff`) stopped because the
+independent box parser required every fielder putout to be known, the maintainer
+authorized this narrow clarification on 2026-10-19. It changes only the mechanism
+gate's independent reconciliation method, not v2 policy, metrics, thresholds,
+engine accounting or the approved E-03/G1 accounting matrix:
+
+- Keep fielder putouts and assists as unknown (`?`/`None`) wherever canonical
+  accounting lacks qualified event-local evidence. Never coerce these values to
+  zero, require a complete fielder-PO total, or infer individual fielder credit.
+- Independently decode each game's canonical event-transition stream, validate
+  transition framing/canonicality and continuity, and sum each transition's
+  `delta.outs` for its recorded pitcher participant and defensive team. Compare
+  that per-game pitcher-ID/team map exactly with known pitcher-role outs in the
+  accounting box.
+- Retain every other existing mechanism check: known team/actor and role identity,
+  batter PA versus opposing pitcher BF, batting/pitching run reconciliation,
+  independent trace arithmetic/witness checks, receipt-backed rebuild equality,
+  and trace-on/off parity. Unknown PO/A remain visible; they are not treated as
+  evidence of complete fielding accounting.
+
+This clarification does not pass the mechanism gate by itself or sign off G1/E-03,
+season accuracy, or any publication/default change. The fresh gate must still pass
+all 2,429 static input trios, all 512 chronological games and every remaining trace,
+role, rebuild and parity check before the authorized three-season evaluation begins.
+Preserve the failed `proc_04ff` evidence unchanged and use a new exclusive directory
+for the clarified run.

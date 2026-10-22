@@ -20,6 +20,12 @@ mod full_transcript;
 #[path = "../examples/support/joint_contact.rs"]
 mod joint;
 #[allow(dead_code)]
+#[path = "../examples/support/pitcher_entry_v2.rs"]
+mod pitcher_entry_v2;
+#[allow(dead_code)]
+#[path = "../examples/support/pitcher_policy_v2.rs"]
+mod pitcher_policy_v2;
+#[allow(dead_code)]
 #[path = "../examples/support/preview.rs"]
 mod preview;
 #[allow(dead_code)]
@@ -463,21 +469,24 @@ fn reliever_only_rating_changes_only_after_native_entry_and_actual_draws_respond
             > neutral.probabilities(&state, *b.probabilities()).unwrap()[0] + 0.5
     );
     let mut audit = 0;
-    let full_simulation::Simulation { steps, draws } =
-        full_simulation::simulate_with_probabilities(
-            &l.initial(),
-            &defense(&l),
-            &m,
-            Some(&c),
-            2,
-            |s| {
-                audit += 1;
-                Ok(Some(m.player_probabilities(
-                    neutral.probabilities(s, *b.probabilities())?,
-                )?))
-            },
-        )
-        .unwrap();
+    let full_simulation::Simulation {
+        steps,
+        draws,
+        manager_trace: _,
+    } = full_simulation::simulate_with_probabilities(
+        &l.initial(),
+        &defense(&l),
+        &m,
+        Some(&c),
+        2,
+        |s| {
+            audit += 1;
+            Ok(Some(m.player_probabilities(
+                neutral.probabilities(s, *b.probabilities())?,
+            )?))
+        },
+    )
+    .unwrap();
     assert_eq!(draws.len(), audit);
     assert_eq!(draws[0].1.word, preview::Rng::new(2).next_u64());
     for (index, draw) in draws {
@@ -852,6 +861,413 @@ fn bench_schema_and_membership_refuse_before_the_first_rating_callback() {
 fn managed_bench_text() -> String {
     bench_text().replace("assumed-game-bench-v1", "season-pool-bench-v1").replace("same-game participant proxies assumed available at start; not verified eligibility", "observed season club players assumed available; no daily injury/minor-league reconstruction") + "season_policy\tseason-pool-soft-usage-v1\nAway:aph:pace\t-1\nHome:hph:pace\t1\n"
 }
+fn v2_lineup_text() -> String {
+    let mut text = format!(
+        "key\tvalue\nformat\tseason-pool-lineup-v2\ngame_id\tOAK201903200\ndate\t2019-03-20\npark_id\tTOK01\naway_team\tSeattle Mariners\nhome_team\tOakland Athletics\naway_team_id\tSEA\nhome_team_id\tOAK\nuse_dh\ttrue\naudit_sha256\t{}\nsnapshot_sha256\t{}\nsupplement_sha256\t{}\nattribution\t{}\nseason_policy\tseason-pool-pitcher-usage-v2\navailability_basis\t{}\n",
+        real::REPORT_SHA,
+        real::SNAPSHOT_SHA,
+        real::SUPPLEMENT_SHA,
+        joint::ATTRIBUTION,
+        season_pool::AVAILABILITY,
+    );
+    for (side, pitcher, name, prefix) in [
+        ("Away", "gonzm005", "Marco Gonzales", "a"),
+        ("Home", "fierm001", "Michael Fiers", "h"),
+    ] {
+        text += &format!("{side}:0:1:{pitcher}\t{name}\n");
+        for (i, position) in [7, 8, 3, 10, 9, 2, 5, 6, 4].into_iter().enumerate() {
+            text += &format!(
+                "{side}:{}:{position}:{prefix}{}\tSynthetic {prefix}{}\n",
+                i + 1,
+                i + 1,
+                i + 1
+            );
+        }
+    }
+    text
+}
+
+fn v2_cast_text() -> String {
+    let old = pool_cast_text();
+    let mut text = old
+        .replace(
+            "season-pool-pitching-cast-v1",
+            "season-pool-pitching-cast-v2",
+        )
+        .replace("season-pool-soft-usage-v1", "season-pool-pitcher-usage-v2")
+        .replace("relief_pace:", "relief_usage:");
+    text = text
+        .lines()
+        .map(|line| {
+            if let Some((key, _)) = line.split_once('\t') {
+                if key.starts_with("relief_usage:") {
+                    return format!("{key}\t0,?");
+                }
+            }
+            line.to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\nclub_clock:Away\t0,162\nclub_clock:Home\t0,162\n";
+    text
+}
+
+fn v2_bench_text() -> String {
+    managed_bench_text()
+        .replace("season-pool-bench-v1", "season-pool-bench-v2")
+        .replace("season-pool-soft-usage-v1", "season-pool-pitcher-usage-v2")
+}
+
+#[test]
+fn pitcher_usage_v2_live_selector_trace_is_valid_and_rng_neutral() {
+    let lineup = real::Lineup::read_tsv(&v2_lineup_text()).unwrap();
+    let cast = full_manager::Cast::read_complete_tsv(&v2_cast_text()).unwrap();
+    let bench = full_simulation::bench::Bench::read_tsv(&v2_bench_text(), "OAK201903200").unwrap();
+    let initial = lineup.initial();
+    let fielders = defense(&lineup);
+    let model = model();
+    let baseline = preview::Baseline::from_counts(COUNTS).unwrap();
+    let mut saw_hook = false;
+    let mut saw_probe = false;
+    for seed in 1..=16 {
+        let simulate = |capture_trace| {
+            full_simulation::simulate_with_personnel_options(
+                &initial,
+                &fielders,
+                &model,
+                Some(&cast),
+                Some(&bench),
+                full_simulation::SimulationOptions {
+                    seed,
+                    capture_v2_trace: capture_trace,
+                },
+                |_state| Ok(Some(model.player_probabilities(*baseline.probabilities())?)),
+            )
+            .unwrap()
+        };
+        let captured = simulate(true);
+        let trace = captured.manager_trace.as_deref().unwrap();
+        let log: Vec<_> = captured
+            .steps
+            .iter()
+            .map(|step| step.transition().clone())
+            .collect();
+        cast.validate_v2_trace(trace, "OAK201903200", seed, &log)
+            .unwrap();
+        saw_hook |= trace.contains("\thook\t");
+        saw_probe |= trace.contains("\tph_probe\t");
+        if seed == 1 {
+            let untraced = simulate(false);
+            assert!(untraced.manager_trace.is_none());
+            assert_eq!(captured.steps, untraced.steps);
+            assert_eq!(captured.draws, untraced.draws);
+        }
+    }
+    assert!(saw_hook, "the seeded cohort must exercise v2 pitcher hooks");
+    assert!(
+        saw_probe,
+        "the seeded cohort must exercise v2 PH reserve probes"
+    );
+}
+
+#[test]
+fn pitcher_usage_v2_non_dh_ph_trace_binds_probe_to_vacancy_and_restoration() {
+    use bbsim_engine::{DefenseState, Half, PersonnelChange, PitcherRole, TeamSide, TeamState};
+    let stable_cast_text = v2_cast_text()
+        .lines()
+        .map(|line| {
+            line.split_once('\t').map_or_else(
+                || line.to_owned(),
+                |(key, _)| {
+                    if key.starts_with("workload:") {
+                        format!("{key}\t100,1")
+                    } else if key.starts_with("usage:") {
+                        format!("{key}\t100")
+                    } else {
+                        line.to_owned()
+                    }
+                },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let cast = full_manager::Cast::read_complete_tsv(&stable_cast_text).unwrap();
+    let bench = full_simulation::bench::Bench::read_tsv(
+        &v2_bench_text().replace("2,3,4,5,6,7,8,9", "?"),
+        "OAK201903200",
+    )
+    .unwrap();
+    let team = |prefix: &str, pitcher: &str| TeamState {
+        defense: DefenseState::LegacyUnassigned,
+        batting_order: std::array::from_fn(|slot| match slot {
+            0 => format!("{prefix}1"),
+            1 => pitcher.to_owned(),
+            _ => format!("{prefix}{slot}"),
+        }),
+        next_batter: 0,
+        pitcher: pitcher.to_owned().into(),
+        dh_slot: None,
+        dh_must_bat: false,
+        bench: vec![],
+        removed: vec![],
+    };
+    let initial = GameState {
+        inning: 1,
+        half: Half::Top,
+        outs: 0,
+        score: [0, 0],
+        teams: [team("a", "gonzm005"), team("h", "fierm001")],
+        bases: [None, None, None],
+        over: false,
+    };
+    let fielders: [[String; 9]; 2] = [
+        ["gonzm005", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"],
+        ["fierm001", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"],
+    ]
+    .map(|side| side.map(str::to_owned));
+    let pitcher_ids = cast.names();
+    let model = model();
+    let mut restored = false;
+    for seed in 1..=1 {
+        let run = full_simulation::simulate_with_personnel(
+            &initial,
+            &fielders,
+            &model,
+            Some(&cast),
+            Some(&bench),
+            seed,
+            |state| {
+                let offense = state.half.offense();
+                let batter = &state.teams[offense].batting_order
+                    [usize::from(state.teams[offense].next_batter)];
+                Ok(Some(if pitcher_ids.contains_key(batter.as_str()) {
+                    [
+                        0.95, 0.005, 0.001, 0.006, 0.012, 0.008, 0.003, 0.005, 0.008, 0.002,
+                    ]
+                } else if batter == "aph" || batter == "hph" {
+                    [0.30, 0.10, 0.02, 0.10, 0.20, 0.10, 0.05, 0.05, 0.07, 0.01]
+                } else {
+                    [
+                        0.85, 0.03, 0.005, 0.02, 0.04, 0.015, 0.005, 0.01, 0.02, 0.005,
+                    ]
+                }))
+            },
+        )
+        .unwrap();
+        let trace = run.manager_trace.as_deref().unwrap();
+        let log: Vec<_> = run
+            .steps
+            .iter()
+            .map(|step| step.transition().clone())
+            .collect();
+        let decisions = cast
+            .validate_v2_trace(trace, "OAK201903200", seed, &log)
+            .unwrap();
+        for (index, step) in run.steps.iter().enumerate() {
+            let Some(PersonnelChange::PinchHitter { outgoing, .. }) = step
+                .transition()
+                .event()
+                .delta
+                .changes
+                .iter()
+                .find(|change| matches!(change, PersonnelChange::PinchHitter { .. }))
+            else {
+                continue;
+            };
+            if pitcher_ids.contains_key(outgoing.as_str()) {
+                let side = usize::from(
+                    step.transition().before().teams[1]
+                        .batting_order
+                        .contains(outgoing),
+                );
+                assert!(matches!(
+                    &step.transition().after().teams[side].pitcher,
+                    PitcherRole::Vacant { .. }
+                ));
+                let team_side = if side == 0 {
+                    TeamSide::Away
+                } else {
+                    TeamSide::Home
+                };
+                let restoration = run.steps[index + 1..]
+                    .iter()
+                    .map(|step| step.transition())
+                    .find(|transition| transition.event().delta.changes.iter().any(|change| {
+                        matches!(change, PersonnelChange::AssignPitcher { team, .. } if *team == team_side)
+                    }))
+                    .expect("pitcher vacancy is restored before that team next defends");
+                assert!(matches!(
+                    &restoration.before().teams[side].pitcher,
+                    PitcherRole::Vacant { .. }
+                ));
+                assert_eq!(restoration.before().half.offense(), 1 - side);
+                restored = true;
+            }
+        }
+        if restored {
+            assert!(decisions
+                .iter()
+                .any(|d| d.reason == pitcher_entry_v2::Reason::PhProbe));
+            assert!(decisions
+                .iter()
+                .any(|d| d.reason == pitcher_entry_v2::Reason::PhRestore));
+            break;
+        }
+    }
+    assert!(
+        restored,
+        "v2 cohort did not exercise pitcher replacement/restoration"
+    );
+}
+
+#[test]
+fn pitcher_usage_v2_personnel_readers_accept_complete_v2_schemas() {
+    let lineup = real::Lineup::read_tsv(&v2_lineup_text()).unwrap();
+    let cast = full_manager::Cast::read_complete_tsv(&v2_cast_text()).unwrap();
+    let bench = full_simulation::bench::Bench::read_tsv(&v2_bench_text(), "OAK201903200").unwrap();
+    assert!(lineup.is_managed() && lineup.is_generic());
+    assert!(cast.is_managed() && cast.is_v2() && bench.is_managed());
+    assert_eq!(
+        lineup.policy_version(),
+        Some(season_pool::PITCHER_USAGE_POLICY_V2)
+    );
+    assert_eq!(
+        cast.season_policy(),
+        Some(season_pool::PITCHER_USAGE_POLICY_V2)
+    );
+    assert_eq!(
+        bench.season_policy(),
+        Some(season_pool::PITCHER_USAGE_POLICY_V2)
+    );
+    assert_eq!(lineup.game_id(), "OAK201903200");
+    assert_eq!(cast.game_id(), Some("OAK201903200"));
+    cast.validate_v2_clocks(lineup.team_labels()).unwrap();
+    assert!(cast.validate_v2_clocks(["DET", "OAK"]).is_err());
+    let state = cast.prepare(&lineup.initial()).unwrap();
+    let prepared = bench.prepare(&state, &defense(&lineup), &cast).unwrap();
+    assert!(prepared.teams[0].bench.contains(&"aph".to_owned()));
+    let clocks = cast.clocks().unwrap();
+    assert_eq!((clocks[0].completed(), clocks[0].scheduled()), (0, 162));
+    assert_eq!(cast.relief_usage().len(), 12);
+    assert_eq!(cast.relief_usage()["gonzm005"].used(), 0);
+    assert_eq!(cast.relief_usage()["gonzm005"].target(), None);
+}
+
+#[test]
+fn pitcher_usage_v2_clock_schedule_and_initial_actor_bindings_are_enforced() {
+    let cast_text = v2_cast_text().replace("club_clock:Away\t0,162", "club_clock:Away\t0,161");
+    let cast = full_manager::Cast::read_tsv(&cast_text).unwrap();
+    assert!(cast.validate_v2_clocks(["CHA", "OAK"]).is_ok());
+    assert!(cast.validate_v2_clocks(["SEA", "OAK"]).is_err());
+    assert!(cast.validate_v2_clocks(["XXX", "OAK"]).is_err());
+
+    let cast = full_manager::Cast::read_tsv(&v2_cast_text()).unwrap();
+    let mismatched = v2_lineup_text().replace("Away:0:1:gonzm005", "Away:0:1:gonzm006");
+    let lineup = real::Lineup::read_tsv(&mismatched).unwrap();
+    assert!(cast.prepare(&lineup.initial()).is_err());
+
+    let lineup = real::Lineup::read_tsv(&v2_lineup_text()).unwrap();
+    let cast = full_manager::Cast::read_tsv(&v2_cast_text()).unwrap();
+    let state = cast.prepare(&lineup.initial()).unwrap();
+    let conflict = v2_bench_text().replace("Away:aph:", "Away:a1:");
+    let bench = full_simulation::bench::Bench::read_tsv(&conflict, "OAK201903200").unwrap();
+    assert!(bench.prepare(&state, &defense(&lineup), &cast).is_err());
+}
+
+#[test]
+fn pitcher_usage_v2_initial_names_are_bound_to_the_lineup() {
+    let lineup = real::Lineup::read_tsv(&v2_lineup_text()).unwrap();
+    let text = v2_cast_text().replace(
+        "cast:Away:0:gonzm005\tMarco Gonzales",
+        "cast:Away:0:gonzm005\tDifferent Name",
+    );
+    let cast = full_manager::Cast::read_tsv(&text).unwrap();
+    let mut names = lineup.names();
+    assert_eq!(
+        cast.merge_names(&mut names).unwrap_err(),
+        "lineup/cast display-name mismatch"
+    );
+}
+
+#[test]
+fn pitcher_usage_v2_cast_requires_exact_clock_and_relief_usage_sets() {
+    let text = v2_cast_text();
+    let cast = full_manager::Cast::read_tsv(&text).unwrap();
+    assert!(cast.is_managed());
+    for bad in [
+        text.replace("club_clock:Away\t0,162\n", ""),
+        text.replace("relief_usage:gonzm005\t0,?\n", ""),
+        text.replace("relief_usage:gonzm005\t0,?\n", "relief_pace:gonzm005\t0\n"),
+        text.clone() + "relief_usage:unlisted\t0,?\n",
+        text.clone() + "unknown\ttrue\n",
+        text.replace("club_clock:Home\t0,162", "club_clock:Home\t0,0"),
+        text.replace("club_clock:Away\t0,162", "club_clock:Away\t0,160"),
+        text.replace("relief_usage:gonzm005\t0,?", "relief_usage:gonzm005\t00,?"),
+        text.replace("season-pool-pitcher-usage-v2", "season-pool-soft-usage-v1"),
+        text.clone() + "club_clock:Away\t0,162\n",
+    ] {
+        assert!(
+            full_manager::Cast::read_tsv(&bad).is_err(),
+            "accepted {bad}"
+        );
+    }
+}
+
+#[test]
+fn pitcher_usage_v2_bench_rejects_a_managed_v1_cast() {
+    let cast = full_manager::Cast::read_tsv(&pool_cast_text()).unwrap();
+    let bench = full_simulation::bench::Bench::read_tsv(&v2_bench_text(), "OAK201903200").unwrap();
+    let lineup = lineup();
+    let state = cast.prepare(&lineup.initial()).unwrap();
+    let error = bench.prepare(&state, &defense(&lineup), &cast).unwrap_err();
+    assert_eq!(error, "bench/cast mode mismatch");
+}
+
+#[test]
+fn pitcher_usage_v2_bench_rejects_v1_or_unbound_metadata() {
+    let text = v2_bench_text();
+    assert!(full_simulation::bench::Bench::read_tsv(&text, "OAK201903200").is_ok());
+    for bad in [
+        text.replace("season_policy\tseason-pool-pitcher-usage-v2\n", ""),
+        text.replace("season-pool-pitcher-usage-v2", "season-pool-soft-usage-v1"),
+        text.replace("OAK201903200", "SEA201903200"),
+        text.replace("Away:aph:pace\t-1\n", ""),
+        text.clone() + "unknown\ttrue\n",
+    ] {
+        assert!(
+            full_simulation::bench::Bench::read_tsv(&bad, "OAK201903200").is_err(),
+            "accepted {bad}"
+        );
+    }
+}
+
+#[test]
+fn pitcher_usage_v2_personnel_readers_reject_changed_source_pins() {
+    for text in [
+        v2_lineup_text().replace(real::REPORT_SHA, "wrong"),
+        v2_lineup_text().replace(real::SNAPSHOT_SHA, "wrong"),
+        v2_lineup_text().replace(real::SUPPLEMENT_SHA, "wrong"),
+    ] {
+        assert!(real::Lineup::read_tsv(&text).is_err());
+    }
+    for text in [
+        v2_cast_text().replace(real::REPORT_SHA, "wrong"),
+        v2_cast_text().replace(ratings::REPORT_SHA, "wrong"),
+        v2_cast_text().replace(real::SNAPSHOT_SHA, "wrong"),
+        v2_cast_text().replace(real::SUPPLEMENT_SHA, "wrong"),
+    ] {
+        assert!(full_manager::Cast::read_tsv(&text).is_err());
+    }
+    for text in [
+        v2_bench_text().replace(real::SNAPSHOT_SHA, "wrong"),
+        v2_bench_text().replace(real::SUPPLEMENT_SHA, "wrong"),
+        v2_bench_text().replace(ratings::REPORT_SHA, "wrong"),
+    ] {
+        assert!(full_simulation::bench::Bench::read_tsv(&text, "OAK201903200").is_err());
+    }
+}
+
 #[test]
 fn season_pool_bench_schema_requires_canonical_per_actor_pace() {
     use full_simulation::bench::Bench;

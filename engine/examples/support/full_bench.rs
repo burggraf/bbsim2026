@@ -12,6 +12,7 @@ pub const AVAILABILITY: &str =
 pub use season_pool::DEFENSE_BASIS;
 pub struct Bench {
     managed: bool,
+    season_policy: Option<&'static str>,
     pub pace: BTreeMap<String, i8>,
     pub pools: [Vec<Candidate>; 2],
     pub names: BTreeMap<String, String>,
@@ -43,12 +44,20 @@ impl Bench {
                 return Err("duplicate/invalid bench field".into());
             }
         }
-        let managed = fields.get("format") == Some(&"season-pool-bench-v1");
-        if managed && fields.remove("season_policy") != Some(season_pool::POLICY) {
+        let v2 = fields.get("format") == Some(&"season-pool-bench-v2");
+        let managed = v2 || fields.get("format") == Some(&"season-pool-bench-v1");
+        let season_policy = if v2 {
+            Some(season_pool::PITCHER_USAGE_POLICY_V2)
+        } else if managed {
+            Some(season_pool::POLICY)
+        } else {
+            None
+        };
+        if managed && fields.remove("season_policy") != season_policy {
             return Err("unsupported bench season_policy".into());
         }
         for (key, value) in [
-            ("format", if managed { "season-pool-bench-v1" } else { "assumed-game-bench-v1" }), ("game_id",game_id),
+            ("format", if v2 { "season-pool-bench-v2" } else if managed { "season-pool-bench-v1" } else { "assumed-game-bench-v1" }), ("game_id",game_id),
             ("policy",pinch::POLICY_VERSION), ("availability_basis", if managed { season_pool::AVAILABILITY } else { AVAILABILITY }),
             ("defense_basis",DEFENSE_BASIS),
             ("snapshot_sha256","d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528"),
@@ -83,6 +92,7 @@ impl Bench {
         }
         let mut bench = Self {
             managed,
+            season_policy,
             pace: BTreeMap::new(),
             pools: [vec![], vec![]],
             names: BTreeMap::new(),
@@ -149,6 +159,10 @@ impl Bench {
     pub fn is_managed(&self) -> bool {
         self.managed
     }
+    #[allow(dead_code)]
+    pub fn season_policy(&self) -> Option<&'static str> {
+        self.season_policy
+    }
 
     /// Called after Cast::prepare, exactly once at a complete game origin.
     pub fn prepare(
@@ -157,7 +171,7 @@ impl Bench {
         fielders: &[[String; 9]; 2],
         cast: &Cast,
     ) -> Result<GameState, String> {
-        if self.managed != cast.is_managed() {
+        if self.season_policy != cast.season_policy() {
             return Err("bench/cast mode mismatch".into());
         }
         if state.inning != 1

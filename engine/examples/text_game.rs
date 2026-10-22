@@ -1,4 +1,9 @@
 //! Offline development command for the connected text-game recovery model.
+#[path = "support/pitcher_entry_v2.rs"]
+mod pitcher_entry_v2;
+#[allow(dead_code)]
+#[path = "support/pitcher_policy_v2.rs"]
+mod pitcher_policy_v2;
 #[allow(dead_code)]
 #[path = "support/season_pool.rs"]
 mod season_pool;
@@ -37,9 +42,11 @@ mod transcript;
 mod tree;
 use std::{
     collections::BTreeMap,
-    io::{self, Write},
+    fmt::Write as FmtWrite,
+    fs::OpenOptions,
+    io::{self, Read, Write},
 };
-const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--bench BENCH.tsv] [--calibrated-ratings TREE.tsv] [--format detailed|radio|accounting]";
+const USAGE: &str = "text_game --baseline COUNTS.csv --contact-counts CONTACT.csv --lineup LINEUP.tsv --cast CAST.tsv [--seed N] [--bench BENCH.tsv] [--calibrated-ratings TREE.tsv] [--format detailed|radio|accounting] [--manager-trace TRACE.tsv --event-log EVENTS.tsv | --validate-manager-trace TRACE.tsv --event-log EVENTS.tsv]";
 fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
     if args == ["--help"] {
         return Ok(None);
@@ -56,6 +63,9 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
             "--seed",
             "--calibrated-ratings",
             "--format",
+            "--manager-trace",
+            "--event-log",
+            "--validate-manager-trace",
         ]
         .contains(&pair[0].as_str())
             || pair[1].is_empty()
@@ -82,8 +92,142 @@ fn parse(args: &[String]) -> Result<Option<BTreeMap<String, String>>, String> {
     if !matches!(format.as_str(), "detailed" | "radio" | "accounting") {
         return Err("format must be detailed or radio or accounting".into());
     }
+    let capture = fields.contains_key("--manager-trace");
+    let validate = fields.contains_key("--validate-manager-trace");
+    if (capture && validate) || fields.contains_key("--event-log") != (capture || validate) {
+        return Err(
+            "manager trace and event log must be supplied as one capture or validation pair".into(),
+        );
+    }
     Ok(Some(fields))
 }
+fn event_log(
+    game: &str,
+    seed: u64,
+    log: &[bbsim_engine::EventTransition],
+) -> Result<String, String> {
+    let count = u32::try_from(log.len()).map_err(|_| "event log exceeds u32 bound")?;
+    if count == 0 {
+        return Err("empty canonical event log".into());
+    }
+    let mut text =
+        format!("format\tcanonical-event-log-v1\ngame\t{game}\nseed\t{seed}\nevents\t{count}\n");
+    for (index, transition) in log.iter().enumerate() {
+        let mut encoded = String::with_capacity(transition.to_bytes().len() * 2);
+        for byte in transition.to_bytes() {
+            write!(&mut encoded, "{byte:02x}").unwrap();
+        }
+        writeln!(&mut text, "event\t{index}\t{encoded}").unwrap();
+    }
+    Ok(text)
+}
+
+fn canonical_hex(value: &str) -> Result<Vec<u8>, String> {
+    let (pairs, remainder) = value.as_bytes().as_chunks::<2>();
+    if pairs.is_empty()
+        || !remainder.is_empty()
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err("invalid canonical event hex".into());
+    }
+    pairs
+        .iter()
+        .map(|pair| {
+            let digit = |b: u8| match b {
+                b'0'..=b'9' => Ok(b - b'0'),
+                b'a'..=b'f' => Ok(b - b'a' + 10),
+                _ => Err("invalid canonical event hex"),
+            };
+            Ok((digit(pair[0])? << 4) | digit(pair[1])?)
+        })
+        .collect()
+}
+
+fn event_log_read(
+    text: &str,
+    game: &str,
+    seed: u64,
+    initial: &bbsim_engine::GameState,
+) -> Result<Vec<bbsim_engine::EventTransition>, String> {
+    if text.len() > 64 * 1024 * 1024 || text.contains('\r') || !text.ends_with('\n') {
+        return Err("invalid canonical event log framing/size".into());
+    }
+    let lines = text[..text.len() - 1].split('\n').collect::<Vec<_>>();
+    if lines.len() < 5
+        || lines[0] != "format\tcanonical-event-log-v1"
+        || lines[1] != format!("game\t{game}")
+        || lines[2] != format!("seed\t{seed}")
+    {
+        return Err("invalid canonical event log identity".into());
+    }
+    let count_text = lines[3]
+        .strip_prefix("events\t")
+        .ok_or("missing canonical event count")?;
+    if count_text.is_empty()
+        || !count_text.bytes().all(|b| b.is_ascii_digit())
+        || (count_text.len() > 1 && count_text.starts_with('0'))
+    {
+        return Err("invalid canonical event count".into());
+    }
+    let count = count_text
+        .parse::<u32>()
+        .map_err(|_| "invalid canonical event count")? as usize;
+    if count == 0 || lines.len().checked_sub(4) != Some(count) {
+        return Err("canonical event count mismatch".into());
+    }
+    let mut log = Vec::with_capacity(count);
+    for (index, line) in lines[4..].iter().enumerate() {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        if fields.len() != 3 || fields[0] != "event" || fields[1] != index.to_string() {
+            return Err("invalid canonical event row".into());
+        }
+        let bytes = canonical_hex(fields[2])?;
+        let transition = bbsim_engine::EventTransition::from_bytes(&bytes)
+            .map_err(|e| format!("invalid canonical event transition: {e:?}"))?;
+        if transition.to_bytes() != bytes {
+            return Err("noncanonical event transition".into());
+        }
+        log.push(transition);
+    }
+    if log[0].before() != initial
+        || log
+            .windows(2)
+            .any(|pair| pair[0].after() != pair[1].before())
+        || !log.last().unwrap().after().over
+    {
+        return Err("canonical event history is incomplete or discontinuous".into());
+    }
+    full_simulation::verify_accounting(&log)?;
+    Ok(log)
+}
+
+fn read_sidecar(path: &str) -> io::Result<String> {
+    const MAX_SIDECAR_BYTES: u64 = 64 * 1024 * 1024;
+    let file = OpenOptions::new().read(true).open(path)?;
+    if file.metadata()?.len() > MAX_SIDECAR_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "sidecar exceeds size bound",
+        ));
+    }
+    let mut text = String::new();
+    file.take(MAX_SIDECAR_BYTES + 1).read_to_string(&mut text)?;
+    if text.len() as u64 > MAX_SIDECAR_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "sidecar exceeds size bound",
+        ));
+    }
+    Ok(text)
+}
+
+fn create_sidecar(path: &str, text: &str) -> io::Result<()> {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    file.write_all(text.as_bytes())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Some(options) = parse(&std::env::args().skip(1).collect::<Vec<_>>())? else {
         println!("{USAGE}");
@@ -111,7 +255,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lineup = real::Lineup::read_tsv(&std::fs::read_to_string(&options["--lineup"])?)?;
     let cast =
         full_manager::Cast::read_complete_tsv(&std::fs::read_to_string(&options["--cast"])?)?;
-    if lineup.is_managed() != cast.is_managed() {
+    if lineup.policy_version() != cast.season_policy() {
         return Err("lineup/cast mode mismatch".into());
     }
     match (lineup.is_generic(), cast.game_id()) {
@@ -130,9 +274,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .transpose()?;
     if bench
         .as_ref()
-        .is_some_and(|bench| bench.is_managed() != cast.is_managed())
+        .is_some_and(|bench| bench.season_policy() != cast.season_policy())
     {
         return Err("bench/cast mode mismatch".into());
+    }
+    if cast.is_v2() && bench.is_none() {
+        return Err("v2 personnel requires a complete bench input".into());
     }
     let teams = lineup.team_names().map(str::to_owned);
     let team_labels = lineup.team_labels().map(str::to_owned);
@@ -181,12 +328,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     });
     let mut names = lineup.names();
-    for (id, name) in cast.names() {
-        if names.get(&id).is_some_and(|old| old != &name) {
-            return Err("lineup/cast display-name mismatch".into());
-        }
-        names.insert(id, name);
-    }
+    cast.merge_names(&mut names)?;
     if let Some(bench) = &bench {
         for (id, name) in &bench.names {
             if names.insert(id.clone(), name.clone()).is_some() {
@@ -194,14 +336,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    if cast.is_v2() {
+        cast.validate_v2_clocks(lineup.team_labels())?;
+        let mut names = lineup.names();
+        cast.merge_names(&mut names)?;
+        let prepared = cast.prepare(&initial)?;
+        let prepared = bench
+            .as_ref()
+            .expect("v2 requires a bench")
+            .prepare(&prepared, &fielders, &cast)?;
+        if options["--format"] != "accounting" {
+            return Err(
+                "v2 personnel currently requires accounting output and trace evidence".into(),
+            );
+        }
+        if let Some(trace_path) = options.get("--validate-manager-trace") {
+            let log = event_log_read(
+                &read_sidecar(&options["--event-log"])?,
+                lineup.game_id(),
+                options["--seed"].parse::<u64>()?,
+                &prepared,
+            )?;
+            let trace = read_sidecar(trace_path)?;
+            cast.validate_v2_trace(
+                &trace,
+                lineup.game_id(),
+                options["--seed"].parse::<u64>()?,
+                &log,
+            )?;
+            return Ok(());
+        }
+        if !options.contains_key("--manager-trace") {
+            return Err("v2 simulation requires --manager-trace and --event-log sidecars".into());
+        }
+    } else if options.contains_key("--manager-trace")
+        || options.contains_key("--validate-manager-trace")
+    {
+        return Err("manager trace options require v2 personnel".into());
+    }
     let seed = options["--seed"].parse::<u64>()?;
-    let full_simulation::Simulation { steps, draws } = full_simulation::simulate_with_personnel(
+    let full_simulation::Simulation {
+        steps,
+        draws,
+        manager_trace,
+    } = full_simulation::simulate_with_personnel_options(
         &initial,
         &fielders,
         &model,
         Some(&cast),
         bench.as_ref(),
-        seed,
+        full_simulation::SimulationOptions {
+            seed,
+            capture_v2_trace: cast.is_v2(),
+        },
         |state| {
             let probabilities = match &calibrated {
                 Some(r) => r.probabilities(state)?,
@@ -210,6 +397,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Some(model.player_probabilities(probabilities)?))
         },
     )?;
+    if cast.is_v2() {
+        let trace = manager_trace
+            .as_deref()
+            .ok_or("v2 simulation omitted manager trace")?;
+        let log = steps
+            .iter()
+            .map(|step| step.transition().clone())
+            .collect::<Vec<_>>();
+        let events = event_log(lineup.game_id(), seed, &log)?;
+        create_sidecar(&options["--manager-trace"], trace)?;
+        create_sidecar(&options["--event-log"], &events)?;
+    }
     if options["--format"] == "accounting" {
         let log: Vec<_> = steps.iter().map(|s| s.transition().clone()).collect();
         let stats = bbsim_engine::accounting::derive_accounting(&log)
@@ -220,7 +419,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ["SEA".into(), "OAK".into()]
         };
         let mut text = Vec::new();
-        if cast.is_managed() {
+        if cast.is_v2() {
+            season_accounting::write_managed_v2(
+                &mut text,
+                &stats,
+                lineup.game_id(),
+                seed,
+                &ids,
+                if calibrated.is_some() {
+                    calibrated::MODEL_VERSION
+                } else {
+                    ratings::MODEL_VERSION
+                },
+                bench.is_some(),
+            )?;
+        } else if cast.is_managed() {
             season_accounting::write_managed(
                 &mut text,
                 &stats,
@@ -442,6 +655,50 @@ mod tests {
             assert!(parse(&[good.clone(), args(&["--format", format])].concat()).is_err());
         }
         assert!(parse(&[good, args(&["--format"])].concat()).is_err());
+    }
+    #[test]
+    fn trace_capture_and_validation_require_distinct_paired_sidecars() {
+        let base = args(&[
+            "--baseline",
+            "base.csv",
+            "--contact-counts",
+            "contact.csv",
+            "--lineup",
+            "lineup.tsv",
+            "--cast",
+            "cast.tsv",
+            "--format",
+            "accounting",
+        ]);
+        for (mode, trace) in [
+            ("--manager-trace", "trace.tsv"),
+            ("--validate-manager-trace", "trace.tsv"),
+        ] {
+            let explicit = [
+                base.clone(),
+                args(&[mode, trace, "--event-log", "events.tsv"]),
+            ]
+            .concat();
+            assert_eq!(parse(&explicit).unwrap().unwrap()[mode], trace);
+        }
+        for bad in [
+            [base.clone(), args(&["--manager-trace", "trace.tsv"])].concat(),
+            [base.clone(), args(&["--event-log", "events.tsv"])].concat(),
+            [
+                base.clone(),
+                args(&[
+                    "--manager-trace",
+                    "trace.tsv",
+                    "--event-log",
+                    "events.tsv",
+                    "--validate-manager-trace",
+                    "trace.tsv",
+                ]),
+            ]
+            .concat(),
+        ] {
+            assert!(parse(&bad).is_err());
+        }
     }
     #[test]
     fn malformed_pairs_keep_error_precedence_over_a_trailing_missing_value() {

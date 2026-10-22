@@ -10,6 +10,12 @@ mod full_simulation;
 #[path = "../examples/support/full_transcript.rs"]
 mod full_transcript;
 #[allow(dead_code)]
+#[path = "../examples/support/pitcher_entry_v2.rs"]
+mod pitcher_entry_v2;
+#[allow(dead_code)]
+#[path = "../examples/support/pitcher_policy_v2.rs"]
+mod pitcher_policy_v2;
+#[allow(dead_code)]
 #[path = "../examples/support/preview.rs"]
 mod preview;
 #[allow(dead_code)]

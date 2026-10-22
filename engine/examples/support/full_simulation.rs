@@ -5,6 +5,7 @@ use super::{
         StrikeoutDecision, TagAttempt,
     },
     full_manager::Cast,
+    pitcher_entry_v2::{self, Budget, ExhaustionKey, Reason, Selection},
     preview::Rng,
 };
 use bbsim_engine::{
@@ -46,6 +47,12 @@ pub struct Simulation {
     pub steps: Vec<Step>,
     #[allow(dead_code)] // Pooled-only callers do not inspect rated draw receipts.
     pub draws: Vec<(usize, PaDraw)>,
+    pub manager_trace: Option<String>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SimulationOptions {
+    pub seed: u64,
+    pub capture_v2_trace: bool,
 }
 pub struct Model {
     pa: [u64; 10],
@@ -619,8 +626,35 @@ pub fn simulate_with_personnel(
     cast: Option<&Cast>,
     bench: Option<&bench::Bench>,
     seed: u64,
+    probabilities: impl FnMut(&GameState) -> Result<Option<[f64; 10]>, String>,
+) -> Result<Simulation, String> {
+    simulate_with_personnel_options(
+        initial,
+        fielders,
+        model,
+        cast,
+        bench,
+        SimulationOptions {
+            seed,
+            capture_v2_trace: true,
+        },
+        probabilities,
+    )
+}
+
+pub fn simulate_with_personnel_options(
+    initial: &GameState,
+    fielders: &[[String; 9]; 2],
+    model: &Model,
+    cast: Option<&Cast>,
+    bench: Option<&bench::Bench>,
+    options: SimulationOptions,
     mut probabilities: impl FnMut(&GameState) -> Result<Option<[f64; 10]>, String>,
 ) -> Result<Simulation, String> {
+    let SimulationOptions {
+        seed,
+        capture_v2_trace,
+    } = options;
     let mut state = match cast {
         Some(cast) => cast.prepare(initial)?,
         None => initial.clone(),
@@ -636,6 +670,9 @@ pub fn simulate_with_personnel(
     // Manager draws must not consume or shift the outcome RNG stream.
     let mut manager_rng = Rng::new(seed ^ 0x6d61_6e61_6765_7232);
     let mut entries: [(String, u64); 2] = std::array::from_fn(|_| (String::new(), 0));
+    let capture_v2_trace = capture_v2_trace && cast.is_some_and(Cast::is_v2);
+    let mut exhausted: [Option<ExhaustionKey>; 2] = [None, None];
+    let mut trace_records = Vec::new();
     let mut steps = Vec::new();
     let mut draws = Vec::new();
     let mut log = Vec::new();
@@ -649,10 +686,30 @@ pub fn simulate_with_personnel(
             return Err("invalid batting cursor".into());
         }
         if bench.is_some() {
-            if let Some(change) = cast
-                .ok_or("PH requires an explicit pitching cast")?
-                .restore_pitcher(&state)?
-            {
+            let cast = cast.ok_or("PH requires an explicit pitching cast")?;
+            if cast.is_v2() {
+                if let Some((selection, change)) = cast.restore_pitcher_v2(&state)? {
+                    let event_index = u32::try_from(log.len())
+                        .map_err(|_| "v2 trace event index exceeds wire bound")?;
+                    let side = 1 - state.half.offense();
+                    state = change.after().clone();
+                    log.push(change.clone());
+                    steps.push(Step::PitchingChange(change));
+                    exhausted[side] = None;
+                    if capture_v2_trace {
+                        trace_records.push(pitcher_entry_v2::encode_record(
+                            u32::try_from(trace_records.len())
+                                .map_err(|_| "v2 trace decision sequence exceeds wire bound")?,
+                            event_index,
+                            Reason::PhRestore,
+                            &selection,
+                            None,
+                            &log,
+                        )?);
+                    }
+                    continue;
+                }
+            } else if let Some(change) = cast.restore_pitcher(&state)? {
                 state = change.after().clone();
                 log.push(change.clone());
                 steps.push(Step::PitchingChange(change));
@@ -674,40 +731,78 @@ pub fn simulate_with_personnel(
                 manager_rng.next_u64(),
             );
         }
-        let step = if let Some(change) = cast
-            .map(|cast| cast.next_change_with_word(&state, &log, entries[side].1))
-            .transpose()?
-            .flatten()
-        {
-            Step::PitchingChange(change)
-        } else if let Some(change) = bench
-            .map(|bench| {
+
+        let mut pending = Vec::<(Reason, Selection, Option<Budget>)>::new();
+        let mut selected_step = None;
+        if let Some(cast) = cast {
+            if cast.is_v2() {
+                if let Some(decision) = cast.next_change_v2(&state, &log, entries[side].1)? {
+                    if let Some(change) = decision.transition {
+                        exhausted[side] = None;
+                        if capture_v2_trace {
+                            pending.push((Reason::Hook, decision.selection, Some(decision.budget)));
+                        }
+                        selected_step = Some(Step::PitchingChange(change));
+                    } else {
+                        let key = decision.selection.exhaustion_key()?;
+                        if capture_v2_trace && exhausted[side].as_ref() != Some(&key) {
+                            pending.push((Reason::Hook, decision.selection, Some(decision.budget)));
+                        }
+                        exhausted[side] = Some(key);
+                    }
+                }
+            } else if let Some(change) =
+                cast.next_change_with_word(&state, &log, entries[side].1)?
+            {
+                selected_step = Some(Step::PitchingChange(change));
+            }
+        }
+        if selected_step.is_none() {
+            if let Some(bench) = bench {
                 let offense = state.half.offense();
-                let reserve = cast
-                    .ok_or("PH requires an explicit pitching cast")?
-                    .next_available(&state, offense);
+                let cast = cast.ok_or("PH requires an explicit pitching cast")?;
+                let mut selection = None;
+                let reserve_id = if cast.is_v2() {
+                    let selected = cast.select_v2(&state, offense)?;
+                    let reserve_id = selected.chosen().map(str::to_owned);
+                    if reserve_id.is_some() {
+                        exhausted[offense] = None;
+                        if capture_v2_trace {
+                            selection = Some(selected);
+                        }
+                    }
+                    reserve_id
+                } else {
+                    cast.next_available(&state, offense).map(str::to_owned)
+                };
+                let reserve = reserve_id.as_deref();
                 let query = |candidate: &GameState| {
                     let p = probabilities(candidate)?
                         .ok_or("PH requires individual current-matchup ratings")?;
                     validate_pa(&p)?;
                     Ok(std::array::from_fn(|i| p[i] / (1.0 - p[9])))
                 };
-                if bench.is_managed() {
+                let change = if bench.is_managed() {
                     pinch::decide_managed_states(
                         &state,
                         &bench.pools[offense],
                         reserve,
                         &bench.pace,
                         query,
-                    )
+                    )?
                 } else {
-                    pinch::decide_states(&state, &bench.pools[offense], reserve, query)
+                    pinch::decide_states(&state, &bench.pools[offense], reserve, query)?
+                };
+                if let Some(selection) = selection {
+                    pending.push((Reason::PhProbe, selection, None));
                 }
-            })
-            .transpose()?
-            .flatten()
-        {
-            Step::PinchHit(change)
+                if let Some(change) = change {
+                    selected_step = Some(Step::PinchHit(change));
+                }
+            }
+        }
+        let step = if let Some(step) = selected_step {
+            step
         } else {
             let side = 1 - state.half.offense();
             let mut defense = match &state.teams[side].defense {
@@ -735,10 +830,49 @@ pub fn simulate_with_personnel(
             }
             Step::Play(play)
         };
+        let event_index =
+            u32::try_from(log.len()).map_err(|_| "v2 trace event index exceeds wire bound")?;
         state = step.transition().after().clone();
         log.push(step.transition().clone());
+        if capture_v2_trace {
+            for (reason, selection, budget) in pending {
+                trace_records.push(pitcher_entry_v2::encode_record(
+                    u32::try_from(trace_records.len())
+                        .map_err(|_| "v2 trace decision sequence exceeds wire bound")?,
+                    event_index,
+                    reason,
+                    &selection,
+                    budget.as_ref(),
+                    &log,
+                )?);
+            }
+        }
         steps.push(step);
     }
     verify_accounting(&log)?;
-    Ok(Simulation { steps, draws })
+    let manager_trace = if capture_v2_trace {
+        let cast = cast.ok_or("v2 trace requires a pitching cast")?;
+        let game = cast
+            .game_id()
+            .ok_or("v2 trace requires a pinned game identity")?;
+        let mut trace = pitcher_entry_v2::header(
+            game,
+            seed,
+            u32::try_from(log.len()).map_err(|_| "v2 trace event count exceeds wire bound")?,
+            u32::try_from(trace_records.len())
+                .map_err(|_| "v2 trace decision count exceeds wire bound")?,
+        )?;
+        for record in trace_records {
+            trace.push_str(&record);
+        }
+        cast.validate_v2_trace(&trace, game, seed, &log)?;
+        Some(trace)
+    } else {
+        None
+    };
+    Ok(Simulation {
+        steps,
+        draws,
+        manager_trace,
+    })
 }

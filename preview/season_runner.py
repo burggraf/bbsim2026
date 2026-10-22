@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import unicodedata
 from preview import game_inputs as game
 from preview import bench_inputs as bench
 
@@ -43,7 +44,219 @@ def manifest(source,master_seed):
     return result
 
 
+def _v2_actor_bindings(bundle):
+    from preview import bench_inputs as bench_policy, managed_inputs, pitcher_policy_v2 as pitcher_v2, real_lineup, season_manager
+
+    def read(name):
+        text=bundle.get(name)
+        if not isinstance(text,str):raise ValueError('Missing v2 personnel file: '+name)
+        if (name=='bench' and len(text.encode('utf-8'))>65536) or any(
+                unicodedata.category(c)=='Cc' and c not in '\n\t' for c in text):
+            raise ValueError('Invalid v2 personnel controls/size')
+        lines=text.splitlines()
+        if not lines or lines[0]!='key\tvalue':raise ValueError('Invalid v2 personnel header: '+name)
+        fields={}
+        for line in lines[1:]:
+            cells=line.split('\t')
+            if len(cells)!=2 or not all(cells) or cells[0] in fields:raise ValueError('Invalid/duplicate v2 personnel row')
+            fields[cells[0]]=cells[1]
+        return fields
+
+    def number(value,limit=2**64-1):
+        if not re.fullmatch(r'0|[1-9][0-9]*',value) or int(value)>limit:
+            raise ValueError('Invalid v2 personnel count')
+        return int(value)
+
+    def vector(value):
+        values=value.split(',')
+        if len(values)!=9:return False
+        return all(number(n)<=maximum for n,maximum in zip(values,game.ratings.COUNTS))
+
+    def pair(value,unknown=False,limit=2**32-1):
+        cells=value.split(',')
+        if len(cells)!=2:raise ValueError('Invalid v2 personnel pair')
+        first=number(cells[0],limit)
+        second=None if unknown and cells[1]=='?' else number(cells[1],limit)
+        return first,second
+
+    lineup=read('lineup');cast=read('cast');bench=read('bench')
+    lineup_meta={'format','game_id','date','park_id','away_team','home_team','away_team_id','home_team_id',
+        'use_dh','audit_sha256','snapshot_sha256','supplement_sha256','attribution','season_policy','availability_basis'}
+    cast_meta={'format','policy','game_id','cast_sizes','season_policy','availability_basis','starter_scale:Away',
+        'starter_scale:Home','workload_recipe_sha256','outcome_events_sha256','attribution','batter_kappa',
+        'pitcher_kappa','league_counts','lineup_report_sha256','model','opportunity_basis',
+        'opportunity_report_sha256','snapshot_sha256','supplement_sha256','workload_basis','exhaustion'}
+    bench_meta={'format','game_id','policy','availability_basis','defense_basis','snapshot_sha256',
+        'supplement_sha256','opportunity_report_sha256','attribution','season_policy'}
+    common=dict(season_policy=pitcher_v2.POLICY,availability_basis=season_manager.AVAILABILITY)
+    if any(lineup.get(k)!=v for k,v in dict(format='season-pool-lineup-v2',**common,
+            audit_sha256=real_lineup.REPORT_SHA,snapshot_sha256=real_lineup.SNAPSHOT_SHA,
+            supplement_sha256=real_lineup.SUPPLEMENT_SHA,attribution=real_lineup.ATTRIBUTION).items()):
+        raise ValueError('Mismatched v2 lineup metadata')
+    if any(cast.get(k)!=v for k,v in dict(format='season-pool-pitching-cast-v2',
+            policy='empirical-pa-closed-cast-v2',**common,
+            workload_recipe_sha256=game.cast.WORKLOAD_RECIPE_SHA,
+            outcome_events_sha256=game.cast.EVENTS_SHA,attribution=real_lineup.ATTRIBUTION,
+            batter_kappa='200',pitcher_kappa='200',league_counts=','.join(map(str,game.ratings.COUNTS)),
+            lineup_report_sha256=real_lineup.REPORT_SHA,model=game.ratings.MODEL,
+            opportunity_basis=game.ratings.BASIS,
+            opportunity_report_sha256=game.ratings.REPORT_SHA,
+            snapshot_sha256=real_lineup.SNAPSHOT_SHA,supplement_sha256=real_lineup.SUPPLEMENT_SHA,
+            workload_basis=managed_inputs.WORKLOAD_BASIS,exhaustion='last_pitcher_stays').items()):
+        raise ValueError('Mismatched v2 cast metadata')
+    if any(bench.get(k)!=v for k,v in dict(format='season-pool-bench-v2',game_id=lineup.get('game_id'),
+            policy=bench_policy.POLICY,**common,defense_basis=bench_policy.DEFENSE_BASIS,
+            snapshot_sha256=real_lineup.SNAPSHOT_SHA,supplement_sha256=real_lineup.SUPPLEMENT_SHA,
+            opportunity_report_sha256=game.ratings.REPORT_SHA,
+            attribution=real_lineup.ATTRIBUTION).items()):
+        raise ValueError('Mismatched v2 bench metadata')
+    if set(lineup)&lineup_meta!=lineup_meta or set(cast)&cast_meta!=cast_meta or set(bench)&bench_meta!=bench_meta:
+        raise ValueError('Missing v2 personnel metadata')
+    game_id=lineup['game_id'];away_id=lineup['away_team_id'];home_id=lineup['home_team_id']
+    game_date=date.fromisoformat(lineup['date'])
+    if (not re.fullmatch(r'[A-Z]{3}2019[0-9]{4}[012]',game_id) or game_id[:3]!=home_id
+            or away_id==home_id or game_date.isoformat()!=lineup['date']
+            or game_date.strftime('%Y%m%d')!=game_id[3:11] or lineup['use_dh'] not in {'true','false'}):
+        raise ValueError('Invalid v2 lineup identity')
+    for team_id in [away_id,home_id]:pitcher_v2.scheduled_games(team_id)
+    if (cast['game_id']!=game_id or bench['game_id']!=game_id
+            or cast['lineup_report_sha256']!=lineup['audit_sha256']
+            or len({lineup['snapshot_sha256'],cast['snapshot_sha256'],bench['snapshot_sha256']})!=1
+            or len({lineup['supplement_sha256'],cast['supplement_sha256'],bench['supplement_sha256']})!=1):
+        raise ValueError('Mismatched v2 personnel source/game binding')
+
+    line_players={'Away':[],'Home':[]};line_ids=set();line_names={}
+    for key,value in lineup.items():
+        if key in lineup_meta:continue
+        parts=key.split(':')
+        if (len(parts)!=4 or parts[0] not in line_players or not re.fullmatch(r'[a-z0-9-]+',parts[3])
+                or value.strip()!=value):raise ValueError('Unknown v2 lineup actor')
+        slot=number(parts[1],9);position=number(parts[2],10);pid=parts[3]
+        if (position==0 or pid in line_ids or (lineup['use_dh']=='true' and ((slot==0)!=(position==1)))
+                or (lineup['use_dh']=='false' and slot==0)):
+            raise ValueError('Invalid v2 lineup actor')
+        line_ids.add(pid);line_names[pid]=value.strip();line_players[parts[0]].append((slot,position,pid))
+    dh=lineup['use_dh']=='true'
+    expected_slots=set(range(10)) if dh else set(range(1,10))
+    expected_positions=set(range(1,11)) if dh else set(range(1,10))
+    for side,players in line_players.items():
+        if ({slot for slot,_,_ in players}!=expected_slots or {pos for _,pos,_ in players}!=expected_positions
+                or len(players)!=len(expected_slots)):
+            raise ValueError('Invalid v2 lineup grain')
+    starters={side:next(pid for _,pos,pid in players if pos==1) for side,players in line_players.items()}
+    lineup_batters={side:{pid for slot,_,pid in players if slot!=0} for side,players in line_players.items()}
+
+    cast_rows={'Away':[],'Home':[]};cast_names={};pitcher_profiles=set();batter_profiles=set();workloads={};usage={};
+    relief_usage=set();clocks={};budget_priors=set()
+    for key,value in cast.items():
+        if key in cast_meta:continue
+        parts=key.split(':')
+        if parts[0]=='cast' and len(parts)==4 and parts[1] in cast_rows:
+            rank=number(parts[2],49);pid=parts[3]
+            if not re.fullmatch(r'[a-z0-9-]+',pid) or value.strip()!=value:raise ValueError('Invalid v2 cast identity')
+            cast_rows[parts[1]].append((rank,pid));cast_names[pid]=value.strip()
+        elif parts[0] in {'pitcher','batter'} and len(parts)==2:
+            if not re.fullmatch(r'[a-z0-9-]+',parts[1]) or not vector(value):raise ValueError('Invalid v2 ability profile')
+            (pitcher_profiles if parts[0]=='pitcher' else batter_profiles).add(parts[1])
+        elif parts[0] in {'workload','usage'} and len(parts)==3 and parts[1] in {'start','relief'}:
+            pid=parts[2]
+            if not re.fullmatch(r'[a-z0-9-]+',pid):raise ValueError('Invalid v2 workload actor')
+            k=(parts[1],pid)
+            if parts[0]=='workload':
+                pa,outings=pair(value,limit=2**64-1)
+                if pa>2**52 or outings>2429 or (outings==0 and pa):raise ValueError('Invalid v2 workload')
+                workloads[k]=(pa,outings)
+            else:
+                samples=[] if value=='-' else [number(n) for n in value.split(',')]
+                if samples!=sorted(samples):raise ValueError('Unsorted v2 workload samples')
+                usage[k]=samples
+        elif parts[0]=='budget_prior' and len(parts)==3 and parts[1] in {'start','relief'}:
+            if value!='true':raise ValueError('Invalid v2 budget prior')
+            budget_priors.add((parts[1],parts[2]))
+        elif parts[0]=='club_clock' and len(parts)==2 and parts[1] in {'Away','Home'}:
+            clocks[parts[1]]=pair(value,unknown=False)
+        elif parts[0]=='relief_usage' and len(parts)==2:
+            pair(value,unknown=True);relief_usage.add(parts[1])
+        else:raise ValueError('Unknown v2 cast field')
+    sizes=[number(n,50) for n in cast['cast_sizes'].split(',')]
+    if len(sizes)!=2 or not all(sizes) or any(cast[f'starter_scale:{side}'] not in {'80','100'} for side in cast_rows):
+        raise ValueError('Invalid v2 cast sizes/starter scale')
+    cast_ids={}
+    for side,index in [('Away',0),('Home',1)]:
+        rows=sorted(cast_rows[side])
+        if len(rows)!=sizes[index] or [rank for rank,_ in rows]!=list(range(sizes[index])):
+            raise ValueError('Incomplete v2 cast rows')
+        cast_ids[side]={pid for _,pid in rows}
+        if len(cast_ids[side])!=len(rows):raise ValueError('Duplicate v2 cast identity')
+    all_cast=cast_ids['Away']|cast_ids['Home']
+    if any(cast_names[pid]!=line_names[pid] for pid in all_cast&line_ids):
+        raise ValueError('V2 lineup/cast display-name mismatch')
+    expected_workloads={(role,pid) for pid in all_cast for role in ('start','relief')}
+    if (cast_ids['Away']&cast_ids['Home'] or pitcher_profiles!=all_cast or relief_usage!=all_cast
+            or set(workloads)!=expected_workloads or set(usage)!=expected_workloads
+            or not budget_priors<=expected_workloads or len(clocks)!=2):
+        raise ValueError('Inconsistent v2 cast actor profiles')
+    for side,tid in [('Away',away_id),('Home',home_id)]:
+        completed,scheduled=clocks[side]
+        if completed>=scheduled or scheduled!=pitcher_v2.scheduled_games(tid):
+            raise ValueError('Invalid v2 club clock binding')
+        if next(pid for rank,pid in sorted(cast_rows[side]) if rank==0)!=starters[side]:
+            raise ValueError('V2 starter does not match lineup')
+        other_side='Home' if side=='Away' else 'Away'
+        other_line_ids={pid for _,_,pid in line_players[other_side]}
+        if (any(pid in line_ids and pid!=starters[side] for pid in cast_ids[side])
+                or cast_ids[side]&other_line_ids):
+            raise ValueError('V2 cast conflicts with lineup identities')
+        if workloads['start',starters[side]][1]==0:
+            raise ValueError('Missing v2 starter workload')
+    for k,(pa,outings) in workloads.items():
+        samples=usage[k]
+        if len(samples)!=outings or sum(samples)!=pa:raise ValueError('V2 workload samples do not reconcile')
+    expected_batters=set().union(*lineup_batters.values())
+    if not dh:expected_batters|=all_cast
+    if batter_profiles!=expected_batters:raise ValueError('V2 batter profiles do not match lineup/cast')
+
+    bench_records={};bench_ids={'Away':set(),'Home':set()}
+    for key,value in bench.items():
+        if key in bench_meta:continue
+        parts=key.split(':')
+        if (len(parts)!=3 or parts[0] not in bench_ids or not re.fullmatch(r'[a-z0-9-]+',parts[1])
+                or parts[2] not in {'name','positions','counts','pace'}):
+            raise ValueError('Unknown v2 bench actor')
+        record=bench_records.setdefault((parts[0],parts[1]),{})
+        if parts[2] in record:raise ValueError('Duplicate v2 bench actor field')
+        record[parts[2]]=value
+    for (side,pid),record in bench_records.items():
+        if set(record)!={'name','positions','counts','pace'} or record['name'].strip()!=record['name'] or not vector(record['counts']) or record['pace'] not in {'-1','0','1'}:
+            raise ValueError('Invalid v2 bench actor')
+        if record['positions']!='?':
+            positions=[number(n,9) for n in record['positions'].split(',')]
+            if any(n<2 for n in positions) or positions!=sorted(set(positions)):raise ValueError('Invalid v2 bench positions')
+        bench_ids[side].add(pid)
+    if (bench_ids['Away']&bench_ids['Home'] or set().union(*bench_ids.values())&(line_ids|all_cast)):
+        raise ValueError('Conflicting v2 bench identity')
+
+    result={}
+    for side in ['Away','Home']:
+        bats=set(lineup_batters[side])|(cast_ids[side] if not dh else set())|bench_ids[side]
+        fielders={pid for _,position,pid in line_players[side] if position!=10}|cast_ids[side]|bench_ids[side]
+        result[side]=dict(batter=sorted(bats),pitcher=sorted(cast_ids[side]),fielder=sorted(fielders))
+    if ({pid for roles in result.values() for ids in roles.values() for pid in ids}
+            !=set().union(*lineup_batters.values())|all_cast|set().union(*bench_ids.values())):
+        raise ValueError('Inconsistent v2 actor bindings')
+    return result
+
+
 def actor_bindings(bundle):
+    markers={('format','season-pool-lineup-v2'),('format','season-pool-pitching-cast-v2'),
+        ('format','season-pool-bench-v2'),('season_policy','season-pool-pitcher-usage-v2')}
+    for name in ('lineup','cast','bench'):
+        text=bundle.get(name,'')
+        if not isinstance(text,str):continue
+        fields=(line.partition('\t') for line in text.splitlines())
+        if (any(separator and (key,value) in markers for key,separator,value in fields)
+                or any(line.startswith(('club_clock:','relief_usage:')) for line in text.splitlines())):
+            return _v2_actor_bindings(bundle)
     lineup=[line.split('\t')[0].split(':') for line in bundle['lineup'].splitlines() if line.startswith(('Away:','Home:'))]
     keys=[line.split('\t')[0].split(':') for line in bundle['cast'].splitlines()]
     batting={k[1] for k in keys if k[0]=='batter'}
@@ -116,12 +329,14 @@ def parse_accounting(text,entry):
     ph_metadata=dict(pinch_hitting=bench.POLICY,availability_basis=bench.AVAILABILITY,defense_basis=bench.DEFENSE_BASIS)
     expected_keys={'format','game','seed'}|VERSIONS
     if expected_format=='controlled-accounting-ph-v1':expected_keys|=ph_metadata.keys()
-    elif expected_format=='controlled-accounting-managed-v1':
-        from preview import season_manager as manager
+    elif expected_format in {'controlled-accounting-managed-v1','controlled-accounting-managed-v2'}:
+        from preview import pitcher_policy_v2, season_manager as manager
         ph=entry.get('pinch_hitting','late-close-expected-bases-ph-usage-v1')
         if ph not in {'disabled','late-close-expected-bases-ph-usage-v1'}:raise ValueError('Unknown managed PH policy')
+        v2=expected_format=='controlled-accounting-managed-v2'
         ph_metadata.update(pinch_hitting=ph,availability_basis=manager.AVAILABILITY,
-            season_policy=manager.POLICY,manager='season-pool-workload-context-2019-v1')
+            season_policy=pitcher_policy_v2.POLICY if v2 else manager.POLICY,
+            manager=pitcher_policy_v2.MANAGER if v2 else 'season-pool-workload-context-2019-v1')
         expected_keys|=ph_metadata.keys()
     elif expected_format!='controlled-accounting-v1':raise ValueError('Unknown accounting schema')
     ids=dict(Away=entry['away_team_id'],Home=entry['home_team_id'])

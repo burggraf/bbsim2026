@@ -34,6 +34,17 @@ class PitcherPolicyV2Tests(unittest.TestCase):
     def rank(self,used=30,target=120,c=80,n=162,*,pa_sum=60,outings=10,inning=5,gap=0):
         return self.m.relief_rank(used,target,c,n,pa_sum=pa_sum,outings=outings,inning=inning,score_gap=gap)
 
+    def test_schedule_binding_uses_only_the_supported_2019_team_counts(self):
+        self.assertEqual(self.m.scheduled_games('DET'),161)
+        self.assertEqual(self.m.scheduled_games('CHA'),161)
+        self.assertEqual(self.m.scheduled_games('ANA'),162)
+        for team in ['ARI','ATL','BAL','BOS','CHN','CIN','CLE','COL','HOU','KCA','ANA','LAN',
+                     'MIA','MIL','MIN','NYA','NYN','OAK','PHI','PIT','SDN','SEA','SFN','SLN',
+                     'TBA','TEX','TOR','WAS']:
+            self.assertEqual(self.m.scheduled_games(team),162)
+        for team in ['AAA','LAA','',None]:
+            with self.subTest(team=team),self.assertRaises(ValueError):self.m.scheduled_games(team)
+
     def test_v2_is_separate_from_v1_context_and_versions(self):
         self.assertEqual(self.m.POLICY,'season-pool-pitcher-usage-v2')
         self.assertEqual(season_manager.POLICY,'season-pool-soft-usage-v1')

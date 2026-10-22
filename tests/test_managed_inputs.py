@@ -190,6 +190,42 @@ class ManagedInputsTests(unittest.TestCase):
         self.assertEqual(f['Away:unknown:pace'],'0')
         self.assertEqual(f['Away:unknown:counts'],'0,0,0,0,0,0,0,0,0')
 
+    def test_v2_producer_exports_all_starter_debt_and_exact_native_workload_wire(self):
+        from preview import pitcher_policy_v2
+        s,p,l,g=fixture();tid='SFN';actors=p['teams'][tid]['players']
+        for team_id in ['SFN','LAN']:
+            p['teams'][team_id]['scheduled_games']=162;l['teams'][team_id]['scheduled_games']=162
+        for i in range(6):
+            pid=f'spot{i}'
+            actor=copy.deepcopy(actors['ap'])
+            actor.update(player_id=pid,name=pid,positions=[1],starts=i+1,
+                targets=dict(batter=0,pitcher=30,start_outs=30,relief_outs=None))
+            actors[pid]=actor
+        mixed=copy.deepcopy(actors['ap'])
+        mixed.update(player_id='mixed',name='Mixed Role',positions=[1],starts=1,
+            targets=dict(batter=0,pitcher=30,start_outs=30,relief_outs=30))
+        actors['mixed']=mixed
+        start_only=copy.deepcopy(actors['ap'])
+        start_only.update(player_id='startonly',name='Start Only',positions=[1],starts=1,
+            targets=dict(batter=0,pitcher=30,start_outs=30,relief_outs=0))
+        actors['startonly']=start_only
+
+        bundle=self.m.build_game(s,p,l,g['game_id'],{},pitcher_policy=pitcher_policy_v2.POLICY)
+        lineup=fields(bundle['lineup']);cast=fields(bundle['cast']);bench=fields(bundle['bench'])
+        self.assertEqual(bundle['starter_decisions']['Away']['player_id'],'spot5')
+        self.assertEqual(bundle['next_turns'],{})
+        self.assertEqual(lineup['format'],'season-pool-lineup-v2')
+        self.assertEqual(cast['format'],'season-pool-pitching-cast-v2')
+        self.assertEqual(bench['format'],'season-pool-bench-v2')
+        self.assertEqual(cast['club_clock:Away'],'0,162')
+        pitcher_ids={key.split(':')[3] for key in cast if key.startswith('cast:')}
+        relief_usage_ids={key.split(':')[1] for key in cast if key.startswith('relief_usage:')}
+        self.assertEqual(pitcher_ids,relief_usage_ids)
+        self.assertIn('mixed',pitcher_ids)
+        self.assertNotIn('startonly',pitcher_ids)
+        self.assertFalse(any(key.startswith('relief_pace:') for key in cast))
+        self.assertEqual(bundle['role_actors'],season.actor_bindings(bundle))
+
     def test_incomplete_history_is_never_usable_policy_context(self):
         s,p,l,g=fixture();l['history_complete']=False
         with self.assertRaisesRegex(ValueError,'Incomplete'):

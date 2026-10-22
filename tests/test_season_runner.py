@@ -147,6 +147,11 @@ class PhAccountingTests(unittest.TestCase):
                 f'policy\t{bench.POLICY}\navailability_basis\t{bench.AVAILABILITY}\ndefense_basis\t{bench.DEFENSE_BASIS}\n'+
                 'Away:bench:name\tBench Actor\nAway:bench:positions\t7\nAway:bench:counts\t0,0,0,0,0,0,0,0,0\n')
 
+    def test_v1_actor_bindings_ignore_v2_marker_in_player_name(self):
+        bundle=self.bundle();expected=season.actor_bindings(bundle)
+        changed=dict(bundle,lineup=bundle['lineup'].replace('Pitcher a','season-pool-lineup-v2'))
+        self.assertEqual(season.actor_bindings(changed),expected)
+
     def test_bench_bindings_expand_only_batting_and_fielding(self):
         bundle=self.bundle();bindings=season.actor_bindings(bundle)
         self.assertIn('bench',bindings['Away']['batter'])
@@ -161,6 +166,90 @@ class PhAccountingTests(unittest.TestCase):
                 bundle['bench'].replace('LAN201904010','LAN201904020')]:
             with self.subTest(text=text),self.assertRaises(ValueError):
                 season.actor_bindings(dict(bundle,bench=text))
+
+    def v2_bundle(self):
+        from preview import bench_inputs, managed_inputs, pitcher_policy_v2, real_lineup, season_manager
+        bundle=self.bundle()
+        def rows(text):return dict(line.split('\t',1) for line in text.splitlines()[1:])
+        def wire(fields):return 'key\tvalue\n'+''.join(f'{k}\t{v}\n' for k,v in sorted(fields.items()))
+        lineup=rows(bundle['lineup'])
+        lineup.update(format='season-pool-lineup-v2',season_policy=pitcher_policy_v2.POLICY,
+            availability_basis=season_manager.AVAILABILITY)
+        bundle['lineup']=wire(lineup)
+        cast=rows(bundle['cast'])
+        cast.update(format='season-pool-pitching-cast-v2',season_policy=pitcher_policy_v2.POLICY,
+            availability_basis=season_manager.AVAILABILITY,workload_basis=managed_inputs.WORKLOAD_BASIS,
+            **{'starter_scale:Away':'100','starter_scale:Home':'80',
+                'club_clock:Away':'0,162','club_clock:Home':'0,162'})
+        pitchers=[key.split(':')[-1] for key in cast if key.startswith('cast:')]
+        cast.update({f'relief_usage:{pid}':'0,?' for pid in pitchers})
+        bundle['cast']=wire(cast)
+        raw_bench=rows(bundle['bench'])
+        raw_bench.update(format='season-pool-bench-v2',season_policy=pitcher_policy_v2.POLICY,
+            availability_basis=season_manager.AVAILABILITY,snapshot_sha256=real_lineup.SNAPSHOT_SHA,
+            supplement_sha256=real_lineup.SUPPLEMENT_SHA,opportunity_report_sha256=season.game.ratings.REPORT_SHA,
+            attribution=real_lineup.ATTRIBUTION,**{'Away:bench:pace':'0'})
+        bundle['bench']=wire(raw_bench)
+        # The existing assumed fixture already carries the same game and PH policy.
+        raw_bench['policy']=bench_inputs.POLICY
+        bundle['bench']=wire(raw_bench)
+        return bundle
+
+    def test_v2_personnel_rejects_controls_and_oversized_bench_wire(self):
+        bundle=self.v2_bundle()
+        controlled=dict(bundle,lineup=bundle['lineup'].replace('Pitcher a','Pitcher\x00a'),
+            cast=bundle['cast'].replace('Pitcher a','Pitcher\x00a'))
+        with self.assertRaises(ValueError):season.actor_bindings(controlled)
+        untrimmed=dict(bundle,lineup=bundle['lineup'].replace('Pitcher a',' Pitcher a'),
+            cast=bundle['cast'].replace('Pitcher a',' Pitcher a'))
+        with self.assertRaises(ValueError):season.actor_bindings(untrimmed)
+        oversized=dict(bundle,bench=bundle['bench'].replace('Bench Actor','x'*65536))
+        with self.assertRaises(ValueError):season.actor_bindings(oversized)
+
+    def test_v2_actor_bindings_allow_unknown_relief_class(self):
+        bundle=self.v2_bundle()
+        bundle['cast']=bundle['cast'].replace('workload:relief:ar1\t4,1','workload:relief:ar1\t0,0').replace(
+            'usage:relief:ar1\t4\n','usage:relief:ar1\t-\n')
+        self.assertIn('ar1',season.actor_bindings(bundle)['Away']['pitcher'])
+
+    def test_v2_actor_bindings_keep_u64_role_workload_values(self):
+        bundle=self.v2_bundle()
+        bundle['cast']=bundle['cast'].replace('workload:relief:ar1\t4,1','workload:relief:ar1\t4294967296,1').replace(
+            'usage:relief:ar1\t4','usage:relief:ar1\t4294967296')
+        self.assertIn('ar1',season.actor_bindings(bundle)['Away']['pitcher'])
+
+    def test_v2_personnel_bundle_binds_policy_game_sources_and_clock_usage_rows(self):
+        bundle=self.v2_bundle();bindings=season.actor_bindings(bundle)
+        self.assertIn('bench',bindings['Away']['batter'])
+        self.assertEqual(set(bindings['Away']['pitcher']),{'ap','ar0','ar1','ar2','ar3'})
+        for bad in [
+            dict(bundle,lineup=bundle['lineup'].replace('season-pool-lineup-v2','season-pool-lineup-v1')),
+            dict(bundle,lineup=bundle['lineup'].replace('season-pool-pitcher-usage-v2','season-pool-soft-usage-v1'),
+                cast=bundle['cast'].replace('season-pool-pitching-cast-v2','season-pool-pitching-cast-v1').replace(
+                    'season-pool-pitcher-usage-v2','season-pool-soft-usage-v1'),
+                bench=bundle['bench'].replace('season-pool-bench-v2','season-pool-bench-v1').replace(
+                    'season-pool-pitcher-usage-v2','season-pool-soft-usage-v1')),
+            dict(bundle,cast=bundle['cast'].replace('club_clock:Away\t0,162\n','')),
+            dict(bundle,cast=bundle['cast'].replace('relief_usage:ap\t0,?\n','')),
+            dict(bundle,cast=bundle['cast']+'relief_pace:ap\t0\n'),
+            dict(bundle,cast=bundle['cast']+'unknown\ttrue\n'),
+            dict(bundle,cast=bundle['cast'].replace('club_clock:Away\t0,162','club_clock:Away\t0,161')),
+            dict(bundle,cast=bundle['cast'].replace('relief_usage:ap\t0,?','relief_usage:ap\t00,?')),
+            dict(bundle,cast=bundle['cast'].replace('cast:Away:1:ar0','cast:Away:1:ap')),
+            dict(bundle,cast=bundle['cast'].replace('starter_scale:Away\t100','starter_scale:Away\t101')),
+            dict(bundle,cast=bundle['cast'].replace('cast:Away:0:ap\tPitcher a','cast:Away:0:ap\tWrong pitcher')),
+            dict(bundle,cast=bundle['cast'].replace('lineup_report_sha256\t','lineup_report_sha256\twrong',1)),
+            dict(bundle,lineup=bundle['lineup'].replace('date\t2019-04-01','date\t20190401')),
+            dict(bundle,cast=bundle['cast'].replace('LAN201904010','LAN201904020')),
+            dict(bundle,lineup=bundle['lineup'].replace('audit_sha256\t','audit_sha256\twrong',1)),
+            dict(bundle,lineup=bundle['lineup'].replace('Away:4:1:ap','Away:4:1:other')),
+            dict(bundle,bench=bundle['bench'].replace('snapshot_sha256\t','snapshot_sha256\twrong',1)),
+            dict(bundle,bench=bundle['bench'].replace('opportunity_report_sha256\t','opportunity_report_sha256\twrong',1)),
+            dict(bundle,bench=bundle['bench'].replace('LAN201904010','LAN201904020')),
+            dict(bundle,bench=bundle['bench'].replace('Away:bench:','Away:ap:')),
+            {key:value for key,value in bundle.items() if key!='bench'},
+        ]:
+            with self.subTest(bundle=bad),self.assertRaises(ValueError):season.actor_bindings(bad)
 
 
 class NativeTests(unittest.TestCase):

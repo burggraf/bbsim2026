@@ -1,6 +1,7 @@
 """Legal season-pool inputs; historical daily lineups are preferences, not eligibility."""
 from preview import game_inputs as game
 from preview import season_manager as manager
+from preview import pitcher_policy_v2 as pitcher_v2
 from preview import bench_inputs as bench
 
 WORKLOAD_BASIS='source empirical role outings; explicitly marked pooled role priors when unavailable'
@@ -62,6 +63,16 @@ def _lineups(policy,g,starters,occupied):
     return selected,orders
 
 
+def _v2_decision(choice):
+    def candidate(row):
+        return dict(player_id=row['player_id'],starts_target=row['starts_target'],
+            starts_before=row['starts_before'],debt_numerator=row['debt'].numerator,
+            debt_denominator=row['debt'].denominator,last_pitched=row['last_pitched'],
+            excluded=row['excluded'],budget_scale=row['budget_scale'])
+    return dict(player_id=choice['player_id'],budget_scale=choice['budget_scale'],
+        reason=choice['reason'],candidates=[candidate(row) for row in choice['candidates']])
+
+
 def _budgets(source):
     individual={};pooled={r:[] for r in ['start','relief']}
     for pid,p in sorted(source['_workloads'].items()):
@@ -80,45 +91,54 @@ def _budgets(source):
     return individual,pooled
 
 
-def build_game(source,pool,snapshot,game_id,rotation_turns):
+def build_game(source,pool,snapshot,game_id,rotation_turns,pitcher_policy=manager.POLICY):
     """Pure choice/export; caller authenticates sources/targets and persists only accepted turns."""
+    if pitcher_policy not in {manager.POLICY,pitcher_v2.POLICY}:raise ValueError('Unsupported pitcher policy')
+    v2=pitcher_policy==pitcher_v2.POLICY
     g=next((g for g in source['data']['game'] if g['game_id']==game_id),None)
     if g is None or type(g['use_dh']) is not bool:raise ValueError('Unsupported managed game/rules')
-    policy=manager.Policy(pool,snapshot,g['date']);rotation=rotations(pool)
+    policy=(pitcher_v2.Policy if v2 else manager.Policy)(pool,snapshot,g['date'])
+    rotation=rotations(pool) if not v2 else None
     individual,pooled=source['_managed_budgets'] if '_managed_budgets' in source else _budgets(source)
-    common=dict(season_policy=manager.POLICY,availability_basis=manager.AVAILABILITY)
-    lineup=dict(format='season-pool-lineup-v1',game_id=game_id,date=g['date'],park_id=g['park_id'],
+    common=dict(season_policy=pitcher_v2.POLICY if v2 else manager.POLICY,availability_basis=manager.AVAILABILITY)
+    lineup=dict(format='season-pool-lineup-v2' if v2 else 'season-pool-lineup-v1',game_id=game_id,date=g['date'],park_id=g['park_id'],
         use_dh=str(g['use_dh']).lower(),audit_sha256=game.real.REPORT_SHA,
         snapshot_sha256=game.real.SNAPSHOT_SHA,supplement_sha256=game.real.SUPPLEMENT_SHA,
         attribution=game.real.ATTRIBUTION,**common)
-    cast=dict(format='season-pool-pitching-cast-v1',game_id=game_id,policy='empirical-pa-closed-cast-v2',
+    cast=dict(format='season-pool-pitching-cast-v2' if v2 else 'season-pool-pitching-cast-v1',game_id=game_id,policy='empirical-pa-closed-cast-v2',
         model=game.ratings.MODEL,opportunity_report_sha256=game.ratings.REPORT_SHA,
         lineup_report_sha256=game.real.REPORT_SHA,snapshot_sha256=game.real.SNAPSHOT_SHA,
         supplement_sha256=game.real.SUPPLEMENT_SHA,attribution=game.real.ATTRIBUTION,
         batter_kappa='200',pitcher_kappa='200',league_counts=','.join(map(str,game.ratings.COUNTS)),
         opportunity_basis=game.ratings.BASIS,workload_basis=WORKLOAD_BASIS,exhaustion='last_pitcher_stays',
         workload_recipe_sha256=game.cast.WORKLOAD_RECIPE_SHA,outcome_events_sha256=game.cast.EVENTS_SHA,**common)
-    bench_fields=dict(format='season-pool-bench-v1',game_id=game_id,policy=bench.POLICY,
+    bench_fields=dict(format='season-pool-bench-v2' if v2 else 'season-pool-bench-v1',game_id=game_id,policy=bench.POLICY,
         defense_basis=bench.DEFENSE_BASIS,snapshot_sha256=game.real.SNAPSHOT_SHA,
         supplement_sha256=game.real.SUPPLEMENT_SHA,opportunity_report_sha256=game.ratings.REPORT_SHA,
         attribution=game.real.ATTRIBUTION,**common)
-    occupied=set();starters={};turns=dict(rotation_turns);decisions={};selected={};orders={}
-    # Allocate the scarcer starter pool first so a shared actor cannot strand the other club.
-    starter_sides=sorted(['Away','Home'],key=lambda side:sum(policy.rested(pid,starter=True)
-        for pid in rotation[g[side.lower()+'_team_id']]))
-    for side in starter_sides:
-        tid=g[side.lower()+'_team_id'];r=rotation[tid];principal=r[:5];turn=rotation_turns.get(tid,0)
-        if type(turn) is not int or not 0<=turn<len(principal):raise ValueError('Invalid principal rotation pointer')
-        available=[pid for pid in principal if pid not in occupied and policy.rested(pid,starter=True)]
-        if available:
-            decision=policy.starter(tid,principal,turn,occupied=occupied)
-        else:
-            extras=r[5:]
-            if not extras:raise ValueError('No rested supported starter: '+tid)
-            decision=policy.starter(tid,extras,0,occupied=occupied);decision['reason']='rested_spot_start'
-        pid=decision['player_id'];starters[side]=pid;occupied.add(pid)
-        turns[tid]=(turn+1)%len(principal);decisions[tid]=decision
-        cast['starter_scale:'+side]='80' if decision['budget_scale']==0.8 else '100'
+    occupied=set();starters={};turns={} if v2 else dict(rotation_turns);decisions={};selected={};orders={}
+    if v2:
+        choices=policy.starters(g['away_team_id'],g['home_team_id'])
+        for side in ['Away','Home']:
+            choice=choices[side];starters[side]=choice['player_id'];occupied.add(choice['player_id'])
+            decisions[side]=_v2_decision(choice);cast['starter_scale:'+side]=str(choice['budget_scale'])
+    else:
+        # Allocate the scarcer starter pool first so a shared actor cannot strand the other club.
+        starter_sides=sorted(['Away','Home'],key=lambda side:sum(policy.rested(pid,starter=True)
+            for pid in rotation[g[side.lower()+'_team_id']]))
+        for side in starter_sides:
+            tid=g[side.lower()+'_team_id'];r=rotation[tid];principal=r[:5];turn=rotation_turns.get(tid,0)
+            if type(turn) is not int or not 0<=turn<len(principal):raise ValueError('Invalid principal rotation pointer')
+            available=[pid for pid in principal if pid not in occupied and policy.rested(pid,starter=True)]
+            if available:
+                decision=policy.starter(tid,principal,turn,occupied=occupied)
+            else:
+                extras=r[5:]
+                if not extras:raise ValueError('No rested supported starter: '+tid)
+                decision=policy.starter(tid,extras,0,occupied=occupied);decision['reason']='rested_spot_start'
+            pid=decision['player_id'];starters[side]=pid;occupied.add(pid)
+            turns[tid]=(turn+1)%len(principal);decisions[tid]=decision
+            cast['starter_scale:'+side]='80' if decision['budget_scale']==0.8 else '100'
     selected,orders=_lineups(policy,g,starters,occupied)
     occupied.update(pid for positions in selected.values() for pid in positions.values())
     for side in ['Away','Home']:
@@ -130,11 +150,25 @@ def build_game(source,pool,snapshot,game_id,rotation_turns):
     bindings={};sizes={};cold=[];priors=[]
     for side in ['Away','Home']:
         tid=g[side.lower()+'_team_id'];actors=policy.pool['teams'][tid]['players'];starter=starters[side]
-        principal=set(rotation[tid][:5])
-        relief={pid:0 for pid,a in actors.items() if _pitching(a) and pid not in principal and
-            ((a['targets']['relief_outs'] or 0)>0 or source['_workloads'].get(pid,{}).get('relief',{}).get('outings',0)>0
-                or (a['targets']['relief_outs'] is None and not a['starts']))}
-        relievers=policy.relievers(tid,relief,occupied=occupied)
+        if v2:
+            relief_profiles={}
+            for pid,a in actors.items():
+                target=a['targets']['relief_outs'];work=source['_workloads'].get(pid,{})
+                support=((target or 0)>0 or work.get('relief',{}).get('outings',0)>0
+                    or (target is None and not a['starts']))
+                if pid in occupied or not _pitching(a) or not support:continue
+                samples=individual.get((pid,'relief'),[]) or pooled['relief']
+                if not samples:raise ValueError('Missing empirical relief prior: '+pid)
+                relief_profiles[pid]=(sum(samples),len(samples))
+            relievers=policy.relievers(tid,relief_profiles,inning=1,score_gap=0,occupied=occupied)
+            clock=snapshot['teams'][tid]
+            cast['club_clock:'+side]=f"{clock['completed_games']},{clock['scheduled_games']}"
+        else:
+            principal=set(rotation[tid][:5])
+            relief={pid:0 for pid,a in actors.items() if _pitching(a) and pid not in principal and
+                ((a['targets']['relief_outs'] or 0)>0 or source['_workloads'].get(pid,{}).get('relief',{}).get('outings',0)>0
+                    or (a['targets']['relief_outs'] is None and not a['starts']))}
+            relievers=policy.relievers(tid,relief,occupied=occupied)
         pitchers=[starter,*relievers]
         if len(pitchers)>50:raise ValueError('Season pitching pool exceeds native bound')
         sizes[side]=len(pitchers);occupied.update(pitchers)
@@ -143,7 +177,10 @@ def build_game(source,pool,snapshot,game_id,rotation_turns):
         for pid in sorted(batters):cast['batter:'+pid]=_vector(actors[pid],'batter')
         for rank,pid in enumerate(pitchers):
             a=actors[pid];cast[f'cast:{side}:{rank}:{pid}']=a['name'];cast['pitcher:'+pid]=_vector(a,'pitcher')
-            cast['relief_pace:'+pid]=str(int(policy._pace(tid,pid,'relief')['preference']))
+            if v2:
+                target=a['targets']['relief_outs'];used=policy._usage(tid,pid,'relief_outs')
+                cast['relief_usage:'+pid]=f'{used},{target if target is not None else "?"}'
+            else:cast['relief_pace:'+pid]=str(int(policy._pace(tid,pid,'relief')['preference']))
             for role in ['start','relief']:
                 samples=individual.get((pid,role),[])
                 if not samples and role==('start' if rank==0 else 'relief'):

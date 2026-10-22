@@ -5,6 +5,13 @@ from preview import season_manager as manager
 from preview.usage_ledger import _count
 
 POLICY='season-pool-pitcher-usage-v2'
+MANAGER='season-pool-workload-context-2019-v2'
+TEAM_IDS=frozenset('ANA ARI ATL BAL BOS CHA CHN CIN CLE COL DET HOU KCA LAN MIA MIL MIN NYA NYN OAK PHI PIT SDN SEA SFN SLN TBA TEX TOR WAS'.split())
+
+
+def scheduled_games(team_id):
+    if not isinstance(team_id,str) or team_id not in TEAM_IDS:raise ValueError('Unsupported 2019 club clock')
+    return 161 if team_id in {'CHA','DET'} else 162
 
 
 def _u32(value):

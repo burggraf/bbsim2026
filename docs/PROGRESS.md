@@ -1,12 +1,14 @@
 # Development progress and restart point
 
-**Last updated:** 2026-10-18 UTC
+**Last updated:** 2026-10-20 UTC
 
-**Latest completed preregistration:** `P-02-pitcher-usage-policy-v2-contract` — [separate v2 contract](modeling/pitcher-usage-policy-v2.md). All-supported-starter start debt; bounded continuous relief debt plus0.25 class preference; unchanged rest/legal/outcome rules; explicit entry traces; original usage bands plus coverage/role/start checks. Pure helpers are now verified below; no v2 native integration or games. V1 remains NO-GO.
+**Current work package:** `P-02-managed-season-v2` — the preregistered 2019 retrospective development evaluation for master seeds 1/2/3 passes every frozen per-seed usage check. Production completed 2,429/2,429 games per seed; corrected independent evaluator `proc_3204` exited 0 with all three seeds PASS. See [v2 results](modeling/pitcher-usage-v2-results.md) and sealed reports under `/tmp/bbsim-pitcher-v2-evaluation-20261019/production-seed-runs-pythonpath-fix-v1/verification-role-key-fix-v1/`. Prior evaluator defects and the correctly blocking binary-lineage attempt remain preserved as invalid evaluator evidence. This is not predictive validation, S-03, or G1–G5 signoff. V1 remains NO-GO/default; v2 remains opt-in. No retune, default change, commit or push.
 
 **Latest completed analysis:** `P-02-pitcher-usage-diagnosis-v1` — [read-only attribution](modeling/pitcher-usage-diagnosis-v1.md). All14,574 starter decisions reconstructed; fixed top-five rotations take4,749–4,753 starts versus3,680 historically. Missing qualifying entries never enter a cast in24/22/20 cases; another0/2/4 are offered relief but never pitch. Negative-pace relief appearances and class priority are verified, but exact entry-state attribution is unavailable. V1 remains NO-GO; no simulator/policy/source changes.
 
-**Latest verified implementation preparation:** native v2 workload-value parsers and exact relief ranks; fresh 796 Python/966 Rust/5 example tests, build/fmt/strict Clippy and 16 game-byte controls pass. Ten focused tests include 1,680 independent ratio cases; eight deliberately defective external copies fail those tests. [Current handoff](#resume-here). Live native selection, full personnel/entry traces and producer/runner integration remain incomplete; no v2 season or accuracy claim. Earlier Python helper/Rust 1.99 compatibility evidence remains below.
+**Pitcher usage v2 status:** the uncommitted integration remains opt-in; v1 remains the default and NO-GO. Final full verification `proc_e51d` passed all nine checks, 16 frozen v1 byte controls, and 26 worktree pins at `/tmp/bbsim-pitcher-v2-integration/full-current-20261019-role-key-final-refresh/report.json` (candidate binary SHA-256 `4191c502a0dddc0c70894501ffc3cfc7e1531a7396658a4def6a8e5d593756f8`). The separate mechanism gate PASS report is `/tmp/bbsim-pitcher-v2-integration/mechanism-v2-transition-outs-role-loop-20261019/report.json` (candidate SHA-256 `2c81e216d628eca994230be48a51358bb044a344dabdf517a87a15625a5bd483`). The fixed-seed usage evaluation independently passes all three seeds; [results and limits](modeling/pitcher-usage-v2-results.md). Production binary `93da407a0f7cc68a67d5bf061361bf1cc07eec83b85acd6a0721edad8eda162d` is bound to its original green full-verification report; the corrected lineage check relates it to the separate current build without assuming binary hashes match. The final full run predates this results/ledger documentation update. The narrow unknown-fielder-PO/A reconciliation clarification does not change engine accounting or the E-03/G1 matrix. No accuracy, S-03 or G1–G5 signoff; no commit or push.
+
+**Last committed implementation checkpoint (`40ee6d7`):** native v2 workload-value parsers and exact relief ranks; its historical verification passed the Python/Rust/examples suites, build/fmt/strict Clippy and 16 game-byte controls. Ten focused tests included 1,680 independent ratio cases; eight deliberately defective external copies failed those tests. This checkpoint predates the uncommitted entry/interface and producer/runner integration. Earlier Python helper/Rust 1.99 compatibility evidence remains below.
 
 **Latest completed managed-season checkpoint:** `P-02-managed-season-v1` implementation/evaluation
 complete; **individual-pitcher usage NO-GO**. All three seeds complete2,429/2,429games
@@ -58,8 +60,8 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | P-02-managed-season-v1 | done — verified implementation/evaluation; pitcher-usage NO-GO | [Results](modeling/managed-season-v1-results.md), [contract](modeling/managed-season-v1.md). Three seeds each2,429complete/zero refusals/native failures; batter100%/aggregate limits pass, pitcher60.26–62.48% fails80%,24qualifying uncomparable per seed. Code `fb2cde0`;769Python/956Rust/4examples/full checks,12legacy byte controls,review/source guards pass. No validated usage/fidelity/default/gate claim. |
 | P-02-pitcher-usage-diagnosis-v1 | done — bounded read-only attribution | [Report/reproduction/limits](modeling/pitcher-usage-diagnosis-v1.md). Three frozen seasons/14,574 starter decisions/7,287 native outputs reconciled;43,765 pinned paths unchanged. Separate literal TSV checker passes. Top-five restriction and extra ordering explain opportunity exclusion; relief class/pace exposure verified without claiming unrecorded entry-state causes. V1 NO-GO preserved; no simulation/policy/outcome/source change. |
 | P-02-pitcher-usage-policy-v2-contract | done — bounded preregistration, not implementation | [Contract](modeling/pitcher-usage-policy-v2.md): exact starter/relief rankings, unchanged empirical budgets/rest/legal/outcome boundaries, opt-in v2 schemas/entry evidence and fixed seeds1/2/3. Original bands retained; additional coverage/role/start gates. Source-only preflight binds455batter/565pitcher/240starter-role/331relief-role/250start-count entries and395unchanged protected paths. No v2 simulation/fit/code or gate signoff. |
-| P-02-pitcher-usage-policy-v2 | active — native primitives verified; full wire/trace integration next | Python helpers plus native strict workload values/exact relief ranks verified. Fresh 796 Python/966 Rust/5 examples/build/fmt/strict Clippy and 16 game-byte controls pass; ten native tests/1,680 ratio cases and eight rejected external mutants. Full personnel/entry traces/shared live selector/producer/runner and gates 2–5 remain incomplete; no default switch/evaluation. |
-| P-02-managed-season-v2 | planned — after pure policy component | Versioned producer/native/trace integration, mechanism/compatibility/full-suite gates, then fixed three-season evaluation under the v2 contract. No completed implementation or new seasons yet. |
+| P-02-pitcher-usage-policy-v2 | active — opt-in implementation and fixed-seed development evaluation pass; broader disposition open | Mechanism gate PASS: `/tmp/bbsim-pitcher-v2-integration/mechanism-v2-transition-outs-role-loop-20261019/report.json` (2,429 static trios; 512 accepted prefix games; zero refusals/native/trace failures; receipt-backed rebuild and independent trace/accounting/role/parity checks; 16 v1 controls). Final full verification `proc_e51d`: nine checks, 16 frozen v1 byte controls and 26 pins; `/tmp/bbsim-pitcher-v2-integration/full-current-20261019-role-key-final-refresh/report.json`. Independent seeds 1/2/3 all PASS; see [result details](modeling/pitcher-usage-v2-results.md) and sealed reports. v1 remains NO-GO/default, v2 opt-in; no retuning, default promotion, commit, push, accuracy or G1–G5 signoff. |
+| P-02-managed-season-v2 | active — preregistered three-seed development evaluation complete; no gate/default promotion | Production state `/tmp/bbsim-pitcher-v2-evaluation-20261019/production-seed-runs-pythonpath-fix-v1/state.json`: seeds 1/2/3 each completed 2,429/2,429 games with exit 0. Corrected independent evaluator `proc_3204` exited 0; `/tmp/bbsim-pitcher-v2-evaluation-20261019/production-seed-runs-pythonpath-fix-v1/verification-role-key-fix-v1/report.json` has `all_seeds_passed: true`, zero refusals/native/trace failures, and every frozen check passes. Pitcher usage bands are 564/565, 563/565, 564/565; starter role 240/240, 239/240, 240/240; relief 331/331; starting opportunities 250/250. Full details, hashes, lineage and scope: [v2 results](modeling/pitcher-usage-v2-results.md). Earlier `game_index`, `start`/`starter`, and binary-lineage evaluator failures remain preserved as invalid evaluator evidence; no production rerun was used to resolve them. v1 remains NO-GO/default; v2 remains opt-in. No predictive/S-03/G1–G5 signoff, retuning, commit or push. |
 | P-02-season-pool-policy-v1 | done — bounded pure component | [Contract/results](modeling/season-pool-policy-v1.md):19 focused/741Python/946Rust/4examples, build/fmt/strictClippy/source guards pass;30club pools independently reconcile historical PA/outs; mixed-role P1 fixed and reviewer-confirmed. Pure selection helpers only, not managed-season integration. |
 | P-02-season-usage-management-v1 | active — v1 NO-GO retained; v2 pure component next | [Plan](modeling/season-usage-management-v1.md), [first-slice results](modeling/season-usage-ledger-v1-results.md). Authenticated PA/outs targets, exactly-once ledger, explicit gaps, receipt-backed replay/comparison and PH parser support implemented. Three fixed seeds each2384complete/45refused; descriptive bands pass, individual errors retained. Maintainer explicitly supersedes verified dated rosters: use existing season club pools and soft PA/IP targets; no injury/minor-league dates. Fresh722Python/946Rust/4examples, build/fmt/strictClippy, source guards and compatibility pass. Both bounded probes are stopped; further acquisition is unnecessary for the revised pool scope, as detailed in first Resume. No S-01/S-02/G1–G5 waiver. |
 | P-02-dated-roster-readiness-v1 | stopped — requirement superseded | [v1](data-audits/2019-dated-roster-probe-v1.md), [v2](data-audits/2019-game-roster-identity-probe-v2.md). V2 exhausts20requests/2103150bytes: historical game rosters include unused personnel; exact candidate mappings exist, but completeness/retroactive timing and independent ID validation remain unverified. MLB non-bulk terms do not clear full2019 acquisition. Parent verified93sealed files; private evidence checkpointed. Maintainer explicitly changed the requirement on 2026-10-18: use existing season club pools instead. No further acquisition; retain both probes as historical evidence. |
@@ -178,6 +180,223 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | D-10 | confirmed completion contract | 2026-10-11 maintainer chose **B — Complete agreed box fields for a bounded event vocabulary** in interview `021d9e0d-b0b7-4164-a7c8-8bd88774c071`, then selected **“Approve the proposed matrix”** in interview `e75959e7-704f-40cc-943b-1a3a10e34285`, without edits. The [approved matrix](engine/g1-accounting-scope.md) governs required fields, event families, exclusions and observable checks. Fully specified simulated logs must yield complete agreed boxes; incomplete historical facts stay unknown. No completion/G1 approval, every-rare-rule/full-season-validation requirement or waiver inferred. The earlier technical CS boundary B is separate. | Implement one small test-first E-03 slice at a time; collect the required coverage/golden/property/historical evidence before E-03 completion and a separate G1 go/no-go. |
 
 ## Resume here
+
+### Pitcher usage v2 — fixed-seed development evaluation PASS; v1 remains default
+
+**Current task:** `P-02-managed-season-v2`, continuing from local commit
+`40ee6d726c1a956a61ea538a0334b6682c36c5e8`. The broad v2 integration remains
+uncommitted on `main` (locally ahead 17). The authorized production runs at master
+seeds 1/2/3 each completed 2,429/2,429 games with exit 0. Corrected independent
+evaluator `proc_3204` exited 0 after evaluating only retained outputs; all three
+seeds pass every frozen per-seed usage criterion. The sealed overall report is
+`/tmp/bbsim-pitcher-v2-evaluation-20261019/production-seed-runs-pythonpath-fix-v1/verification-role-key-fix-v1/report.json`
+(`all_seeds_passed: true`; SHA-256
+`a1c8f3de2d3c1498b316282fe617bf83ad28cdade6b547a106cb2c0a90e9d372`). See
+[result details and limitations](modeling/pitcher-usage-v2-results.md). No
+production rerun, policy retune, default change, commit or push. The three-seed
+retrospective development PASS is not predictive validation, S-03 or G1–G5
+signoff; v1 remains NO-GO/default and v2 remains opt-in.
+
+**Most recent full verification (`proc_e51d`):**
+`python3 -B /tmp/bbsim-pitcher-v2-integration/run-full-current-role-key-final-refresh-v1.py`
+passed all nine checks, all 16 frozen v1 byte controls and all 26 worktree pins
+in 1,184 seconds. Report:
+`/tmp/bbsim-pitcher-v2-integration/full-current-20261019-role-key-final-refresh/report.json`
+(SHA-256 `d02820c663d4ca03b047301ee17ffce556a96de6127bbc85ba477491f50bbc1e`);
+candidate binary SHA-256
+`4191c502a0dddc0c70894501ffc3cfc7e1531a7396658a4def6a8e5d593756f8`. It predates
+the current result/ledger documentation update. Production was bound to its own
+separately built full-verification candidate
+`93da407a0f7cc68a67d5bf061361bf1cc07eec83b85acd6a0721edad8eda162d`; the corrected
+evaluator validates lineage rather than assuming those distinct builds hash
+identically. The mechanism candidate remains a third binary
+`2c81e216d628eca994230be48a51358bb044a344dabdf517a87a15625a5bd483`. The original
+`engine/target` reference remains unchanged at
+`f226b27b6562aafa9df5910a4c56ce0b58a8e2080d7b06d752279e63cabe04d8`.
+
+**Earlier mechanism failure `proc_04ff`:** its evidence remains preserved at
+`/tmp/bbsim-pitcher-v2-integration/mechanism-v2-trace-order-ana-clock/`. It passed
+2,429 static trios, 512 games and receipt-backed rebuild, then stopped because
+unknown fielder `po` blocked a fielder-total comparison. The [accounting contract](engine/accounting.md#observed-defense-poa-coverage)
+requires unresolved PO/A to remain unknown. On 2026-10-19 the maintainer
+authorized replacing only that equality with outs independently summed from
+canonical transitions by defensive team/pitcher ID; engine accounting and the
+E-03/G1 matrix remain unchanged.
+
+**Fresh mechanism gate — PASS:**
+`python3 -B /tmp/bbsim-pitcher-v2-integration/run-mechanism-gate-transition-outs-v1.py`
+completed with status PASS at
+`/tmp/bbsim-pitcher-v2-integration/mechanism-v2-transition-outs-role-loop-20261019/report.json`.
+It checked all 2,429 Python and native static trios and accepted the full 512-game
+chronological prefix with zero refusals/native failures; trace validation covered
+45,576 decisions and four trace-on/off contexts. Receipt-backed rebuild and
+independent trace, accounting, role and parity checks passed: 512 boxes, 30 teams,
+1,859 player-team roles, 512 exact transition-derived pitcher-out comparisons,
+16 v1 compatibility controls, 10 doubleheader team-days, 169 intergame off-day
+gaps, 261 non-DH games and 251 DH-use games. Scope is engineering mechanism gate
+only (`full_season_complete: false`), not the usage evaluation, predictive accuracy
+or G1–G5 signoff.
+
+**Maintainer decision recorded (2026-10-19):** the maintainer authorized the
+recommended narrow mechanism-gate clarification. Leave canonical fielder PO/A `?`
+values unknown; do not coerce them to zero or alter engine accounting. Replace only
+the unsupported fielder-PO total equality with independent canonical transition-
+derived pitcher outs by defensive team and pitcher ID. Retain identity, PA/BF, run,
+trace, receipt-backed rebuild and trace-on/off checks. This does not change the
+E-03/G1 matrix, fielding-stat completeness, v2 policy or thresholds. Failed
+`proc_04ff` evidence remains unchanged. The clarified mechanism gate and final full
+verification passed. The authorized three-seed production run is complete and the
+corrected independent evaluation `proc_3204` passes all frozen checks for seeds
+1/2/3. Earlier `proc_2d2e` (`game_index` NameError) and `proc_cd8a` (`start` versus
+`starter` evaluator key mismatch) are retained as evaluator failures, not season
+results. A further preflight (`proc_46e2`) correctly stopped before seed checks
+because separate production/current build hashes were treated as identical; the
+lineage checker now binds production to its own green full report and compares
+current source/input/toolchain/reference/compatibility evidence. Four lineage
+regressions and the full external evaluator suite (14 tests) plus `py_compile`
+pass. No policy or threshold changed. This development result does not change
+E-03/G1 scope or signoff.
+
+**Harness regressions and targeted evidence:**
+`PITCHER_V2_GATE_SCRIPT=/tmp/bbsim-pitcher-v2-integration/run-mechanism-gate-transition-outs-v1.py python3 -B /tmp/bbsim-pitcher-v2-integration/test-mechanism-reconciliation-v1.py`
+now passes five regressions, including the new fielder-row projection case. The
+expected red for that defect is preserved at
+`/tmp/bbsim-pitcher-v2-integration/fielding-role-projection-red.stderr`; five-test
+green output is `role-loop-regressions-green.stderr`. The reordered-transition
+continuity mutation also fails closed (`role-loop-continuity-green.stdout`).
+
+The corrected independent role reconciler was exercised against the **retained
+outputs for all 512 games** with
+`python3 -B /tmp/bbsim-pitcher-v2-integration/test-retained-batch-role-reconciliation-v1.py`.
+It passed 512 boxes, 512 exact transition-derived pitcher-outs comparisons, 30
+teams and 1,859 player-team role rows; its report is
+`/tmp/bbsim-pitcher-v2-integration/targeted-role-reconciliation-20261019/report.json`.
+This was targeted reconciliation evidence; it does not replace the full mechanism
+gate or its trace-on/off parity check. The earlier one-game OAK trace test and unknown PO/A
+preservation remain in `targeted-transition-outs.stdout` and the four-test RED/green
+logs.
+
+**Next exact action:** no further production or evaluation rerun is warranted for
+this fixed three-seed development task. Preserve v1 NO-GO/default and v2 opt-in.
+Await a separate maintainer decision before any policy/default change or broader
+validation; the result does not sign off S-03 or G1–G5. Any newly authorized
+validation must have its own scope and preregistered checks. Preserve prior failed
+evaluator evidence; do not retune, commit or push.
+
+### Separate 1976 readiness audit — 2026-10-20; no replay
+
+This is a read-only side assessment, not a new `docs/EXECUTION.md` work package;
+`P-02-managed-season-v2` remains the current package and its v1-default/v2-opt-in
+status is unchanged. Full findings and reproduction are in
+`/tmp/bbsim-1976-audit-v1/readiness-and-compatibility-v1.md` (SHA-256
+`b63313647ac450629ddf2a2b4ad441bc785a07d8f271e4ef5dc9a4e44d638d80`). Pinned
+CSV/event/schedule archive hashes and the existing read-only scripts are listed
+there. Fresh checks passed:
+`python3 -B /tmp/bbsim-1976-audit-v1/reconcile_schedule.py` and
+`python3 -B /tmp/bbsim-1976-audit-v1/reconcile_player_coverage.py`.
+
+Schedule grouping is exact only at final-listed-makeup-date + unordered-team-pair
+grain; the report records four multi-date annotations, two site-change orientation
+reversals, and why `Num` cannot replace gameinfo `number`. New chronology finding:
+`CHN197604210` and `TEX197605262` each span a next-day suspension/resumption. The
+current engine/season runner has no verified date-aware continuation treatment.
+The 147,598 PA and 104,777 integer pitcher-out targets reconcile exactly to box
+values at game/player/team and season grains. Annual roster/event identity matches,
+but is not daily eligibility/availability; 12 roster player/team keys lack fielding
+`value` rows and `d_pb/d_wp/d_sb/d_cs` remain blank in 40,582 of 45,099 regular
+`value` rows. Those gaps limit fielding claims, not the narrow PA/out targets.
+
+Rule-source interpretation is qualified: searchable 1976 Rule 6.10 material says a
+club need not name a DH, so the two CHA pitcher-in-order lineups in DH-flagged AL
+games are consistent with team-level DH choice, not evidence of corrupt lineups.
+The Retrosheet year-by-year PDF fetch aborted and the primary 1976 rulebook passage
+was not captured, so confirm the rule source before replay. Core `TeamState` can
+represent asymmetric DH choices, but `real_lineup.rs` has one DH flag for both sides
+and rejects non-2019 dates; `season_pool.rs` hard-codes the 2019 club/schedule map.
+No engine compatibility conclusion or season-input GO is established.
+
+**Next exact action:** obtain separate maintainer authorization/scope for any 1976
+work package and decide player-availability assumptions, mixed-DH adapter scope,
+and treatment of the two suspended games before defining preregistered comparison
+measures or running a replay. No 1976 replay/comparison, code/data input, v2 rerun,
+default change, commit or push occurred. Only this handoff block was added to the
+already-dirty `docs/PROGRESS.md`; existing uncommitted v2 paths remain untouched.
+`git diff --check` passed. No Rust/Python suite was rerun because no executable path
+changed.
+
+**Uncommitted integration paths:**
+`docs/PROGRESS.md`, `docs/modeling/pitcher-usage-v2-results.md`,
+`docs/modeling/pitcher-usage-v2-native-wire.md`,
+`docs/modeling/pitcher-entry-decisions-v2.md`, `engine/examples/support/full_bench.rs`,
+`full_manager.rs`, `full_simulation.rs`, `pitcher_entry_v2.rs`,
+`pitcher_policy_v2.rs`, `real_lineup.rs`, `season_accounting.rs`, `season_pool.rs`,
+`engine/examples/text_game.rs`, `engine/tests/full_manager.rs`,
+`full_player_game.rs`, `full_simulation.rs`, `full_transcript.rs`,
+`pitcher_entry_v2.rs`, `preview/managed_inputs.py`, `managed_season.py`,
+`pitcher_policy_v2.py`, `season_runner.py`, `tests/test_managed_inputs.py`,
+`test_managed_season.py`, `test_pitcher_policy_v2.py`, and `test_season_runner.py`.
+No commit or push.
+
+**Entry-preparation paths from the prior subtask:** this ledger;
+[entry-interface contract](modeling/pitcher-entry-decisions-v2.md);
+`engine/examples/support/pitcher_entry_v2.rs` and
+`engine/tests/pitcher_entry_v2.rs` (new); and
+`engine/examples/support/pitcher_policy_v2.rs` (validated getters plus extraction
+of the unchanged debt calculation into `relief_debt`). The extraction is needed
+to record debt for an excluded starter without inventing relief outings/class.
+No formula, thresholds, source inputs or existing game callers changed. New
+semantic fixes ensure a PH-probe witness is an actual PH substitution when its
+next event is a substitution, and do not permit the probe to leave a pitcher
+vacancy without a selected reserve.
+
+**Implemented, not live:** immutable shared selector filters starter/active/
+removed/not-benched actors, ranks by exact score/debt/ID, and supplies the chosen
+ID and all candidate evidence to the same record encoder. Supported excluded
+profiles retain exact components; an unsupported starter retains debt but explicit
+undefined class/score. The encoder binds actual indexed canonical transition bytes
+and exact before-state equality, budget arithmetic and hook/probe/restoration
+semantics. Exhaustion/probes cannot conceal actual pitcher entries. Canonical
+engine fixtures exercise real substitutions and a PH vacancy/restoration; no RNG
+is drawn. Header/per-record serialization is not whole-sidecar acceptance.
+
+**Fresh verification:** process `proc_8f93` ran
+`python3 -B /tmp/bbsim-pitcher-entry-v2-resume-v1/verify-full.py` and exited 0 in
+601 seconds. Fresh results: **796 Python; 979 Rust across 68 zero-failure summaries;
+5 example tests; 23 focused native tests (13 entry + 10 primitive); build, fmt,
+strict all-target Clippy and `git diff --check` passed**. All **16** retained v1
+byte controls match. `/tmp/bbsim-pitcher-entry-v2-resume-v1/check-full.py` then exited
+0, independently recounting those logs and authenticating 400 protected tracked
+paths, 11 external inputs, candidate code hashes and 779 local Markdown links.
+Machine-readable results:
+`/tmp/bbsim-pitcher-entry-v2-resume-v1/full-verification-v1.json` and
+`/tmp/bbsim-pitcher-entry-v2-resume-v1/checks-full-v1/report.json`. The fresh run
+used an isolated target and exclusive output directory. Original target binaries
+and both live previews remain untouched. This verifies only the pure entry
+selector/interface preparation only; at that checkpoint it did not cover v2
+personnel readers, whole-sidecar acceptance, live v2 selection, season runs or
+accuracy claims.
+
+Retained TDD REDs `probe-vacancy-red.*` show that an unrelated opposing-pitcher
+substitution could be accepted as a PH-probe witness and that an exhausted
+selection could permit a PH pitcher vacancy; both cases now fail closed. The
+10 primitive and 13 entry tests pass in `focused-green-final.stdout`. `budget-red.*`
+was an invalid initial test-state setup; after repairing the fixture, the
+relief-budget restriction test passes. Evidence root:
+`/tmp/bbsim-pitcher-entry-v2-resume-v1/`; latest freeze is `freeze-v3.json`.
+
+**Current subtask — strict v2 personnel readers and trio validation (preparation only):** native callers are `real_lineup::Lineup`, `full_manager::Cast`, `full_bench::Bench`, and `text_game`; Python caller is `season_runner.actor_bindings`. The v1 producer/reader path remains unchanged. [Native wire](modeling/pitcher-usage-v2-native-wire.md) specifies the exact trio markers, source pins, cast workload values and 2019 clock binding (CHA/DET 161; other supported clubs 162).
+
+All three native schemas now parse v2 fields strictly; cast values require exactly two clocks and one `U,T` relief-usage row for every cast pitcher. Native preparation binds policy/game/team/schedule, starter and actor identities, lineup/cast names, and bench conflicts; the CLI returns `v2 personnel validation only; live selection is not integrated` before simulation. Python `_v2_actor_bindings` validates all three metadata/source bindings, canonical date/team clock, cast/profile/workload consistency, lineup/cast identity and name matching, and bench overlap. It detects v2-only cast rows even if format/policy markers are rewritten, so mixed or mislabeled sets fail closed.
+
+**Fresh focused verification:** `PYTHONPATH=tests python3 -B -W error -m unittest test_season_runner test_pitcher_policy_v2` — 52 tests passed; `python3 -B -m py_compile preview/season_runner.py preview/pitcher_policy_v2.py` and `git diff --check` passed. `CARGO_TARGET_DIR=/tmp/bbsim-pitcher-personnel-v2/target-current cargo test --locked --offline --manifest-path engine/Cargo.toml --test full_player_game pitcher_usage_v2 -- --nocapture` — 7 passed. The isolated current `text_game` binary refused a valid v2 trio before writing stdout and refused a lineup/cast name mismatch; logs are `text-game-v2.stderr` and `text-game-v2-bad-name.stderr` under `/tmp/bbsim-pitcher-personnel-v2/`. Initial RED evidence remains in `/tmp/bbsim-pitcher-personnel-v2/red/`, including the valid v2 bundle rejected by the pre-change reader (`python-valid-fixture.stderr`). One expanded Python run exposed a 32-bit cap on u64 workload samples; current parsing uses u64. Another test found an overstrict Python requirement for nonstarter relief outings; zero-outing role data now remains valid/unsupported rather than being converted into class evidence. Name rows reject surrounding whitespace consistently with native readers. An interim Rust assertion used labels absent from its fixture; it was removed in favor of the existing dedicated name-binding regression.
+
+**Retained full-run failures and corrections:** the first fresh candidate run passed fmt and focused native tests, then strict all-target Clippy reported `validate_v2_clocks` and `merge_names` unused in the standalone `full_manager` test target (`full-checks-v1/clippy.stderr`). A regression test now exercises both. Its first fixture attempt used a six-actor fixture and failed (`helper-regression-v1.stderr`); the corrected three-actor fixture passed (`helper-regression-v2.stdout`), and isolated strict Clippy passed (`clippy-followup-v1.stderr`). The next frozen run stopped at fmt because that test needed rustfmt formatting (`full-checks-v2/fmt.stdout`). Both raw failures are retained; the current candidate was then formatted and freshly re-frozen as v6 before full verification.
+
+**Fresh full verification completed:** process `proc_ed69` exited 0 after 559 seconds running `/tmp/bbsim-pitcher-personnel-v2/run-full-checks-v3.py` with isolated target `/tmp/bbsim-pitcher-personnel-v2/full-checks-v3/target`. `/tmp/bbsim-pitcher-personnel-v2/full-checks-v3/results.json` records all ten commands exiting 0: fmt, focused entry/policy (23), focused personnel (7), strict all-target Clippy, example build, full Python (**802**), full Rust (**987 passed across 68 test targets**), example tests (**5**), pycompile, and `git diff --check`. The 16 v1 controls in `compatibility.json` all matched frozen/reference stdout byte-for-byte (12 input/format combinations plus four retained games). Both fresh v2 CLI boundary cases refused with empty stdout: a valid personnel trio stopped at the explicit no-live-selection boundary, and a name mismatch was rejected. Machine-readable report: `full-checks-v3/report.json` (SHA-256 `6b6146b7d9c545b4a1771776d36a5184233ba32596fdca736b17d866f5171c6f`); code freeze used: `freeze-protocol-v6.json` (SHA-256 `e97ad74a4af79e222e0c14631cb412cb48252e48346c4818768ae907e0fa4a50`). The end-of-run guard and an independent check confirmed 19 candidate hashes, 386 protected tracked paths, 11 external inputs, and the original `engine/target/debug/examples/text_game` SHA-256 `f226b27b6562aafa9df5910a4c56ce0b58a8e2080d7b06d752279e63cabe04d8` unchanged. The only post-run source change is this ledger update; code hashes are unchanged. The ledger was captured by interim freeze v7, and this final status is captured by freeze v8.
+
+**Still incomplete/out of scope:** whole-entry-trace/sidecar acceptance, live selector/PH/restoration hooks, producer/runner integration and gates 2–5 remain incomplete. Managed-season v1 individual-pitcher usage stays **NO-GO**. No v2 game/season evaluation, default change, accuracy claim, commit or push.
+
+**Next concrete action:** continue P-02 only by specifying and testing the whole-entry-trace/sidecar acceptance boundary. Keep the v2 selector, PH/restoration hooks, producer/runner integration, game execution, and season evaluation out of scope until separately reviewed and authorized.
 
 ### Pitcher usage v2 — native workload-wire/ranking preparation verified
 

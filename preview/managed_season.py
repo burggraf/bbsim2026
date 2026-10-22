@@ -6,8 +6,11 @@ import json
 from pathlib import Path
 import subprocess
 from preview import game_inputs as game, managed_inputs as managed, season_manager as manager
+from preview import pitcher_policy_v2
 from preview import season_runner as season, usage_ledger, season_usage
 from preview.season_usage import _starters, _json, _file, TARGET_SHA256
+
+PINCH_HITTING='late-close-expected-bases-ph-usage-v1'
 
 LIMITS=('Whole-season club pools/observed positions assumed usable, not daily injuries/minor-league rosters. '
     'Original date then game-ID ordering, including normalized suspensions and unresolved source schedule flags. '
@@ -23,14 +26,47 @@ def _pins(inputs,pins):
         raise ValueError('Managed season inputs changed before acceptance')
 
 
-def _entry(row,bundle):
+def _validate_native_trace(command,folder,row,inputs,pins):
+    if not isinstance(command,list) or not command or any(type(value) is not str for value in command):
+        raise ValueError('Invalid recorded native command')
+    args=command[1:]
+    if len(args)%2:raise ValueError('Invalid recorded native option pairs')
+    options={}
+    for key,value in zip(args[::2],args[1::2]):
+        if key in options:raise ValueError('Duplicate recorded native option')
+        options[key]=value
+    expected={'--baseline':options.get('--baseline'),'--contact-counts':options.get('--contact-counts'),
+        '--lineup':'lineup.tsv','--cast':'cast.tsv','--bench':'bench.tsv','--seed':str(row['seed']),
+        '--format':'accounting','--manager-trace':'manager-trace.tsv','--event-log':'event-log.tsv'}
+    if options!=expected:raise ValueError('Invalid recorded v2 native command')
+    pinned={str(Path(path).resolve()):sha for path,sha in zip(inputs,pins)}
+    for path in (command[0],options['--baseline'],options['--contact-counts']):
+        resolved=str(Path(path).resolve())
+        if resolved not in pinned or game.real.digest(Path(resolved))!=pinned[resolved]:
+            raise ValueError('Recorded v2 native command uses an unpinned input')
+    validation=command.copy();validation[validation.index('--manager-trace')]='--validate-manager-trace'
+    try:
+        result=subprocess.run(validation,cwd=folder,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,timeout=30,check=False)
+    except (OSError,subprocess.TimeoutExpired) as error:
+        raise ValueError(f'Native manager trace validation could not run: {error}') from error
+    if result.returncode:
+        detail=result.stderr.decode('utf-8','replace')
+        raise ValueError(f'Native manager trace validation failed ({result.returncode}): {detail}')
+
+
+def _entry(row,bundle,pitcher_policy=manager.POLICY):
+    v2=pitcher_policy==pitcher_policy_v2.POLICY
     return dict({k:row[k] for k in (*usage_ledger.CORE,'seed')},
-        accounting_format='controlled-accounting-managed-v1',role_actors=season.actor_bindings(bundle),
+        accounting_format='controlled-accounting-managed-v2' if v2 else 'controlled-accounting-managed-v1',
+        pinch_hitting=PINCH_HITTING,role_actors=season.actor_bindings(bundle),
         **_starters(bundle['lineup'],row))
 
 
-def run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,output):
+def run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,output,pitcher_policy=manager.POLICY):
     """Caller authenticates full sources/targets. Failure stops; never continue on incomplete history."""
+    if pitcher_policy not in {manager.POLICY,pitcher_policy_v2.POLICY}:raise ValueError('Unsupported pitcher policy')
+    v2=pitcher_policy==pitcher_policy_v2.POLICY
     output=game._destination(output);rows=season.manifest(source,master_seed);_pins(inputs,pins)
     ledger=usage_ledger.Ledger(rows);turns={};results=[];artifacts={}
     prepared=dict(source,_managed_budgets=managed._budgets(source))
@@ -40,8 +76,8 @@ def run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,outp
     for row in rows:
         snapshot=ledger.snapshot()
         try:
-            bundle=managed.build_game(prepared,pool,snapshot,row['game_id'],turns)
-            entry=_entry(row,bundle)
+            bundle=managed.build_game(prepared,pool,snapshot,row['game_id'],turns,pitcher_policy=pitcher_policy)
+            entry=_entry(row,bundle,pitcher_policy)
             if entry['role_actors']!=bundle['role_actors']:raise ValueError('Managed actor declaration mismatch')
         except ValueError as error:
             row.update(status='input_refused',reason=str(error));ledger.record_refusal(row,str(error));break
@@ -51,6 +87,7 @@ def run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,outp
         command=[str(Path(binary).resolve()),'--baseline',str(Path(baseline).resolve()),
             '--contact-counts',str(Path(contact).resolve()),'--lineup','lineup.tsv','--cast','cast.tsv',
             '--bench','bench.tsv','--seed',str(row['seed']),'--format','accounting']
+        if v2:command.extend(['--manager-trace','manager-trace.tsv','--event-log','event-log.tsv'])
         row.update(entry,cold_profiles=bundle['cold_profiles'],budget_priors=bundle['budget_priors'],
             starter_decisions=bundle['starter_decisions'],cast_sizes=bundle['cast_sizes'])
         try:
@@ -59,11 +96,14 @@ def run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,outp
             row['exit']=result.returncode
             if result.returncode:raise ValueError(f'Native game exited {result.returncode}; see raw stderr')
             parsed=season.parse_accounting((folder/'stdout.tsv').read_text(),entry)
-            game_receipt=dict(format='managed-game-receipt-v1',entry=entry,command=command,
+            if v2:_validate_native_trace(command,folder,row,inputs,pins)
+            outputs=['lineup.tsv','cast.tsv','bench.tsv','stdout.tsv','stderr.txt']
+            if v2:outputs.extend(['manager-trace.tsv','event-log.tsv'])
+            game_receipt=dict(format='managed-game-receipt-v2' if v2 else 'managed-game-receipt-v1',entry=entry,command=command,
                 pregame_sha256=hashlib.sha256(usage_ledger._canonical(snapshot)).hexdigest(),
                 rotation_before=turns,next_turns=bundle['next_turns'],
                 starter_decisions=bundle['starter_decisions'],
-                output_sha256={n:game.real.digest(folder/n) for n in ['lineup.tsv','cast.tsv','bench.tsv','stdout.tsv','stderr.txt']})
+                output_sha256={n:game.real.digest(folder/n) for n in outputs})
             receipt_text=_dump(game_receipt)
             ledger.accept(entry,parsed,hashlib.sha256(receipt_text.encode()).hexdigest())
         except (ValueError,subprocess.TimeoutExpired,OSError) as error:
@@ -72,8 +112,12 @@ def run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,outp
             publish(prefix+'receipt.json',receipt_text)
             turns=bundle['next_turns'];results.append(parsed);row.update(status='complete',teams=parsed['teams'])
         for name in ['stdout.tsv','stderr.txt']:artifacts[prefix+name]=game.real.digest(folder/name)
+        if v2:
+            for name in ['manager-trace.tsv','event-log.tsv']:
+                if (folder/name).exists():artifacts[prefix+name]=game.real.digest(folder/name)
         if row['status']!='complete':break
-    report=dict(format='managed-season-v1',season_policy=manager.POLICY,availability_basis=manager.AVAILABILITY,
+    report=dict(format='managed-season-v2' if v2 else 'managed-season-v1',
+        season_policy=pitcher_policy_v2.POLICY if v2 else manager.POLICY,availability_basis=manager.AVAILABILITY,
         master_seed=master_seed,seed_algorithm='sha256:bbsim-season-v1:first8-big-endian',games=rows,
         counts=dict(sorted(Counter(r['status'] for r in rows).items())),rotation_turns=turns,
         complete_season=bool(rows) and all(r['status']=='complete' for r in rows),
@@ -83,7 +127,7 @@ def run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,outp
         publish(name,_dump(value))
     _pins(inputs,pins)
     if any(game.real.digest(output/name)!=sha for name,sha in artifacts.items()):raise ValueError('Managed output changed before acceptance')
-    receipt=dict(format='managed-season-receipt-v1',input_sha256={str(p):h for p,h in zip(inputs,pins)},
+    receipt=dict(format='managed-season-receipt-v2' if v2 else 'managed-season-receipt-v1',input_sha256={str(p):h for p,h in zip(inputs,pins)},
         output_sha256=artifacts,counts=report['counts'],complete_season=report['complete_season'],attribution=game.real.ATTRIBUTION)
     rebuild(output,source,pool,targets,receipt)
     game.ratings.publish(_dump(receipt),inputs,tuple(pins),output/'receipt.json')
@@ -94,16 +138,27 @@ def rebuild(directory,source,pool,targets,receipt=None):
     """Authenticate retained bytes and reconstruct every pregame choice/ledger from supplied authenticated sources."""
     root=Path(directory).resolve();receipt=_json(root/'receipt.json') if receipt is None else receipt
     report=_json(root/'manifest.json')
-    if (receipt['format']!='managed-season-receipt-v1' or report['format']!='managed-season-v1'
-            or report['season_policy']!=manager.POLICY or report['availability_basis']!=manager.AVAILABILITY
+    v2=report.get('format')=='managed-season-v2'
+    policy=pitcher_policy_v2.POLICY if v2 else manager.POLICY
+    receipt_format='managed-season-receipt-v2' if v2 else 'managed-season-receipt-v1'
+    if (receipt['format']!=receipt_format or report['format']!=('managed-season-v2' if v2 else 'managed-season-v1')
+            or report['season_policy']!=policy or report['availability_basis']!=manager.AVAILABILITY
             or report['seed_algorithm']!='sha256:bbsim-season-v1:first8-big-endian' or report['limits']!=LIMITS):
         raise ValueError('Unsupported managed receipt/policy')
-    required={'manifest.json','schedule.json','summary.json','ledger.json','comparison.json'}
+    required={'manifest.json','schedule.json','summary.json','ledger.json','comparison.json'};allowed=set(required)
     for row in report['games']:
+        prefix='games/'+row['game_id']+'/'
         if row['status'] in {'complete','simulation_failed'}:
-            required.update('games/'+row['game_id']+'/'+name for name in ['lineup.tsv','cast.tsv','bench.tsv','stdout.tsv','stderr.txt'])
-        if row['status']=='complete':required.add('games/'+row['game_id']+'/receipt.json')
-    if set(receipt['output_sha256'])!=required:raise ValueError('Missing/unknown managed artifact pins')
+            files=['lineup.tsv','cast.tsv','bench.tsv','stdout.tsv','stderr.txt']
+            required.update(prefix+name for name in files);allowed.update(prefix+name for name in files)
+            if v2 and row['status']=='simulation_failed':allowed.update(prefix+name for name in ['manager-trace.tsv','event-log.tsv'])
+        if row['status']=='complete':
+            required.add(prefix+'receipt.json');allowed.add(prefix+'receipt.json')
+            if v2:
+                required.update(prefix+name for name in ['manager-trace.tsv','event-log.tsv'])
+                allowed.update(prefix+name for name in ['manager-trace.tsv','event-log.tsv'])
+    actual=set(receipt['output_sha256'])
+    if not required<=actual or actual-allowed:raise ValueError('Missing/unknown managed artifact pins')
     inputs=[Path(p) for p in receipt['input_sha256']];pins=list(receipt['input_sha256'].values());_pins(inputs,pins)
     for name,sha in receipt['output_sha256'].items():
         if game.real.digest(_file(root,name))!=sha:raise ValueError('Managed retained artifact changed')
@@ -120,18 +175,21 @@ def rebuild(directory,source,pool,targets,receipt=None):
             ledger.record_refusal(row,row['reason']);stopped=True;continue
         if row['status']!='complete':raise ValueError('Unexplained pending managed game')
         if type(row.get('exit')) is not int or row['exit']!=0:raise ValueError('Invalid completed native exit')
-        b=managed.build_game(prepared,pool,ledger.snapshot(),row['game_id'],turns);entry=_entry(row,b)
+        b=managed.build_game(prepared,pool,ledger.snapshot(),row['game_id'],turns,pitcher_policy=policy);entry=_entry(row,b,policy)
         prefix='games/'+row['game_id']+'/';folder=root/prefix;gr=_json(folder/'receipt.json')
-        if (gr['format']!='managed-game-receipt-v1' or gr['entry']!=entry or gr['rotation_before']!=turns
+        if (gr['format']!=('managed-game-receipt-v2' if v2 else 'managed-game-receipt-v1') or gr['entry']!=entry or gr['rotation_before']!=turns
                 or gr['next_turns']!=b['next_turns'] or gr['starter_decisions']!=b['starter_decisions']
                 or gr['pregame_sha256']!=hashlib.sha256(usage_ledger._canonical(ledger.snapshot())).hexdigest()):
             raise ValueError('Managed pregame recipe/ledger mismatch')
         for name in ['lineup','cast','bench']:
             if (folder/(name+'.tsv')).read_text()!=b[name]:raise ValueError('Managed personnel recipe mismatch')
-        if set(gr['output_sha256'])!={'lineup.tsv','cast.tsv','bench.tsv','stdout.tsv','stderr.txt'}:
+        game_outputs={'lineup.tsv','cast.tsv','bench.tsv','stdout.tsv','stderr.txt'}
+        if v2:game_outputs|={'manager-trace.tsv','event-log.tsv'}
+        if set(gr['output_sha256'])!=game_outputs:
             raise ValueError('Missing/unknown managed game pins')
         for name,sha in gr['output_sha256'].items():
             if game.real.digest(_file(folder,name))!=sha:raise ValueError('Managed game artifact changed')
+        if v2:_validate_native_trace(gr['command'],folder,row,inputs,pins)
         parsed=season.parse_accounting((folder/'stdout.tsv').read_text(),entry)
         ledger.accept(entry,parsed,game.real.digest(folder/'receipt.json'));results.append(parsed);turns=b['next_turns']
         if any(row[k]!=entry[k] for k in entry) or row['teams']!=parsed['teams']:raise ValueError('Managed manifest entry mismatch')
@@ -148,19 +206,20 @@ def rebuild(directory,source,pool,targets,receipt=None):
     return rebuilt,comparison
 
 
-def export(lineups,native,opportunities,events,readiness,target_directory,baseline,contact,binary,master_seed,output):
+def export(lineups,native,opportunities,events,readiness,target_directory,baseline,contact,binary,master_seed,output,pitcher_policy=manager.POLICY):
     paths=[Path(p).resolve() for p in [lineups,native,opportunities,events,readiness]]
     target=Path(target_directory).resolve()/'targets.json'
     if game.real.digest(target)!=TARGET_SHA256:raise ValueError('Unsupported approved usage targets')
     targets=_json(target)
     recipes=[Path(m.__file__) for m in [game.lineup,game.player,game.workload,game.bullpen,game.real,game.ratings,
         game.cast,game,managed,manager,season,usage_ledger,season_usage,managed.bench]]+[Path(__file__)]
+    if pitcher_policy==pitcher_policy_v2.POLICY:recipes.append(Path(pitcher_policy_v2.__file__))
     inputs=[*paths,target,*[Path(p).resolve() for p in [baseline,contact,binary]],*recipes]
     pins=tuple(game.real.digest(p) for p in inputs)
     if pins[:5]!=game.INPUT_SHA or game.real.digest(Path(game.workload.__file__))!=game.cast.WORKLOAD_RECIPE_SHA:
         raise ValueError('Unsupported managed source/recipe digest')
     source=game.prepare_season(game.read_sources(paths));pool=manager.build_pool(source,targets)
-    report=run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,output)
+    report=run(source,pool,targets,inputs,pins,binary,baseline,contact,master_seed,output,pitcher_policy)
     return report
 
 
@@ -169,9 +228,11 @@ def main():
     for name in ['lineups','native','opportunities','events','readiness','targets','baseline','contact','binary','output']:
         parser.add_argument(name,type=Path)
     parser.add_argument('--seed',type=int,default=1)
+    parser.add_argument('--pitcher-policy',choices=['v1','v2',manager.POLICY,pitcher_policy_v2.POLICY],default='v1')
     args=parser.parse_args()
+    policy={'v1':manager.POLICY,'v2':pitcher_policy_v2.POLICY}.get(args.pitcher_policy,args.pitcher_policy)
     result=export(args.lineups,args.native,args.opportunities,args.events,args.readiness,args.targets,
-        args.baseline,args.contact,args.binary,args.seed,args.output)
+        args.baseline,args.contact,args.binary,args.seed,args.output,policy)
     print(json.dumps(dict(counts=result['counts'],complete_season=result['complete_season']),sort_keys=True))
     return 0 if result['complete_season'] else 2
 

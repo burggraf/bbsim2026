@@ -5,6 +5,8 @@ use bbsim_engine::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::pitcher_entry_v2::{self, Budget, Candidate, Reason, Selection, TraceDecision};
+use super::pitcher_policy_v2::{Clock, ReliefUsage};
 use crate::season_pool;
 
 const ATTRIBUTION: &str = "The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at \"www.retrosheet.org\".";
@@ -50,10 +52,38 @@ impl Workload {
     }
 }
 
+fn pitcher_pa_count(log: &[EventTransition], pitcher: &str) -> u64 {
+    log.iter()
+        .filter(|transition| {
+            transition.event().participants.pitcher.as_deref() == Some(pitcher)
+                && matches!(
+                    transition.event().kind,
+                    EventKind::PlateAppearance
+                        | EventKind::OutOfParkHomeRun
+                        | EventKind::FieldersChoice
+                )
+        })
+        .count() as u64
+}
+
+fn next_manager_word(state: &mut u64) -> u64 {
+    *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    let mut value = *state;
+    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    value ^ (value >> 31)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Pitcher {
     id: String,
     name: String,
+}
+
+pub struct V2HookDecision {
+    pub selection: Selection,
+    pub budget: Budget,
+    pub transition: Option<EventTransition>,
 }
 
 /// The pinned exporter version does not authenticate arbitrary TSV bytes or player eligibility.
@@ -68,6 +98,9 @@ pub struct Cast {
     managed: bool,
     starter_scale: [u64; 2],
     relief_pace: BTreeMap<String, i8>,
+    v2: bool,
+    clocks: Option<[Clock; 2]>,
+    relief_usage: BTreeMap<String, ReliefUsage>,
 }
 
 impl Cast {
@@ -111,27 +144,35 @@ impl Cast {
             }
         }
 
-        let (empirical, generic, managed) = match (
+        let (empirical, generic, managed, v2) = match (
             fields.remove("format").as_deref(),
             fields.remove("policy").as_deref(),
         ) {
             (Some("closed-pitching-cast-v1"), Some("pa-mean-closed-cast-v1")) => {
-                (false, false, false)
+                (false, false, false, false)
             }
             (Some("closed-pitching-cast-v2"), Some("empirical-pa-closed-cast-v2")) => {
-                (true, false, false)
+                (true, false, false, false)
             }
             (Some("closed-pitching-cast-v3"), Some("empirical-pa-closed-cast-v2")) => {
-                (true, true, false)
+                (true, true, false, false)
             }
             (Some("season-pool-pitching-cast-v1"), Some("empirical-pa-closed-cast-v2")) => {
-                (true, true, true)
+                (true, true, true, false)
+            }
+            (Some("season-pool-pitching-cast-v2"), Some("empirical-pa-closed-cast-v2")) => {
+                (true, true, true, true)
             }
             _ => return Err("unsupported pitching cast format/policy".into()),
         };
         let mut starter_scale = [100; 2];
         if managed {
-            if fields.remove("season_policy").as_deref() != Some(season_pool::POLICY) {
+            let expected_policy = if v2 {
+                season_pool::PITCHER_USAGE_POLICY_V2
+            } else {
+                season_pool::POLICY
+            };
+            if fields.remove("season_policy").as_deref() != Some(expected_policy) {
                 return Err("unsupported cast season_policy".into());
             }
             for (side, label) in ["Away", "Home"].iter().enumerate() {
@@ -175,6 +216,19 @@ impl Cast {
                 if fields.remove(key).as_deref() != Some(expected) {
                     return Err(format!("unsupported pitching cast {key}"));
                 }
+            }
+        }
+        let mut clocks = [None, None];
+        if v2 {
+            for (side, label) in ["Away", "Home"].iter().enumerate() {
+                let value = fields
+                    .remove(&format!("club_clock:{label}"))
+                    .ok_or("missing v2 club clock")?;
+                let clock = Clock::read(&value)?;
+                if !matches!(clock.scheduled(), 161 | 162) {
+                    return Err("invalid v2 club clock schedule".into());
+                }
+                clocks[side] = Some(clock);
             }
         }
         let valid_actor = |id: &str| {
@@ -254,12 +308,16 @@ impl Cast {
         let mut workloads = BTreeMap::new();
         let mut usage = BTreeMap::new();
         let mut relief_pace = BTreeMap::new();
+        let mut relief_usage = BTreeMap::new();
         let mut budget_priors = BTreeSet::new();
         for (key, value) in fields {
             let parts = key.split(':').collect::<Vec<_>>();
             match parts.as_slice() {
-                ["relief_pace", id] if managed && valid_actor(id) => {
+                ["relief_pace", id] if managed && !v2 && valid_actor(id) => {
                     relief_pace.insert((*id).to_owned(), season_pool::pace(&value)?);
+                }
+                ["relief_usage", id] if v2 && valid_actor(id) => {
+                    relief_usage.insert((*id).to_owned(), ReliefUsage::read(&value)?);
                 }
                 ["budget_prior", role @ ("start" | "relief"), id]
                     if managed && valid_actor(id) && value == "true" =>
@@ -383,7 +441,8 @@ impl Cast {
             return Err("pitcher profiles do not match recorded cast".into());
         }
         if managed
-            && (relief_pace.keys().cloned().collect::<BTreeSet<_>>() != cast_ids
+            && ((!v2 && relief_pace.keys().cloned().collect::<BTreeSet<_>>() != cast_ids)
+                || (v2 && relief_usage.keys().cloned().collect::<BTreeSet<_>>() != cast_ids)
                 || !budget_priors.is_subset(&expected_workloads))
         {
             return Err("season-pool profiles do not match cast".into());
@@ -421,6 +480,16 @@ impl Cast {
             managed,
             starter_scale,
             relief_pace,
+            v2,
+            clocks: if v2 {
+                Some([
+                    clocks[0].expect("parsed Away v2 club clock"),
+                    clocks[1].expect("parsed Home v2 club clock"),
+                ])
+            } else {
+                None
+            },
+            relief_usage,
         })
     }
 
@@ -438,6 +507,278 @@ impl Cast {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn season_policy(&self) -> Option<&'static str> {
+        if self.v2 {
+            Some(season_pool::PITCHER_USAGE_POLICY_V2)
+        } else if self.managed {
+            Some(season_pool::POLICY)
+        } else {
+            None
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn is_v2(&self) -> bool {
+        self.v2
+    }
+
+    #[allow(dead_code)]
+    pub fn clocks(&self) -> Option<&[Clock; 2]> {
+        self.clocks.as_ref()
+    }
+
+    #[allow(dead_code)]
+    pub fn relief_usage(&self) -> &BTreeMap<String, ReliefUsage> {
+        &self.relief_usage
+    }
+
+    pub fn validate_v2_clocks(&self, team_ids: [&str; 2]) -> Result<(), String> {
+        if let Some(clocks) = &self.clocks {
+            for side in 0..2 {
+                if clocks[side].scheduled() != season_pool::scheduled_games(team_ids[side])? {
+                    return Err("v2 club clock does not match lineup schedule".into());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn v2_candidates(&self, side: usize) -> Result<Vec<Candidate>, String> {
+        if !self.v2 || side > 1 {
+            return Err("v2 candidate request requires a v2 cast and valid side".into());
+        }
+        self.teams[side]
+            .iter()
+            .enumerate()
+            .map(|(rank, pitcher)| {
+                let workload = &self.workloads[&(pitcher.id.clone(), false)];
+                let pa_sum = u32::try_from(workload.pa_sum)
+                    .map_err(|_| "v2 relief PA sum exceeds selector bound")?;
+                let outings = u32::try_from(workload.outings)
+                    .map_err(|_| "v2 relief outing count exceeds selector bound")?;
+                if rank > 0 && outings == 0 {
+                    return Err("v2 reliever lacks a supported relief workload".into());
+                }
+                Ok(Candidate {
+                    id: pitcher.id.clone(),
+                    starter: rank == 0,
+                    usage: self.relief_usage[&pitcher.id],
+                    pa_sum,
+                    outings,
+                })
+            })
+            .collect()
+    }
+
+    pub fn select_v2(&self, before: &GameState, side: usize) -> Result<Selection, String> {
+        if side > 1 {
+            return Err("invalid v2 selector side".into());
+        }
+        let clock = self
+            .clocks
+            .as_ref()
+            .filter(|_| self.v2)
+            .ok_or("v2 selector requires a v2 cast")?[side];
+        pitcher_entry_v2::select(before, side, clock, &self.v2_candidates(side)?)
+    }
+
+    pub fn v2_budget(
+        &self,
+        before: &GameState,
+        side: usize,
+        log: &[EventTransition],
+        word: u64,
+    ) -> Result<Budget, String> {
+        if !self.v2 || side > 1 {
+            return Err("v2 budget request requires a v2 cast and valid side".into());
+        }
+        let outgoing = before.teams[side]
+            .pitcher
+            .active_id()
+            .ok_or("v2 budget requires an active outgoing pitcher")?;
+        let starter = self.teams[side]
+            .iter()
+            .position(|pitcher| pitcher.id == outgoing)
+            .ok_or("v2 outgoing pitcher is absent from cast")?
+            == 0;
+        let workload = &self.workloads[&(outgoing.to_owned(), starter)];
+        let samples = workload
+            .samples
+            .as_ref()
+            .filter(|samples| !samples.is_empty())
+            .ok_or("v2 outgoing pitcher lacks pinned usage samples")?;
+        let sample_index = ((u128::from(word) * samples.len() as u128) >> 64) as usize;
+        let sample_index_u32 =
+            u32::try_from(sample_index).map_err(|_| "v2 usage sample index exceeds wire bound")?;
+        let base = u32::try_from(samples[sample_index].max(1))
+            .map_err(|_| "v2 usage sample exceeds budget wire bound")?;
+        let scale = if starter {
+            u32::try_from(self.starter_scale[side])
+                .map_err(|_| "v2 starter scale exceeds budget wire bound")?
+        } else {
+            100
+        };
+        let mut final_budget = (u64::from(base) * u64::from(scale) / 100).max(1);
+        let runs = log
+            .iter()
+            .filter(|transition| {
+                transition.event().participants.pitcher.as_deref() == Some(outgoing)
+            })
+            .try_fold(0u64, |sum, transition| {
+                sum.checked_add(u64::from(transition.event().delta.runs))
+                    .ok_or("v2 pitcher run total overflow")
+            })?;
+        let lead = i64::from(before.score[side]) - i64::from(before.score[1 - side]);
+        let mut lead_extension = 0;
+        let mut no_hit_floor = None;
+        if starter && runs == 0 {
+            if lead > 3 {
+                lead_extension = 3;
+                final_budget += 3;
+            }
+            let complete_origin = log.first().is_some_and(|transition| {
+                let initial = transition.before();
+                initial.inning == 1
+                    && initial.half == bbsim_engine::Half::Top
+                    && initial.outs == 0
+                    && initial.bases.iter().all(Option::is_none)
+                    && initial.score == [0, 0]
+            });
+            if complete_origin && !log.is_empty() {
+                let stats = derive_accounting(log)
+                    .map_err(|e| format!("manager accounting refused: {e:?}"))?;
+                if stats.pitchers[side]
+                    .get(outgoing)
+                    .is_some_and(|pitcher| pitcher.classified_hits_allowed == Some(0))
+                {
+                    let floor = (3 * workload.pa_sum).div_ceil(2 * workload.outings).max(1);
+                    no_hit_floor = Some(floor);
+                    final_budget = final_budget.max(floor);
+                }
+            }
+        }
+        Ok(Budget {
+            word,
+            sample_index: sample_index_u32,
+            base,
+            scale,
+            lead_extension,
+            no_hit_floor,
+            final_budget,
+        })
+    }
+
+    pub fn next_change_v2(
+        &self,
+        before: &GameState,
+        log: &[EventTransition],
+        word: u64,
+    ) -> Result<Option<V2HookDecision>, String> {
+        if !self.v2 {
+            return Err("v2 hook requires a v2 cast".into());
+        }
+        if before.over {
+            return Ok(None);
+        }
+        let side = 1 - before.half.offense();
+        if matches!(
+            before.teams[side].pitcher,
+            PitcherRole::Active {
+                obligation: PitcherObligation::StartingBatter | PitcherObligation::ReliefBatter,
+                ..
+            }
+        ) {
+            return Ok(None);
+        }
+        let budget = self.v2_budget(before, side, log, word)?;
+        let outgoing = before.teams[side]
+            .pitcher
+            .active_id()
+            .ok_or("v2 hook requires an active pitcher")?;
+        if pitcher_pa_count(log, outgoing) < budget.final_budget {
+            return Ok(None);
+        }
+        let selection = self.select_v2(before, side)?;
+        let transition = selection
+            .chosen()
+            .map(|incoming| self.substitution(before, side, incoming))
+            .transpose()?;
+        Ok(Some(V2HookDecision {
+            selection,
+            budget,
+            transition,
+        }))
+    }
+
+    pub fn restore_pitcher_v2(
+        &self,
+        before: &GameState,
+    ) -> Result<Option<(Selection, EventTransition)>, String> {
+        if !self.v2 {
+            return Err("v2 restoration requires a v2 cast".into());
+        }
+        let side = 1 - before.half.offense();
+        if !matches!(before.teams[side].pitcher, PitcherRole::Vacant { .. }) {
+            return Ok(None);
+        }
+        let selection = self.select_v2(before, side)?;
+        let incoming = selection
+            .chosen()
+            .ok_or("no unused v2 cast pitcher for PH vacancy")?;
+        let transition = self.substitution(before, side, incoming)?;
+        Ok(Some((selection, transition)))
+    }
+
+    pub fn validate_v2_trace(
+        &self,
+        text: &str,
+        game: &str,
+        seed: u64,
+        log: &[EventTransition],
+    ) -> Result<Vec<TraceDecision>, String> {
+        if !self.v2 || self.game_id.as_deref() != Some(game) {
+            return Err("v2 trace requires matching v2 cast/game identity".into());
+        }
+        let clocks = self.clocks.as_ref().ok_or("v2 trace has no club clocks")?;
+        let profiles = [self.v2_candidates(0)?, self.v2_candidates(1)?];
+        let decisions = pitcher_entry_v2::validate_trace(text, game, seed, log, &profiles, clocks)?;
+        let mut rng_state = seed ^ 0x6d61_6e61_6765_7232;
+        let mut entries: [(String, u64); 2] = std::array::from_fn(|_| (String::new(), 0));
+        for (event_index, transition) in log.iter().enumerate() {
+            if decisions.iter().any(|decision| {
+                decision.event_index as usize == event_index && decision.reason == Reason::PhRestore
+            }) {
+                continue;
+            }
+            let before = transition.before();
+            let side = 1 - before.half.offense();
+            let pitcher = before.teams[side]
+                .pitcher
+                .active_id()
+                .ok_or("v2 manager trace contains an unresolved pitcher vacancy")?;
+            if entries[side].0 != pitcher {
+                entries[side] = (pitcher.to_owned(), next_manager_word(&mut rng_state));
+            }
+            for decision in decisions.iter().filter(|decision| {
+                decision.event_index as usize == event_index && decision.reason == Reason::Hook
+            }) {
+                if decision.side != side {
+                    return Err("v2 hook trace has the wrong defending side".into());
+                }
+                let budget = self.v2_budget(before, side, &log[..event_index], entries[side].1)?;
+                if decision.budget.as_ref() != Some(&budget)
+                    || pitcher_pa_count(&log[..event_index], pitcher) < budget.final_budget
+                {
+                    return Err(
+                        "v2 hook budget or entry threshold does not match pinned history".into(),
+                    );
+                }
+            }
+        }
+        Ok(decisions)
+    }
+
     #[allow(dead_code)] // Only game-input callers need the source game ID.
     pub fn game_id(&self) -> Option<&str> {
         self.game_id.as_deref()
@@ -452,6 +793,16 @@ impl Cast {
     /// Only names explicitly present in the source cast rows are exposed.
     pub fn names(&self) -> BTreeMap<String, String> {
         self.names.clone()
+    }
+
+    pub fn merge_names(&self, names: &mut BTreeMap<String, String>) -> Result<(), String> {
+        for (id, name) in &self.names {
+            if names.get(id).is_some_and(|old| old != name) {
+                return Err("lineup/cast display-name mismatch".into());
+            }
+            names.insert(id.clone(), name.clone());
+        }
+        Ok(())
     }
 
     /// Add exactly the supplied nonstarters after native starter/membership checks.
@@ -511,6 +862,9 @@ impl Cast {
 
     #[allow(dead_code)] // Optional PH entry points also compile in isolated pitching-manager tests.
     pub fn next_available<'a>(&'a self, before: &GameState, side: usize) -> Option<&'a str> {
+        if self.v2 || side > 1 {
+            return None;
+        }
         let available = self.teams[side].iter().skip(1).filter(|p| {
             before.teams[side].bench.contains(&p.id) && !before.teams[side].removed.contains(&p.id)
         });
@@ -532,6 +886,9 @@ impl Cast {
     /// A PH vacancy is resolved before defensive readiness or any entry/play RNG word.
     #[allow(dead_code)]
     pub fn restore_pitcher(&self, before: &GameState) -> Result<Option<EventTransition>, String> {
+        if self.v2 {
+            return Err("v2 restoration must use its shared selector".into());
+        }
         let side = 1 - before.half.offense();
         if !matches!(before.teams[side].pitcher, PitcherRole::Vacant { .. }) {
             return Ok(None);
@@ -569,6 +926,9 @@ impl Cast {
         log: &[EventTransition],
         usage_word: u64,
     ) -> Result<Option<EventTransition>, String> {
+        if self.v2 {
+            return Err("v2 hook must use its shared selector".into());
+        }
         if before.over {
             return Ok(None);
         }

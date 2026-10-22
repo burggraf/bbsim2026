@@ -58,7 +58,38 @@ pub fn write_managed(
         seed,
         teams,
         None,
-        Some((ratings, pinch_hitting)),
+        Some((
+            ratings,
+            pinch_hitting,
+            season_pool::POLICY,
+            season_pool::MANAGER,
+        )),
+    )
+}
+
+#[allow(dead_code)]
+pub fn write_managed_v2(
+    output: &mut dyn Write,
+    stats: &GameAccounting,
+    game: &str,
+    seed: u64,
+    teams: &[String; 2],
+    ratings: &str,
+    pinch_hitting: bool,
+) -> io::Result<()> {
+    write_inner(
+        output,
+        stats,
+        game,
+        seed,
+        teams,
+        None,
+        Some((
+            ratings,
+            pinch_hitting,
+            season_pool::PITCHER_USAGE_POLICY_V2,
+            season_pool::MANAGER_V2,
+        )),
     )
 }
 
@@ -69,7 +100,7 @@ fn write_inner(
     seed: u64,
     teams: &[String; 2],
     ph: Option<(&str, &str, &str, &str)>,
-    managed: Option<(&str, bool)>,
+    managed: Option<(&str, bool, &str, &str)>,
 ) -> io::Result<()> {
     if !stats.complete_game {
         return Err(io::Error::new(
@@ -77,8 +108,12 @@ fn write_inner(
             "accounting requires a complete game",
         ));
     }
-    let format = if managed.is_some() {
-        "controlled-accounting-managed-v1"
+    let format = if let Some((_, _, policy, _)) = managed {
+        if policy == season_pool::PITCHER_USAGE_POLICY_V2 {
+            "controlled-accounting-managed-v2"
+        } else {
+            "controlled-accounting-managed-v1"
+        }
     } else if ph.is_some() {
         "controlled-accounting-ph-v1"
     } else {
@@ -91,11 +126,11 @@ fn write_inner(
             "pinch_hitting\t{policy}\navailability_basis\t{availability}\ndefense_basis\t{defense}"
         )?;
     }
-    if let Some((_, ph)) = managed {
+    if let Some((_, ph, policy, _)) = managed {
         writeln!(
             output,
             "season_policy\t{}\navailability_basis\t{}\ndefense_basis\t{}\npinch_hitting\t{}",
-            season_pool::POLICY,
+            policy,
             season_pool::AVAILABILITY,
             season_pool::DEFENSE_BASIS,
             if ph {
@@ -111,14 +146,14 @@ fn write_inner(
         (
             "ratings",
             managed
-                .map(|(model, _)| model)
+                .map(|(model, _, _, _)| model)
                 .or_else(|| ph.map(|(_, _, _, model)| model))
                 .unwrap_or(super::ratings::MODEL_VERSION),
         ),
         (
             "manager",
-            if managed.is_some() {
-                season_pool::MANAGER
+            if let Some((_, _, _, manager)) = managed {
+                manager
             } else {
                 super::full_manager::POLICY_VERSION
             },

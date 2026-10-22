@@ -19,13 +19,45 @@ Each cast actor has exactly one `relief_usage` row, including the selected start
 ranking still considers only supported legal unused nonstarters. Unknown `T` is
 `?`, never an omitted value or zero. `U` cannot be unknown. Counts are canonical
 ASCII unsigned decimal u32 values (no whitespace, sign or leading zeros).
-Exactly two comma-separated cells are required. Clocks require `0 <= c < N <=162`.
-Examples: `0,162`, `161,162`, `17,60`, `0,0`, `17,?`.
+Exactly two comma-separated cells are required. Clocks require `0 <= c < N <= 162`,
+where the 2019 scheduled count is 161 for CHA and DET and 162 for every other
+supported club. Examples: clocks `0,162`, `161,162`, `0,161`; usage `0,?`,
+`17,0`, `120,144`.
 
-V2 must not accept `relief_pace` as a replacement for these counts. The eventual
-full cast reader must reject missing/duplicate/unknown fields and mismatched actor
-sets; the small value parsers in this slice do **not** certify a complete cast.
-There is no standalone context file, new CLI option or default change here.
+V2 must not accept `relief_pace` as a replacement for these counts.
+
+## Complete v2 personnel schemas
+
+These markers are distinct from the historical, assumed, and managed-v1 inputs:
+
+| File | Required `format` | `season_policy` | Retained policy field |
+|---|---|---|---|
+| Lineup | `season-pool-lineup-v2` | `season-pool-pitcher-usage-v2` | — |
+| Cast | `season-pool-pitching-cast-v2` | `season-pool-pitcher-usage-v2` | `policy=empirical-pa-closed-cast-v2` |
+| Bench | `season-pool-bench-v2` | `season-pool-pitcher-usage-v2` | `policy=late-close-expected-bases-ph-v1` |
+
+The lineup and bench retain their complete managed-v1 row schemas, changing only
+`format` and `season_policy`. The bench retains its per-actor `pace` preference;
+that is not pitcher `relief_pace`. The cast retains its generic managed-v1
+identity, ability, empirical workload/sample, marked-prior, and `starter_scale`
+fields. It replaces every `relief_pace:<id>` with exactly one
+`relief_usage:<id>` for every `cast:<side>:<rank>:<id>` actor, and adds exactly one
+`club_clock:Away` and `club_clock:Home`. Unknown, missing, duplicate, or extra
+fields and mismatched usage/cast actor sets are errors.
+
+All three files must be present and agree on v2 mode, `season_policy`, and
+`game_id`. Their source pins must match the existing audited inputs: lineup
+`audit_sha256` equals cast `lineup_report_sha256`; all three carry the same pinned
+snapshot and supplement hashes; cast and bench carry the same pinned opportunity
+report hash; attribution is unchanged. The two clock `N` values are checked against
+the corresponding lineup team IDs. The cast's two side groups and selected starters
+must agree with that lineup, and bench actors may not overlap lineup or cast
+identities. Mixed v1/v2/historical sets fail closed.
+
+The native lineup/cast/bench parsers and Python season-runner validator check this
+v2 schema. The text-game command validates and then deliberately stops before
+simulation: v2 selector, hook, probe, and restoration integration is not part of
+this preparation. There is no new CLI option or default change.
 
 ## Native exact ranking interface
 
@@ -49,9 +81,9 @@ situation bonus still applies. Known zero targets use the registered formula.
 
 ## Remaining integration boundary
 
-This is preparation, not a completed native manager. The existing Cast, lineup,
-bench, CLI and season runner do not consume these primitives yet. Before wiring
-live selection, freeze/test the **full** personnel and `pitcher-entry-decisions-v2`
-entry-trace interfaces required by the parent contract, then share one selector
-across hooks, PH probes and restoration. No trace acceptance, mechanism gate,
-season evaluation or pitching-accuracy improvement is claimed here.
+This is preparation, not a completed native manager. The Cast/Lineup/Bench
+readers validate v2 personnel schemas, the Python season runner binds the trio for
+accounting, and the text-game CLI refuses before simulation; no v2 selector is
+wired into game execution. Whole `pitcher-entry-decisions-v2` trace acceptance and
+live hook, PH-probe, and restoration integration remain to be completed. No
+mechanism gate, season evaluation, or pitching-accuracy improvement is claimed.

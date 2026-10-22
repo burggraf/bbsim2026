@@ -8,6 +8,12 @@ mod full_manager;
 #[path = "../examples/support/full_simulation.rs"]
 mod full_simulation;
 #[allow(dead_code)]
+#[path = "../examples/support/pitcher_entry_v2.rs"]
+mod pitcher_entry_v2;
+#[allow(dead_code)]
+#[path = "../examples/support/pitcher_policy_v2.rs"]
+mod pitcher_policy_v2;
+#[allow(dead_code)]
 #[path = "../examples/support/preview.rs"]
 mod preview;
 #[allow(dead_code)]
@@ -165,6 +171,24 @@ fn simulation_refreshes_all_canonical_positions_not_only_the_pitcher() {
         assert!(step.transition().to_bytes().starts_with(b"BBE33"));
     }
 }
+#[test]
+fn trace_capture_is_ignored_without_a_v2_cast() {
+    let simulation = full_simulation::simulate_with_personnel_options(
+        &initial(),
+        &defense(),
+        &model(),
+        None,
+        None,
+        full_simulation::SimulationOptions {
+            seed: 67,
+            capture_v2_trace: true,
+        },
+        |_| Ok(None),
+    )
+    .unwrap();
+    assert!(simulation.manager_trace.is_none());
+}
+
 #[test]
 fn ordinary_seeded_games_complete_with_canonical_continuity_and_independent_totals() {
     let model = model();
