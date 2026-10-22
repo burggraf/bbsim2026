@@ -62,6 +62,7 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 
 | ID | Status | Evidence / blocker |
 | --- | --- | --- |
+| P-02-linux-runtime-compatibility | done — bounded Linux engine/CLI verification | Ubuntu 24.04.5 x86_64; Rust/Cargo 1.99.1, Python 3.12.3, DuckDB 1.5.6 plus signed httpfs. 995 Rust/807 Werror Python/example tests, fmt/build/strict-Clippy, read-only snapshot export, deterministic native seed-1 repeat and static viewer pass. Final private report `work-checkpoints/linux-runtime-httpfs-20261022/results.json`: `all_runtime_checks_passed: true`; prior missing-httpfs failure retained. See first Resume for commands, provenance and exclusions. No season/browser/Tauri/gate signoff. |
 | P-02-text-game-usage-v1 | done — bounded verified checkpoint | [Contract/results](modeling/text-game-usage-audit-v1.md):482 source outings/3391 independently reconciled decision rows; removed extra performance hook. Fresh4000 fixed-matchup games pass, mean tails395→168/empirical537→326;896Rust/4examples/57focused/629Python/build/fmt/strictClippy/diff,221stable source pins/342protected paths. No probability/roster/gate change; finite-cast and historical-fidelity limits remain. Local checkpoint only, no push. |
 | F-01-season-replay-readiness | done — bounded offline audit | [Results/reproduction/blockers](data-audits/2019-season-replay-readiness.md):30teams/2429played/2430slots;2363unique/66ambiguous/1not-made-up. All played IDs retained; four suspensions/ten shortened games visible. 21starting batters/1starter pitcher lack training opportunities. Source reference assertion fails24PA cells/62SH-SF credit gaps; no repair/certification. 33focused/636Python pass,101stable pins, repeat reports/native exports exact. Runtime/gates not complete. |
 | P-02-season-game-inputs-v1 | done — bounded verified generic-input checkpoint | [Contract/results/reproduction](modeling/season-game-inputs-v1.md): source-bound exclusive lineupv2/castv3;600actual-source games/600independent boxes/46592consumed vectors;1634incoming-pitcher draws and107cold-starter draws.404old text/8preview pairs byte-identical; mixed schemas refuse.899Rust/4examples/648Python/build/fmt/strictClippy/diff,226stable source pins. Oracle FC ownership repair and raw failure retained; no engine/policy/RNG change, full-season certification or gate signoff. |
@@ -251,7 +252,7 @@ root ownership/agent permissions and explicit application input paths still appl
 No dependency installs or simulator changes. Local migration logs/manifests live
 under `~/Library/Application Support/bbsim2026-migrations/`.
 
-**Linux runtime verification (`P-02-linux-runtime-compatibility`, active):** the
+**Linux runtime verification (`P-02-linux-runtime-compatibility`, done — bounded engine/CLI/runtime checks):** the
 maintainer approved Rust 1.99.1/rustfmt/Clippy and DuckDB CLI 1.5.6 installation via
 interview `ebe47d52-a820-4aec-bbc8-a3d92503349d`. Ubuntu 24.04.5/x86_64 has Python
 3.12.3. The pre-install full Python run `proc_c49b` exited 1 (105.16 s), with missing
@@ -259,19 +260,43 @@ DuckDB/native-executable errors; raw output is preserved at remote
 `work-checkpoints/linux-runtime-20261022/`. Official rustup bootstrap SHA-256 and
 DuckDB GitHub asset digest verified; installation `proc_78ae` exited 0 in 29 s.
 Installed tool versions match approval; no repository dependency or model changes.
-`proc_af90` now runs full equipped build/fmt/Rust/examples/Clippy/Python/diff checks,
-read-only baseline export and repeated seed-1 native/static-viewer smoke tests.
-Remote driver `/root/.local/share/bbsim-verify-linux-runtime-20261022.py`; logs/results
-under private `work-checkpoints/linux-runtime-equipped-20261022/`. Native builds
-use a fresh Linux `engine/target/`, not the transferred macOS caches/reference.
-This documentation checkpoint does not modify executable code. Keep the remote
-checkout at tested commit `514f171` until the job finishes so its source guard
-remains meaningful. Runtime compatibility remains unconfirmed until results are
-inspected. No season run or gate/default promotion.
+`proc_af90` finished after 1940 s: fmt/build/Rust/examples/strict-Clippy/diff all
+exit 0; Rust alone took 1683.451 s. Read-only baseline export, repeated seed-1
+native trace (byte-identical), and static-viewer generation all exit 0. The snapshot
+retained SHA-256 `d036b4664c8ce4cab51e86aacc075727558f9461c813b51f53d5974fc39a4528`.
+Linux generated-game binary SHA-256
+`39a2c5cfdba8d7dce8f0f57ca51a920785c58a6ada679e7a32b97fe98c152c65`.
+Python ran 807 tests in 206.856 s with one failure: missing preinstalled signed
+`httpfs` extension in the synthetic loopback extraction test. Overall exit 1 /
+`all_passed: false` is retained. The source guard also saw exactly HANDOFF/PROGRESS
+changes because the remote checkout advanced to `418cbb0`; no executable drift.
+Remote driver `/root/.local/share/bbsim-verify-linux-runtime-20261022.py`; raw logs
+and report under private `work-checkpoints/linux-runtime-equipped-20261022/`.
+Native builds use fresh Linux `engine/target/`, not transferred macOS artifacts.
 
-**Next exact action:** inspect `proc_af90` completion/raw reports; record Linux
-runtime results, failures and exclusions, then publish the handoff update.
-Afterward obtain the next bounded maintainer scope (1976 audit/
+Installed `httpfs` using `duckdb -init /dev/null -bail -batch :memory: -c
+"INSTALL httpfs FROM 'https://extensions.duckdb.org'; LOAD httpfs; ..."`; native
+query confirms installed/loaded. No unsigned-extension allowance or test change.
+`proc_1426` exited 0 after 224 s: signed-extension loading, the exact failed test,
+and FULL Werror Python discovery all pass (807 tests, 216.892 s in unittest;
+219.032 s command time). Final report under
+`work-checkpoints/linux-runtime-httpfs-20261022/results.json` records
+`all_runtime_checks_passed: true`, no source drift during recheck, and unchanged
+snapshot/native-binary hashes. It binds the prior full report by SHA-256
+`ddf358de823be501438db0cf6ccbcd8f40278c3ab2a0e6c94381d565c5be4a06` rather than
+rewriting the earlier failure. The prior Rust run passed 995 tests across 68
+summaries, zero failures/ignored, including the 10,000-seed full_simulation test;
+examples/fmt/build/strict-Clippy and data-backed smoke checks passed as above.
+Remote code at recheck was `418cbb0`; its only changes from initial `514f171`
+were HANDOFF/PROGRESS. Fresh local `git diff --check` is required before publishing
+this final documentary handoff. No simulator code/assertion changes, season run,
+model/default promotion, browser validation, Tauri desktop packaging or gate signoff.
+All managed jobs have exited; the local terminal is no longer needed for checks.
+
+**Next exact action:** continue on Linux using the installed native tools and
+explicit private input paths; remap archived macOS paths deliberately. Bounded
+engine/CLI compatibility is verified, not the finished desktop app. Obtain the
+next bounded maintainer scope (1976 audit/
 replay preparation or another task); do not retune/rerun the frozen v2 evaluation,
 promote defaults, or claim S-03/G1–G5/release signoff. Root HANDOFF preserves the
 compact accomplished-work/next-action map and the recorded 1976 archive hashes.

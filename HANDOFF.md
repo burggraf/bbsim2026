@@ -180,16 +180,27 @@ and verification report are included. The historical binary is copied as
 
 ## Next concrete action
 
-**First:** inspect Linux verification `proc_af90` (still running at this
-checkpoint), with raw reports under
-`/root/.local/share/bbsim2026/work-checkpoints/linux-runtime-equipped-20261022/`.
-The maintainer approved installation of Rust/Cargo 1.99.1 with rustfmt/Clippy and
-DuckDB CLI 1.5.6; installation passed, and the fresh Linux example build exited 0.
-The initial pre-install Python run failed with missing DuckDB/native executables;
-its output is retained separately under `linux-runtime-20261022/`. The equipped
-full suites/read-only snapshot/native repeat/static-viewer checks must finish and
-be inspected before confirming compatibility. Keep the remote checkout at tested
-commit `514f171` until completion; apply this documentary update afterward.
+**Linux engine/CLI runtime verification is complete and passing.** On Ubuntu
+24.04.5 x86_64 with Python 3.12.3, installed Rust/Cargo 1.99.1/rustfmt/Clippy and
+DuckDB CLI 1.5.6 plus the official signed `httpfs` extension:
+
+- 995 Rust tests (68 summaries, zero failures/ignored), including 10,000-seed
+  `full_simulation`; example tests, fmt, build and strict all-target Clippy pass.
+- FULL Werror Python discovery: 807 tests pass after installing `httpfs`.
+- Read-only transferred snapshot export, two byte-identical native seed-1 game
+  traces and static-viewer generation pass; snapshot bytes remain unchanged.
+- `proc_1426` exited 0 after 224 s; final report
+  `/root/.local/share/bbsim2026/work-checkpoints/linux-runtime-httpfs-20261022/results.json`
+  records `all_runtime_checks_passed: true`. It binds prior full-run results and
+  executable sources, unchanged snapshot/native binary, and no recheck source drift.
+
+The first equipped Python run had one missing-httpfs failure; original raw logs
+remain in `work-checkpoints/linux-runtime-equipped-20261022/`. Earlier pre-install
+failures remain in `linux-runtime-20261022/`. No source/assertion changes were
+needed. Recheck code was `418cbb0` (only two documentary changes from `514f171`).
+All managed jobs have finished: the old local terminal is no longer required.
+Continue on Linux with explicit input paths. This does not verify browser UI,
+Tauri desktop packaging, every archived restore script, or full-season fidelity.
 Private migration is complete and hash-verified; publication's seven macOS commands
 passed as qualified above. Remap old macOS paths deliberately. No season run,
 model/default change, or scientific/gate signoff is part of runtime verification.
