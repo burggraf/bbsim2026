@@ -237,19 +237,23 @@ daily-roster reconstruction or date-aware suspension simulation as mandatory.
 The 1976 mixed-DH/year/club-input issues and missing primary rule text remain
 unresolved; no replay occurred.
 
-**Private Linux migration (active):** maintainer authorized copying private data to
-the new server. `proc_028b` runs `/tmp/bbsim-private-migration-20261022.py`:
-SHA-256 source inventory is 39,041 files/17,252,777,797 bytes (includes protected
-macOS reference binary). SSH-encrypted tar transfer stages outside the repo and
-publishes `/root/.local/share/bbsim2026/` only after destination hashes match.
-Require `migration-info/verified.json` with `sha256_all_match: true`; it is not yet
-complete. `AGENTS.md` and HANDOFF point new Pi-web sessions at the private path;
+**Private Linux migration (done — byte transfer verified):** maintainer authorized
+copying private data to the new server. `proc_028b` executed
+`python3 -B /tmp/bbsim-private-migration-20261022.py`, exited 0 after 714 seconds:
+39,041 files/17,252,777,797 bytes (includes protected macOS reference binary) passed
+destination SHA-256 checks. SSH-encrypted tar staged outside the repo, then renamed
+to `/root/.local/share/bbsim2026/`. Independently read destination
+`migration-info/verified.json`: `sha256_all_match: true`. Final directory tightened
+to root-only mode 0700 after tar restored the source directory's 0755 mode.
+Transfer-byte equality is not historical archive authentication or Linux runtime
+verification. `AGENTS.md` and HANDOFF point new Pi-web sessions at the private path;
 root ownership/agent permissions and explicit application input paths still apply.
 No dependency installs or simulator changes. Local migration logs/manifests live
 under `~/Library/Application Support/bbsim2026-migrations/`.
 
-**Next exact action:** finish/verify the private transfer and record completion.
-Then obtain the next bounded maintainer scope (1976 audit/
+**Next exact action:** on Linux, check toolchains/input paths and remap macOS
+paths before data-backed work; transfer is complete. Obtain the next bounded
+maintainer scope (1976 audit/
 replay preparation or another task); do not retune/rerun the frozen v2 evaluation,
 promote defaults, or claim S-03/G1–G5/release signoff. Root HANDOFF preserves the
 compact accomplished-work/next-action map and the recorded 1976 archive hashes.

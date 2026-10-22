@@ -134,11 +134,12 @@ Archive identities recorded by the prior audit (not currently present):
 ## Moving to another machine
 
 **Linux destination:** `/root/.local/share/bbsim2026/`, outside the repository at
-`/root/dev/bbsim2026`. The authorized private SSH transfer is **in progress**;
-source hashing covered 39,041 files (17,252,777,797 bytes), including the historical
-reference binary. Completion requires destination `migration-info/verified.json`
-with `sha256_all_match: true`; inspect the adjacent manifest. Failed/partial copies
-remain in a hidden staging directory, not the final path. The source-folder paths
+`/root/dev/bbsim2026`. The authorized private SSH transfer is **complete**:
+`proc_028b` exited 0 after 714 seconds; 39,041 files (17,252,777,797 bytes), including
+the historical reference binary, passed destination SHA-256 verification. The
+final directory is root-owned/mode 0700. Destination `migration-info/verified.json`
+records `sha256_all_match: true`; inspect the adjacent manifest. This verifies
+transfer bytes, not historical archive validity or Linux runtime compatibility. The source-folder paths
 below are macOS paths; replace that prefix with the Linux destination for reads.
 `AGENTS.md` points new sessions here. Pi-web's server-side agent can access the
 folder only with sufficient permissions; application CLIs still need explicit
@@ -179,9 +180,9 @@ and verification report are included. The historical binary is copied as
 
 ## Next concrete action
 
-**First:** finish and verify the private SSH migration; record its result in the
-canonical ledger. Publication's seven commands passed as qualified above. On Linux,
-verify toolchains and input paths before trying data-backed previews or runs.
+**First:** on Linux, verify toolchains and input paths before trying data-backed
+previews or runs. Private migration is complete and hash-verified; publication's
+seven commands passed as qualified above. Remap old macOS paths deliberately.
 
 **Then:** ask the maintainer to choose the next bounded work package. For 1976,
 confirm replay scope/availability/normalization assumptions, recover or reproduce
