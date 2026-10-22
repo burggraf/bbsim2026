@@ -251,9 +251,27 @@ root ownership/agent permissions and explicit application input paths still appl
 No dependency installs or simulator changes. Local migration logs/manifests live
 under `~/Library/Application Support/bbsim2026-migrations/`.
 
-**Next exact action:** on Linux, check toolchains/input paths and remap macOS
-paths before data-backed work; transfer is complete. Obtain the next bounded
-maintainer scope (1976 audit/
+**Linux runtime verification (`P-02-linux-runtime-compatibility`, active):** the
+maintainer approved Rust 1.99.1/rustfmt/Clippy and DuckDB CLI 1.5.6 installation via
+interview `ebe47d52-a820-4aec-bbc8-a3d92503349d`. Ubuntu 24.04.5/x86_64 has Python
+3.12.3. The pre-install full Python run `proc_c49b` exited 1 (105.16 s), with missing
+DuckDB/native-executable errors; raw output is preserved at remote
+`work-checkpoints/linux-runtime-20261022/`. Official rustup bootstrap SHA-256 and
+DuckDB GitHub asset digest verified; installation `proc_78ae` exited 0 in 29 s.
+Installed tool versions match approval; no repository dependency or model changes.
+`proc_af90` now runs full equipped build/fmt/Rust/examples/Clippy/Python/diff checks,
+read-only baseline export and repeated seed-1 native/static-viewer smoke tests.
+Remote driver `/root/.local/share/bbsim-verify-linux-runtime-20261022.py`; logs/results
+under private `work-checkpoints/linux-runtime-equipped-20261022/`. Native builds
+use a fresh Linux `engine/target/`, not the transferred macOS caches/reference.
+This documentation checkpoint does not modify executable code. Keep the remote
+checkout at tested commit `514f171` until the job finishes so its source guard
+remains meaningful. Runtime compatibility remains unconfirmed until results are
+inspected. No season run or gate/default promotion.
+
+**Next exact action:** inspect `proc_af90` completion/raw reports; record Linux
+runtime results, failures and exclusions, then publish the handoff update.
+Afterward obtain the next bounded maintainer scope (1976 audit/
 replay preparation or another task); do not retune/rerun the frozen v2 evaluation,
 promote defaults, or claim S-03/G1–G5/release signoff. Root HANDOFF preserves the
 compact accomplished-work/next-action map and the recorded 1976 archive hashes.

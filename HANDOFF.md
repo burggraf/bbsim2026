@@ -180,9 +180,19 @@ and verification report are included. The historical binary is copied as
 
 ## Next concrete action
 
-**First:** on Linux, verify toolchains and input paths before trying data-backed
-previews or runs. Private migration is complete and hash-verified; publication's
-seven commands passed as qualified above. Remap old macOS paths deliberately.
+**First:** inspect Linux verification `proc_af90` (still running at this
+checkpoint), with raw reports under
+`/root/.local/share/bbsim2026/work-checkpoints/linux-runtime-equipped-20261022/`.
+The maintainer approved installation of Rust/Cargo 1.99.1 with rustfmt/Clippy and
+DuckDB CLI 1.5.6; installation passed, and the fresh Linux example build exited 0.
+The initial pre-install Python run failed with missing DuckDB/native executables;
+its output is retained separately under `linux-runtime-20261022/`. The equipped
+full suites/read-only snapshot/native repeat/static-viewer checks must finish and
+be inspected before confirming compatibility. Keep the remote checkout at tested
+commit `514f171` until completion; apply this documentary update afterward.
+Private migration is complete and hash-verified; publication's seven macOS commands
+passed as qualified above. Remap old macOS paths deliberately. No season run,
+model/default change, or scientific/gate signoff is part of runtime verification.
 
 **Then:** ask the maintainer to choose the next bounded work package. For 1976,
 confirm replay scope/availability/normalization assumptions, recover or reproduce
