@@ -8,6 +8,18 @@ These repository-local instructions supplement the global agent policy. Follow h
 2. Read [PLAN.md](PLAN.md) (product/model contract), [docs/EXECUTION.md](docs/EXECUTION.md) (stable work-package IDs, dependencies and gates), and [docs/PROGRESS.md](docs/PROGRESS.md) (the **single source of truth for current status and the next task**).
 3. Confirm the next task's prerequisites and evidence. If progress says `active`, inspect its changes and tests before continuing. If it says `blocked`, resolve or ask about the blocker rather than jumping gates. Chat history and an unverified checkbox are not evidence.
 
+## Private data locations
+
+On the Linux migration server, private data belongs at `/root/.local/share/bbsim2026/`
+(outside `/root/dev/bbsim2026`). Check `migration-info/verified.json` and
+`migration-info/manifest.json` before treating the transfer as complete. See
+[HANDOFF.md](HANDOFF.md#moving-to-another-machine) for the offline snapshot and
+path mapping. The macOS source is `~/Library/Application Support/bbsim2026/`.
+Use existing data read-only; do not commit it. Historical `/Users/markb` and `/tmp`
+paths may need explicit remapping; do not run old restore scripts blindly.
+A root-owned private directory requires a permitted server-side account; a browser
+connection alone does not grant filesystem access or configure application inputs.
+
 ## How to execute and track work
 
 - Choose one ready task ID (F/E/P/A/S/X) and keep the implementation small and testable. Change its status to `active` in `docs/PROGRESS.md` when substantial work starts; record a blocker as `blocked` with the precise decision needed. Use `planned` for later work and `ready` for unblocked next work.

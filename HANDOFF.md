@@ -46,9 +46,12 @@ Refresh this file when handing off another session.
 
 ## Verification at this handoff
 
-Publication check process: `proc_0a75` (`publication-full-checks-20261022`). At the
-handoff write, **fmt and all Python discovery tests exited 0; Rust and subsequent
-checks were still running**. No full-verification claim is made for this commit.
+Publication check process: `proc_0a75` (`publication-full-checks-20261022`) finished.
+**All seven commands below exited 0.** The launcher exited 1 and kept
+`all_passed: false` because its final source guard detected exactly the expected
+`HANDOFF.md` / `docs/PROGRESS.md` edits. No executable-source drift was reported.
+This is fresh command-level verification, not an unqualified aggregate PASS or
+scientific/gate signoff. Later migration/startup documentation was not in its pins.
 
 Durable local logs (not in Git):
 
@@ -130,6 +133,17 @@ Archive identities recorded by the prior audit (not currently present):
 
 ## Moving to another machine
 
+**Linux destination:** `/root/.local/share/bbsim2026/`, outside the repository at
+`/root/dev/bbsim2026`. The authorized private SSH transfer is **in progress**;
+source hashing covered 39,041 files (17,252,777,797 bytes), including the historical
+reference binary. Completion requires destination `migration-info/verified.json`
+with `sha256_all_match: true`; inspect the adjacent manifest. Failed/partial copies
+remain in a hidden staging directory, not the final path. The source-folder paths
+below are macOS paths; replace that prefix with the Linux destination for reads.
+`AGENTS.md` points new sessions here. Pi-web's server-side agent can access the
+folder only with sufficient permissions; application CLIs still need explicit
+input paths, and archived restore scripts may hard-code macOS locations.
+
 GitHub contains the source/tests/docs through `3097149` (root handoff), following
 source checkpoint `3c9a59b`. Subsequent documentation commits may supersede these.
 Inside the repository, ignored files are only `engine/target/` (about 4 GB) and
@@ -159,13 +173,15 @@ reference, not the new v2 build. Ordinary development can rebuild; a rebuilt bin
 is not byte-identical historical proof and this executable may not run on another
 OS/architecture. Install Rust, Python and the DuckDB CLI on the destination; no
 project secrets or credentials are required by the current core/unit-test path.
-Let publication checks finish before copying their directory for a stable result.
+Publication checks finished before this transfer started; their final raw logs
+and verification report are included. The historical binary is copied as
+`migration-info/text_game-macos-reference` and must not replace the Linux build.
 
 ## Next concrete action
 
-**First:** collect the publication check's final results, investigate any actual
-failures without weakening tests, and update the canonical ledger. If the process
-is gone, inspect the durable logs before choosing missing checks to rerun.
+**First:** finish and verify the private SSH migration; record its result in the
+canonical ledger. Publication's seven commands passed as qualified above. On Linux,
+verify toolchains and input paths before trying data-backed previews or runs.
 
 **Then:** ask the maintainer to choose the next bounded work package. For 1976,
 confirm replay scope/availability/normalization assumptions, recover or reproduce

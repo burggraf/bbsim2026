@@ -9,8 +9,9 @@ v2 integration/results and 1976 audit notes; `git push origin main` succeeded
 [HANDOFF.md](../HANDOFF.md) is a compact restart snapshot; this remains the only
 live status ledger. Older “uncommitted/no push” statements below are historical,
 not the current publication state. V1 NO-GO/default, v2 opt-in, frozen evaluation,
-and all scientific/release restrictions remain unchanged. Publication checks are
-still running; see the new first Resume entry. No full-verification claim yet.
+and all scientific/release restrictions remain unchanged. Publication's seven
+commands exited 0; the launcher exited 1 only for the expected two documentation
+pin changes. See the first Resume entry for qualifications and private migration.
 
 **Current work package:** `P-02-managed-season-v2` — the preregistered 2019 retrospective development evaluation for master seeds 1/2/3 passes every frozen per-seed usage check. Production completed 2,429/2,429 games per seed; corrected independent evaluator `proc_3204` exited 0 with all three seeds PASS. See [v2 results](modeling/pitcher-usage-v2-results.md) and sealed reports under `/tmp/bbsim-pitcher-v2-evaluation-20261019/production-seed-runs-pythonpath-fix-v1/verification-role-key-fix-v1/`. Prior evaluator defects and the correctly blocking binary-lineage attempt remain preserved as invalid evaluator evidence. This is not predictive validation, S-03, or G1–G5 signoff. V1 remains NO-GO/default; v2 remains opt-in. No retune, default change, commit or push.
 
@@ -198,9 +199,12 @@ with all 17 earlier local commits, under the maintainer's explicit request.
 `HANDOFF.md` and this entry are the separate documentation follow-up. No executable
 code changed in the publication task, no default changed, and no season reran.
 
-**Fresh verification:** `proc_0a75` is running the full fmt/Python/Rust/examples/
-strict-Clippy/build/diff sequence. At handoff write, fmt and Python discovery
-exited 0; the remaining checks are pending. Exact commands, source pins and raw
+**Fresh verification:** `proc_0a75` finished: fmt/Python/Rust/examples/
+strict-Clippy/build/diff all exited 0 (1.5/64.118/511.19/3.799/5.126/0.132/0.158 s).
+The launcher exited 1 and retained `all_passed: false` because its source guard
+reported exactly `HANDOFF.md` and `docs/PROGRESS.md`; no executable-source drift.
+This is command-level verification, not an unqualified aggregate PASS or gate
+signoff. Later migration/startup documentation was outside these pins. Exact commands, source pins and raw
 logs are in `~/Library/Application Support/bbsim2026/work-checkpoints/publication-20261022/`
 (`verify.py`, `results.json`, final `verification.json` when available). Isolated
 `CARGO_TARGET_DIR` protects existing reference binaries. Source pins were taken
@@ -233,8 +237,19 @@ daily-roster reconstruction or date-aware suspension simulation as mandatory.
 The 1976 mixed-DH/year/club-input issues and missing primary rule text remain
 unresolved; no replay occurred.
 
-**Next exact action:** collect the final publication checks, inspect raw failures
-and record results here. Then obtain the next bounded maintainer scope (1976 audit/
+**Private Linux migration (active):** maintainer authorized copying private data to
+the new server. `proc_028b` runs `/tmp/bbsim-private-migration-20261022.py`:
+SHA-256 source inventory is 39,041 files/17,252,777,797 bytes (includes protected
+macOS reference binary). SSH-encrypted tar transfer stages outside the repo and
+publishes `/root/.local/share/bbsim2026/` only after destination hashes match.
+Require `migration-info/verified.json` with `sha256_all_match: true`; it is not yet
+complete. `AGENTS.md` and HANDOFF point new Pi-web sessions at the private path;
+root ownership/agent permissions and explicit application input paths still apply.
+No dependency installs or simulator changes. Local migration logs/manifests live
+under `~/Library/Application Support/bbsim2026-migrations/`.
+
+**Next exact action:** finish/verify the private transfer and record completion.
+Then obtain the next bounded maintainer scope (1976 audit/
 replay preparation or another task); do not retune/rerun the frozen v2 evaluation,
 promote defaults, or claim S-03/G1–G5/release signoff. Root HANDOFF preserves the
 compact accomplished-work/next-action map and the recorded 1976 archive hashes.
