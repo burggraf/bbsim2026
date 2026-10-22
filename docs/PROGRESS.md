@@ -1,6 +1,16 @@
 # Development progress and restart point
 
-**Last updated:** 2026-10-20 UTC
+**Last updated:** 2026-10-22 UTC
+
+**Publication/restart override (2026-10-22):** maintainer explicitly authorized
+committing/pushing all changes and a root restart file. `3c9a59b` now commits the
+v2 integration/results and 1976 audit notes; `git push origin main` succeeded
+(`971be58..3c9a59b`), including the 17 previously local commits. The root
+[HANDOFF.md](../HANDOFF.md) is a compact restart snapshot; this remains the only
+live status ledger. Older “uncommitted/no push” statements below are historical,
+not the current publication state. V1 NO-GO/default, v2 opt-in, frozen evaluation,
+and all scientific/release restrictions remain unchanged. Publication checks are
+still running; see the new first Resume entry. No full-verification claim yet.
 
 **Current work package:** `P-02-managed-season-v2` — the preregistered 2019 retrospective development evaluation for master seeds 1/2/3 passes every frozen per-seed usage check. Production completed 2,429/2,429 games per seed; corrected independent evaluator `proc_3204` exited 0 with all three seeds PASS. See [v2 results](modeling/pitcher-usage-v2-results.md) and sealed reports under `/tmp/bbsim-pitcher-v2-evaluation-20261019/production-seed-runs-pythonpath-fix-v1/verification-role-key-fix-v1/`. Prior evaluator defects and the correctly blocking binary-lineage attempt remain preserved as invalid evaluator evidence. This is not predictive validation, S-03, or G1–G5 signoff. V1 remains NO-GO/default; v2 remains opt-in. No retune, default change, commit or push.
 
@@ -180,6 +190,45 @@ This is the single status ledger. Task definitions and gate criteria are in [EXE
 | D-10 | confirmed completion contract | 2026-10-11 maintainer chose **B — Complete agreed box fields for a bounded event vocabulary** in interview `021d9e0d-b0b7-4164-a7c8-8bd88774c071`, then selected **“Approve the proposed matrix”** in interview `e75959e7-704f-40cc-943b-1a3a10e34285`, without edits. The [approved matrix](engine/g1-accounting-scope.md) governs required fields, event families, exclusions and observable checks. Fully specified simulated logs must yield complete agreed boxes; incomplete historical facts stay unknown. No completion/G1 approval, every-rare-rule/full-season-validation requirement or waiver inferred. The earlier technical CS boundary B is separate. | Implement one small test-first E-03 slice at a time; collect the required coverage/golden/property/historical evidence before E-03 completion and a separate G1 go/no-go. |
 
 ## Resume here
+
+### Publication and root handoff — 2026-10-22
+
+**Saved:** source checkpoint `3c9a59b` was pushed normally to `origin/main`, along
+with all 17 earlier local commits, under the maintainer's explicit request.
+`HANDOFF.md` and this entry are the separate documentation follow-up. No executable
+code changed in the publication task, no default changed, and no season reran.
+
+**Fresh verification:** `proc_0a75` is running the full fmt/Python/Rust/examples/
+strict-Clippy/build/diff sequence. At handoff write, fmt and Python discovery
+exited 0; the remaining checks are pending. Exact commands, source pins and raw
+logs are in `~/Library/Application Support/bbsim2026/work-checkpoints/publication-20261022/`
+(`verify.py`, `results.json`, final `verification.json` when available). Isolated
+`CARGO_TARGET_DIR` protects existing reference binaries. Source pins were taken
+before the handoff documentation edits, so the final guard will report those
+expected documentation changes; inspect actual command results and any unexpected
+source changes rather than treating the aggregate flag as a clean pass.
+`git diff --check` passed before the source commit. A bounded outgoing-path/history
+scan found no credential-pattern matches or files over 2 MB; not a security audit.
+
+**Missing proof:** `/tmp/bbsim-pitcher-v2-integration/`,
+`/tmp/bbsim-pitcher-v2-evaluation-20261019/`, `/tmp/bbsim-season-usage-targets-v1/`
+and `/tmp/bbsim-1976-audit-v1/` were absent on this restart. Prior results/hashes
+below are historical records, not freshly verified retained artifacts. Existing
+private checkpoint manifests may help recovery but were not authenticated here.
+No external compatibility harness, scientific evaluation or browser check reran.
+
+**Scope clarification:** PLAN's existing pilot policy already permits modeled
+season-pool availability and normalizing abnormal played games to full games.
+For a new 1976 scope, confirm whether those policies apply rather than treating
+daily-roster reconstruction or date-aware suspension simulation as mandatory.
+The 1976 mixed-DH/year/club-input issues and missing primary rule text remain
+unresolved; no replay occurred.
+
+**Next exact action:** collect the final publication checks, inspect raw failures
+and record results here. Then obtain the next bounded maintainer scope (1976 audit/
+replay preparation or another task); do not retune/rerun the frozen v2 evaluation,
+promote defaults, or claim S-03/G1–G5/release signoff. Root HANDOFF preserves the
+compact accomplished-work/next-action map and the recorded 1976 archive hashes.
 
 ### Pitcher usage v2 — fixed-seed development evaluation PASS; v1 remains default
 
